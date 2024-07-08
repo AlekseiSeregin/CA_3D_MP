@@ -101,8 +101,6 @@ for pos in range(1, numb_of_div_per_page+1):
 
 s_chunk_ranges[-1, 1] = Config.N_CELLS_PER_AXIS
 
-
-
 p_ind = []
 for item in p_chunk_ranges:
     new_batch = generate_fetch_ind_mp(item)
@@ -117,31 +115,31 @@ for index, item in enumerate(s_chunk_ranges):
     new_batch = generate_fetch_ind_mp(item)
     s_ind.append(new_batch)
 
-dummy_grid1 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
-
-for item in p_ind:
-    for coord_set in item:
-        for ind in range(len(coord_set[0])):
-            z_coord = coord_set[0, ind]
-            y_coord = coord_set[1, ind]
-            if dummy_grid1[z_coord, y_coord]:
-                print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
-            else:
-                dummy_grid1[z_coord, y_coord] = True
-print()
-
-dummy_grid2 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
-
-for item in s_ind:
-    for coord_set in item:
-        for ind in range(len(coord_set[0])):
-            z_coord = coord_set[0, ind]
-            y_coord = coord_set[1, ind]
-            if dummy_grid2[z_coord, y_coord]:
-                print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
-            else:
-                dummy_grid2[z_coord, y_coord] = True
-print()
+# dummy_grid1 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
+#
+# for item in p_ind:
+#     for coord_set in item:
+#         for ind in range(len(coord_set[0])):
+#             z_coord = coord_set[0, ind]
+#             y_coord = coord_set[1, ind]
+#             if dummy_grid1[z_coord, y_coord]:
+#                 print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
+#             else:
+#                 dummy_grid1[z_coord, y_coord] = True
+# print()
+#
+# dummy_grid2 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
+#
+# for item in s_ind:
+#     for coord_set in item:
+#         for ind in range(len(coord_set[0])):
+#             z_coord = coord_set[0, ind]
+#             y_coord = coord_set[1, ind]
+#             if dummy_grid2[z_coord, y_coord]:
+#                 print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
+#             else:
+#                 dummy_grid2[z_coord, y_coord] = True
+# print()
 
 #
 # # import utils

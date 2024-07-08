@@ -3293,3 +3293,38 @@ class CellularAutomata:
             print("Number of Cells per Axis must be divisible by ", size, "!!!")
             print("______________________________________________________________")
             sys.exit()
+
+    @staticmethod
+    def generate_fetch_ind_mp(ranges, switch=False):
+        size = 3 + (Config.NEIGH_RANGE - 1) * 2
+        if Config.N_CELLS_PER_AXIS % size == 0:
+            # length = int((Config.N_CELLS_PER_AXIS / size) ** 2)
+            # fetch_ind = np.zeros((size**2, 2, length), dtype=np.short)
+            iter_shifts = np.array(np.where(np.ones((size, size)) == 1)).transpose()
+            dummy_grid = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
+            if switch:
+                dummy_grid[ranges[0][0]:ranges[0][1], :] = True
+                dummy_grid[ranges[1][0]:ranges[1][1], :] = True
+            else:
+                dummy_grid[ranges[0]:ranges[1], :] = True
+            n_fetch = []
+            all_coord = np.array(np.nonzero(dummy_grid), dtype=np.short)
+            for step, t in enumerate(iter_shifts):
+                t_ind = np.where(((all_coord[0] - t[1]) % size == 0) & ((all_coord[1] - t[0]) % size == 0))[0]
+                # fetch_ind[step] = all_coord[:, t_ind]
+                if len(t_ind) > 0:
+                    n_fetch.append(all_coord[:, t_ind])
+            return n_fetch
+        else:
+            print()
+            print("______________________________________________________________")
+            print("Number of Cells per Axis must be divisible by ", size, "!!!")
+            print("______________________________________________________________")
+            sys.exit()
+
+
+
+
+
+
+
