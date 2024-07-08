@@ -784,9 +784,9 @@ def diffuse_bulk_mp(working_range, cells_shm_mdata, dirs_shm_mdata, cells_per_ax
     # adjusting a coordinates of side points for correct shifting
     ind_left = np.where(cells[2, working_range] < 0)[0]
     # closed left bound (reflection)
-    # cells[2, working_range[ind_left]] = 1
-    # dirs[2, working_range[ind_left]] = 1
-    # ind_left = np.array([], dtype=int)
+    cells[2, working_range[ind_left]] = 1
+    dirs[2, working_range[ind_left]] = 1
+    ind_left = np.array([], dtype=int)
     # _______________________
     # periodic____________________________________
     # self.cells[2, working_range[ind_left]] = self.cells_per_axis - 1

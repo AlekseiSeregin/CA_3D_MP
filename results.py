@@ -11,7 +11,7 @@ visualise = Visualisation(database_name)
 #
 # visualise.animate_3d(animate_separate=False, const_cam_pos=False)
 
-# visualise.plot_3d(plot_separate=False, const_cam_pos=False)
+visualise.plot_3d(plot_separate=False, const_cam_pos=False)
 # visualise.plot_3d(plot_separate=False, const_cam_pos=True, iteration=iter)
 # visualise.animate_2d(plot_separate=False)
 

@@ -78,11 +78,11 @@ class SimulationConfigurator:
         for self.ca.iteration in progressbar.progressbar(range(Config.N_ITERATIONS)):
             if keyboard.is_pressed('ctrl+h'):
                 break
-            # self.ca.precip_func()
-            # self.ca.decomposition()
+            self.ca.precip_func()
+            self.ca.decomposition()
             # self.precip_func()
             # self.decomposition()
-            # self.ca.diffusion_inward()
+            self.ca.diffusion_inward()
             self.ca.diffusion_outward_mp()
 
             # self.calc_precipitation_front_only_cells()

@@ -363,8 +363,12 @@ class CellularAutomata:
                     self.cases.first.precip_3d_init = np.full(
                         (self.cells_per_axis, self.cells_per_axis, self.cells_per_axis + 1), 0, dtype=np.ubyte)
 
+            self.primary_fetch_ind = []
+            self.secondary_fetch_ind = []
             self.fetch_ind = None
-            self.generate_fetch_ind()
+            # self.generate_fetch_ind()
+            self.generate_fetch_ind_mp()
+
             self.aggregated_ind = np.array([[7, 0, 1, 2, 19, 16, 14],
                                             [6, 0, 1, 5, 18, 15, 14],
                                             [8, 0, 4, 5, 20, 15, 17],
@@ -460,6 +464,8 @@ class CellularAutomata:
 
             self.prev_len = 0
             self.powers = physical_data.POWERS
+
+
 
     def dissolution_zhou_wei_original(self):
         """Implementation of original not adapted Zhou and Wei approach. Only two probabilities p for block and pn
@@ -1877,9 +1883,14 @@ class CellularAutomata:
             nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
                                                                      Config.PRODUCTS.PRIMARY)
 
+            # tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
+            #         self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, [ind],
+            #         self.fetch_ind, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in self.comb_indexes]
+
             tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                    self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, [ind],
-                    self.fetch_ind, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in self.comb_indexes]
+                      self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, [ind],
+                      fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
+                     self.comb_indexes for fetch_batch in self.primary_fetch_ind]
 
             self.pool.map(worker, tasks)
 
@@ -3295,33 +3306,77 @@ class CellularAutomata:
             sys.exit()
 
     @staticmethod
-    def generate_fetch_ind_mp(ranges, switch=False):
+    def generate_batch_fetch_ind_mp(ranges, size, switch=False):
+        # size = 3 + (Config.NEIGH_RANGE - 1) * 2
+        # if Config.N_CELLS_PER_AXIS % size == 0:
+        iter_shifts = np.array(np.where(np.ones((size, size)) == 1)).transpose()
+        dummy_grid = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
+        if switch:
+            dummy_grid[ranges[0][0]:ranges[0][1], :] = True
+            dummy_grid[ranges[1][0]:ranges[1][1], :] = True
+        else:
+            dummy_grid[ranges[0]:ranges[1], :] = True
+        n_fetch_batch = []
+        all_coord = np.array(np.nonzero(dummy_grid), dtype=np.short)
+        for step, t in enumerate(iter_shifts):
+            t_ind = np.where(((all_coord[0] - t[1]) % size == 0) & ((all_coord[1] - t[0]) % size == 0))[0]
+            if len(t_ind) > 0:
+                n_fetch_batch.append(all_coord[:, t_ind])
+        return n_fetch_batch
+        # else:
+        #     print()
+        #     print("______________________________________________________________")
+        #     print("Number of Cells per Axis must be divisible by ", size, "!!!")
+        #     print("______________________________________________________________")
+        #     sys.exit()
+
+    def generate_fetch_ind_mp(self):
         size = 3 + (Config.NEIGH_RANGE - 1) * 2
         if Config.N_CELLS_PER_AXIS % size == 0:
-            # length = int((Config.N_CELLS_PER_AXIS / size) ** 2)
-            # fetch_ind = np.zeros((size**2, 2, length), dtype=np.short)
-            iter_shifts = np.array(np.where(np.ones((size, size)) == 1)).transpose()
-            dummy_grid = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
-            if switch:
-                dummy_grid[ranges[0][0]:ranges[0][1], :] = True
-                dummy_grid[ranges[1][0]:ranges[1][1], :] = True
-            else:
-                dummy_grid[ranges[0]:ranges[1], :] = True
-            n_fetch = []
-            all_coord = np.array(np.nonzero(dummy_grid), dtype=np.short)
-            for step, t in enumerate(iter_shifts):
-                t_ind = np.where(((all_coord[0] - t[1]) % size == 0) & ((all_coord[1] - t[0]) % size == 0))[0]
-                # fetch_ind[step] = all_coord[:, t_ind]
-                if len(t_ind) > 0:
-                    n_fetch.append(all_coord[:, t_ind])
-            return n_fetch
+
+            numb_of_div_per_page = Config.NUMBER_OF_DIVS_PER_PAGE
+
+            p_chunk_size = int((Config.N_CELLS_PER_AXIS / numb_of_div_per_page) - Config.NEIGH_RANGE * 2)
+            s_chunk_size = Config.NEIGH_RANGE * 2
+
+            p_chunk_ranges = np.zeros((numb_of_div_per_page, 2), dtype=int)
+            p_chunk_ranges[0] = [Config.NEIGH_RANGE, Config.NEIGH_RANGE + p_chunk_size]
+
+            for pos in range(1, numb_of_div_per_page):
+                p_chunk_ranges[pos, 0] = p_chunk_ranges[pos - 1, 1] + s_chunk_size
+                p_chunk_ranges[pos, 1] = p_chunk_ranges[pos, 0] + p_chunk_size
+
+            s_chunk_ranges = np.zeros((numb_of_div_per_page + 1, 2), dtype=int)
+            s_chunk_ranges[0] = [0, Config.NEIGH_RANGE]
+
+            for pos in range(1, numb_of_div_per_page + 1):
+                s_chunk_ranges[pos, 0] = s_chunk_ranges[pos - 1, 1] + p_chunk_size
+                s_chunk_ranges[pos, 1] = s_chunk_ranges[pos, 0] + s_chunk_size
+
+            s_chunk_ranges[-1, 1] = Config.N_CELLS_PER_AXIS
+
+            # p_ind = []
+            for item in p_chunk_ranges:
+                new_batch = self.generate_batch_fetch_ind_mp(item, size)
+                self.primary_fetch_ind.append(new_batch)
+
+            # s_ind = []
+            f_and_l = self.generate_batch_fetch_ind_mp([s_chunk_ranges[0], s_chunk_ranges[-1]], size, switch=True)
+            self.secondary_fetch_ind.append(f_and_l)
+            for index, item in enumerate(s_chunk_ranges):
+                if index == 0 or index == len(s_chunk_ranges) - 1:
+                    continue
+                new_batch = self.generate_batch_fetch_ind_mp(item, size)
+                self.secondary_fetch_ind.append(new_batch)
+
+
+
         else:
             print()
             print("______________________________________________________________")
             print("Number of Cells per Axis must be divisible by ", size, "!!!")
             print("______________________________________________________________")
             sys.exit()
-
 
 
 
