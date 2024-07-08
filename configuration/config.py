@@ -41,9 +41,9 @@ class Config:
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 300  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 3000000  # must be >= n_cells_per_axis
-    STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
+    N_CELLS_PER_AXIS = 308  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_ITERATIONS = 300000  # must be >= n_cells_per_axis
+    STRIDE = 1  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
     SIM_TIME = 72000  # [sek]
@@ -53,7 +53,7 @@ class Config:
     PHASE_FRACTION_LIMIT = 0.056
     THRESHOLD_INWARD = 1
     THRESHOLD_OUTWARD = 1
-    NEIGH_RANGE = 1   # neighbouring ranges    1, 2, 3, 4, 5,  6,  7,  8,  9,  10
+    NEIGH_RANGE = 5   # neighbouring ranges    1, 2, 3, 4, 5,  6,  7,  8,  9,  10
                       #          and           |  |  |  |  |   |   |   |   |   |
                       # corresponding divisors 3, 5, 7, 9, 11, 13, 15, 17, 19, 21
     N_BOOST_STEPS = 3
@@ -69,12 +69,12 @@ class Config:
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = True
     FULL_CELLS = False
-    SAVE_PATH = 'C:/test_runs_data/'
+    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 20
+    NUMBER_OF_PROCESSES = 10
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()

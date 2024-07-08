@@ -25,31 +25,61 @@ from configuration import Config
 #
 #         return np.array(fetch_ind, dtype=np.ushort)
 
+#
+# def generate_fetch_ind(my_range):
+#     range_start = my_range[0]
+#     range_end = my_range[1]
+#     size = 3 + (Config.NEIGH_RANGE - 1) * 2
+#     if Config.N_CELLS_PER_AXIS % size == 0:
+#         iter_shifts = np.array(np.where(np.ones((size, size)) == 1)).transpose()
+#
+#         # Create a dummy grid with the specified range in the first dimension
+#         dummy_grid = np.full((range_end - range_start, Config.N_CELLS_PER_AXIS), True)
+#         all_coord = np.array(np.nonzero(dummy_grid), dtype=np.short)
+#         all_coord[0] += range_start  # Adjust the first dimension coordinates to the given range
+#
+#         # Initialize fetch_ind as a list to accommodate varying lengths of coordinate arrays
+#         fetch_ind = []
+#
+#         for step, t in enumerate(iter_shifts):
+#             t_ind = np.where(((all_coord[0] - t[1]) % size == 0) & ((all_coord[1] - t[0]) % size == 0))[0]
+#             fetch_ind.append(all_coord[:, t_ind])
+#
+#         # Convert the list of arrays to an object array for easier manipulation later
+#         return np.array(fetch_ind, dtype=object)
 
-def generate_fetch_ind(my_range):
-    range_start = my_range[0]
-    range_end = my_range[1]
+
+def generate_fetch_ind_mp(ranges, switch=False):
     size = 3 + (Config.NEIGH_RANGE - 1) * 2
     if Config.N_CELLS_PER_AXIS % size == 0:
+        # length = int((Config.N_CELLS_PER_AXIS / size) ** 2)
+        # fetch_ind = np.zeros((size**2, 2, length), dtype=np.short)
         iter_shifts = np.array(np.where(np.ones((size, size)) == 1)).transpose()
-
-        # Create a dummy grid with the specified range in the first dimension
-        dummy_grid = np.full((range_end - range_start, Config.N_CELLS_PER_AXIS), True)
+        dummy_grid = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
+        if switch:
+            dummy_grid[ranges[0][0]:ranges[0][1], :] = True
+            dummy_grid[ranges[1][0]:ranges[1][1], :] = True
+        else:
+            dummy_grid[ranges[0]:ranges[1], :] = True
+        # dummy_grid[start:end, :] = True
+        # dummy_grid[-5:1, :] = True
+        n_fetch = []
         all_coord = np.array(np.nonzero(dummy_grid), dtype=np.short)
-        all_coord[0] += range_start  # Adjust the first dimension coordinates to the given range
-
-        # Initialize fetch_ind as a list to accommodate varying lengths of coordinate arrays
-        fetch_ind = []
-
         for step, t in enumerate(iter_shifts):
             t_ind = np.where(((all_coord[0] - t[1]) % size == 0) & ((all_coord[1] - t[0]) % size == 0))[0]
-            fetch_ind.append(all_coord[:, t_ind])
+            # fetch_ind[step] = all_coord[:, t_ind]
+            if len(t_ind) > 0:
+                n_fetch.append(all_coord[:, t_ind])
+        # fetch_ind = np.array(fetch_ind, dtype=np.ushort)
 
-        # Convert the list of arrays to an object array for easier manipulation later
-        return np.array(fetch_ind, dtype=object)
+        dummy_grid[:] = False
+        for item in n_fetch:
+            dummy_grid[item[0], item[1]] = True
+
+    return n_fetch
 
 
-numb_of_div_per_page = 11
+numb_of_div_per_page = 7
 
 p_chunk_size = int((Config.N_CELLS_PER_AXIS / numb_of_div_per_page) - Config.NEIGH_RANGE * 2)
 s_chunk_size = Config.NEIGH_RANGE * 2
@@ -62,7 +92,6 @@ for pos in range(1, numb_of_div_per_page):
     p_chunk_ranges[pos, 0] = p_chunk_ranges[pos-1, 1] + s_chunk_size
     p_chunk_ranges[pos, 1] = p_chunk_ranges[pos, 0] + p_chunk_size
 
-
 s_chunk_ranges = np.zeros((numb_of_div_per_page + 1, 2), dtype=int)
 s_chunk_ranges[0] = [0, Config.NEIGH_RANGE]
 
@@ -72,11 +101,47 @@ for pos in range(1, numb_of_div_per_page+1):
 
 s_chunk_ranges[-1, 1] = Config.N_CELLS_PER_AXIS
 
+
+
+p_ind = []
+for item in p_chunk_ranges:
+    new_batch = generate_fetch_ind_mp(item)
+    p_ind.append(new_batch)
+
+s_ind = []
+f_and_l = generate_fetch_ind_mp([s_chunk_ranges[0], s_chunk_ranges[-1]], switch=True)
+s_ind.append(f_and_l)
+for index, item in enumerate(s_chunk_ranges):
+    if index == 0 or index == len(s_chunk_ranges) - 1:
+        continue
+    new_batch = generate_fetch_ind_mp(item)
+    s_ind.append(new_batch)
+
+dummy_grid1 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
+
+for item in p_ind:
+    for coord_set in item:
+        for ind in range(len(coord_set[0])):
+            z_coord = coord_set[0, ind]
+            y_coord = coord_set[1, ind]
+            if dummy_grid1[z_coord, y_coord]:
+                print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
+            else:
+                dummy_grid1[z_coord, y_coord] = True
 print()
 
-f_ind = generate_fetch_ind(p_chunk_ranges[0])
-print()
+dummy_grid2 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
 
+for item in s_ind:
+    for coord_set in item:
+        for ind in range(len(coord_set[0])):
+            z_coord = coord_set[0, ind]
+            y_coord = coord_set[1, ind]
+            if dummy_grid2[z_coord, y_coord]:
+                print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
+            else:
+                dummy_grid2[z_coord, y_coord] = True
+print()
 
 #
 # # import utils

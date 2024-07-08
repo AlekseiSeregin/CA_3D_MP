@@ -154,7 +154,7 @@ class SimulationConfigurator:
 
         self.ca.pool.close()
         self.ca.pool.join()
-
+        print()
         print("TERMINATED PROPERLY!")
 
     def unlink(self):
