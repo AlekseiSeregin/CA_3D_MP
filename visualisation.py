@@ -1859,3 +1859,4 @@ def plot_kinetics(data_to_plot, with_kinetic=False):
     plt.ylabel('Concentration')
     plt.legend()
     plt.show()
+

@@ -41,9 +41,9 @@ class Config:
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 308  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_CELLS_PER_AXIS = 110  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
     N_ITERATIONS = 300000  # must be >= n_cells_per_axis
-    STRIDE = 1  # n_iterations / stride = n_iterations for outward diffusion
+    STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
     SIM_TIME = 72000  # [sek]
@@ -69,13 +69,15 @@ class Config:
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = True
     FULL_CELLS = False
-    SAVE_PATH = 'C:/Users/alexe/PycharmProjects/test_runs_data/'
+    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 10
-    NUMBER_OF_DIVS_PER_PAGE = 7
+    NUMBER_OF_PROCESSES = 16
+    NUMBER_OF_DIVS_PER_PAGE = 2
+    DEPTH_PER_DIV = 5
+    MAX_TASK_PER_CHILD = 50000
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
@@ -88,7 +90,7 @@ class Config:
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.7
+    PROBABILITIES.PRIMARY.p1 = 0.9999999
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1

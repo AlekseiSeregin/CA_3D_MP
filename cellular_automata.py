@@ -18,7 +18,7 @@ def go_around_mult_oxid_n_also_partial_neigh_aip_MP(array_3d, around_coords):
 
 
 def precip_step_standard_MP(product_x_nzs_mdata, shm_mdata_product, shm_mdata_full_product, shm_mdata_product_init,
-                            shm_mdata_active, shm_mdata_oxidant, plane_index, fetch_indexes, nucleation_probabilities,
+                            shm_mdata_active, shm_mdata_oxidant, plane_indexes, fetch_indexes, nucleation_probabilities,
                             callback):
     shm_o = shared_memory.SharedMemory(name=shm_mdata_oxidant.name)
     oxidant = np.ndarray(shm_mdata_oxidant.shape, dtype=shm_mdata_oxidant.dtype, buffer=shm_o.buf)
@@ -27,11 +27,19 @@ def precip_step_standard_MP(product_x_nzs_mdata, shm_mdata_product, shm_mdata_fu
     full_3d = np.ndarray(shm_mdata_full_product.shape, dtype=shm_mdata_full_product.dtype, buffer=shm_p_FULL.buf)
 
     for fetch_ind in fetch_indexes:
-        oxidant_cells = oxidant[fetch_ind[0], fetch_ind[1], plane_index]
-        oxidant_cells = fetch_ind[:, np.nonzero(oxidant_cells)[0]]
+        plane_indexes = np.array(plane_indexes)
+        # oxidant_cells = oxidant[fetch_ind[0], fetch_ind[1], plane_indexes]
+        oxidant_cells1 = oxidant[fetch_ind[0][:, np.newaxis], fetch_ind[1][:, np.newaxis], plane_indexes]
+        nonzero_indices = np.nonzero(oxidant_cells1)
+        oxidant_cells = fetch_ind[:, nonzero_indices[0]]
+        # nz = np.array(nonzero_indices[1])
+        # oxidant_cells = fetch_ind[:, oxidant_cells2]
 
         if len(oxidant_cells[0]) != 0:
-            oxidant_cells = np.vstack((oxidant_cells, np.full(len(oxidant_cells[0]), plane_index)))
+            # n_plane_indexes = plane_indexes[np.array(nonzero_indices[1])]
+            # oxidant_cells = np.vstack((oxidant_cells, np.full(len(oxidant_cells[0]), plane_indexes)))
+            oxidant_cells = np.vstack((oxidant_cells, plane_indexes[np.array(nonzero_indices[1])]))
+
             oxidant_cells = np.array(oxidant_cells, dtype=np.short).transpose()
 
             exists = check_at_coord(full_3d, oxidant_cells)  # precip on place of oxidant!
@@ -414,7 +422,7 @@ class CellularAutomata:
                     self.chunk_ranges[pos, 1] = self.chunk_ranges[pos, 0] + chunk_size
                 self.chunk_ranges[-1, 1] = self.cells_per_axis
 
-                self.pool = multiprocessing.Pool(processes=self.numb_of_proc, maxtasksperchild=50000)
+                self.pool = multiprocessing.Pool(processes=self.numb_of_proc, maxtasksperchild=Config.MAX_TASK_PER_CHILD)
 
             self.threshold_inward = Config.THRESHOLD_INWARD
             self.threshold_outward = Config.THRESHOLD_OUTWARD
@@ -1588,13 +1596,14 @@ class CellularAutomata:
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
+        less_than_zero = np.where(matrix_moles < 0)[0]
+        matrix_moles[less_than_zero] = 0
         whole_moles = matrix_moles + oxidant_moles + active_moles + product_moles
         product_c = product_moles / whole_moles
 
-        powers = self.powers[np.arange(ioz_bound + 1)]
-
-        soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[:ioz_bound + 1]) ** powers
-        # soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[:ioz_bound + 1]) ** 1.1
+        # powers = self.powers[np.arange(ioz_bound + 1)]
+        # soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[:ioz_bound + 1]) ** powers
+        soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[:ioz_bound + 1]) ** 1.1
         # soll_prod = product_c
 
         self.diffs = product_c - soll_prod
@@ -1882,17 +1891,37 @@ class CellularAutomata:
 
             nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
                                                                      Config.PRODUCTS.PRIMARY)
-
             # tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
             #         self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, [ind],
             #         self.fetch_ind, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in self.comb_indexes]
 
-            tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                      self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, [ind],
-                      fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
-                     self.comb_indexes for fetch_batch in self.primary_fetch_ind]
+            if len(self.comb_indexes) <= Config.DEPTH_PER_DIV:
+                p_tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
+                          self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata,
+                          self.comb_indexes, fetch_batch, nucleation_probabilities, ci_single_MP,
+                          precip_step_standard_MP) for fetch_batch in self.primary_fetch_ind]
+                s_tasks = [
+                    (self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
+                     self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata,
+                     self.comb_indexes, fetch_batch, nucleation_probabilities, ci_single_MP,
+                     precip_step_standard_MP) for fetch_batch in self.secondary_fetch_ind]
+            else:
+                ind_chunks = [self.comb_indexes[i:i + Config.DEPTH_PER_DIV]
+                              for i in range(0, len(self.comb_indexes), Config.DEPTH_PER_DIV)]
 
-            self.pool.map(worker, tasks)
+                p_tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
+                          self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
+                          fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
+                         ind_chunks for fetch_batch in self.primary_fetch_ind]
+
+                s_tasks = [
+                    (self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
+                     self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
+                     fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
+                    ind_chunks for fetch_batch in self.secondary_fetch_ind]
+
+            self.pool.map(worker, p_tasks)
+            self.pool.map(worker, s_tasks)
 
         self.primary_oxidant.transform_to_descards()
 
@@ -2074,9 +2103,11 @@ class CellularAutomata:
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
+        less_than_zero = np.where(matrix_moles < 0)[0]
+        matrix_moles[less_than_zero] = 0
+
         whole_moles = matrix_moles + oxidant_moles + active_moles + product_moles
         product_c = product_moles / whole_moles
-
 
         temp_ind = np.where(product == 0)[0]
         self.product_x_nzs[self.product_indexes[temp_ind]] = False
@@ -2090,9 +2121,9 @@ class CellularAutomata:
         product_c = np.delete(product_c, temp_ind)
         self.comb_indexes = np.delete(self.comb_indexes, temp_ind)
 
-        powers = self.powers[self.comb_indexes]
-
-        soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[self.comb_indexes]) ** powers
+        # powers = self.powers[self.comb_indexes]
+        # soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[self.comb_indexes]) ** powers
+        soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[self.comb_indexes]) ** 1.1
 
         self.diffs = product_c - soll_prod
 
@@ -3164,15 +3195,17 @@ class CellularAutomata:
 
     def diffusion_outward_mp(self):
         if (self.iteration + 1) % Config.STRIDE == 0:
-        # self.primary_active.transform_to_descards()
+            self.primary_active.transform_to_descards()
             chunk_size = self.primary_active.last_in_diff_arr // self.numb_of_proc
             remainder = self.primary_active.last_in_diff_arr % self.numb_of_proc
             indices = []
             start = 0
             for i in range(self.numb_of_proc):
                 end = start + chunk_size + (1 if i < remainder else 0)
-                indices.append((start, end))
+                indices.append([start, end])
                 start = end
+
+            indices[-1][1] = self.primary_active.last_in_diff_arr
             tasks = [(wr, self.primary_active.cells_shm_mdata, self.primary_active.dirs_shm_mdata,
                       self.cells_per_axis, self.primary_active.p_ranges, diffuse_bulk_mp) for wr in indices]
             results = self.pool.map(worker, tasks)
@@ -3345,6 +3378,7 @@ class CellularAutomata:
             for pos in range(1, numb_of_div_per_page):
                 p_chunk_ranges[pos, 0] = p_chunk_ranges[pos - 1, 1] + s_chunk_size
                 p_chunk_ranges[pos, 1] = p_chunk_ranges[pos, 0] + p_chunk_size
+            p_chunk_ranges[-1, 1] = Config.N_CELLS_PER_AXIS - Config.NEIGH_RANGE
 
             s_chunk_ranges = np.zeros((numb_of_div_per_page + 1, 2), dtype=int)
             s_chunk_ranges[0] = [0, Config.NEIGH_RANGE]
@@ -3368,8 +3402,6 @@ class CellularAutomata:
                     continue
                 new_batch = self.generate_batch_fetch_ind_mp(item, size)
                 self.secondary_fetch_ind.append(new_batch)
-
-
 
         else:
             print()

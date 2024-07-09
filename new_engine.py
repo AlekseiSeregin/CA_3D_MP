@@ -86,7 +86,6 @@ class SimulationConfigurator:
             self.ca.diffusion_outward_mp()
 
             # self.calc_precipitation_front_only_cells()
-
             # self.diffusion_outward_with_mult_srtide()
 
         end = time.time()
