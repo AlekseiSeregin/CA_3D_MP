@@ -100,15 +100,15 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 3
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 1*10**-4
+    PROBABILITIES.PRIMARY.p0_d = 1*10**-10
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 1
-    PROBABILITIES.PRIMARY.p1_d = 1*10**-5
+    PROBABILITIES.PRIMARY.p1_d = 1*10**-11
     PROBABILITIES.PRIMARY.p1_d_f = 0.9999
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 1
-    PROBABILITIES.PRIMARY.p6_d = 1e-6
+    PROBABILITIES.PRIMARY.p6_d = 1e-12
     PROBABILITIES.PRIMARY.p6_d_f = 0.01
     PROBABILITIES.PRIMARY.p6_d_A_const = 1
     PROBABILITIES.PRIMARY.p6_d_B_const = 1

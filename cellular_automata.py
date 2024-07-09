@@ -3196,22 +3196,23 @@ class CellularAutomata:
     def diffusion_outward_mp(self):
         if (self.iteration + 1) % Config.STRIDE == 0:
             self.primary_active.transform_to_descards()
-            chunk_size = self.primary_active.last_in_diff_arr // self.numb_of_proc
-            remainder = self.primary_active.last_in_diff_arr % self.numb_of_proc
-            indices = []
-            start = 0
-            for i in range(self.numb_of_proc):
-                end = start + chunk_size + (1 if i < remainder else 0)
-                indices.append([start, end])
-                start = end
+            if self.iteration > 3000:
+                chunk_size = self.primary_active.last_in_diff_arr // self.numb_of_proc
+                remainder = self.primary_active.last_in_diff_arr % self.numb_of_proc
+                indices = []
+                start = 0
+                for i in range(self.numb_of_proc):
+                    end = start + chunk_size + (1 if i < remainder else 0)
+                    indices.append([start, end])
+                    start = end
 
-            indices[-1][1] = self.primary_active.last_in_diff_arr
-            tasks = [(wr, self.primary_active.cells_shm_mdata, self.primary_active.dirs_shm_mdata,
-                      self.cells_per_axis, self.primary_active.p_ranges, diffuse_bulk_mp) for wr in indices]
-            results = self.pool.map(worker, tasks)
-            to_del = np.array(np.concatenate(results))
-            self.primary_active.dell_cells_from_diff_arrays(to_del)
-            self.primary_active.fill_first_page()
+                indices[-1][1] = self.primary_active.last_in_diff_arr
+                tasks = [(wr, self.primary_active.cells_shm_mdata, self.primary_active.dirs_shm_mdata,
+                          self.cells_per_axis, self.primary_active.p_ranges, diffuse_bulk_mp) for wr in indices]
+                results = self.pool.map(worker, tasks)
+                to_del = np.array(np.concatenate(results))
+                self.primary_active.dell_cells_from_diff_arrays(to_del)
+                self.primary_active.fill_first_page()
 
     def diffusion_outward_with_mult_srtide(self):
         if self.iteration % Config.STRIDE == 0:
