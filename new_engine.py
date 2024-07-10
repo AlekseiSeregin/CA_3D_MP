@@ -76,13 +76,14 @@ class SimulationConfigurator:
     def run_simulation(self):
         self.begin = time.time()
         for self.ca.iteration in progressbar.progressbar(range(Config.N_ITERATIONS)):
-            if keyboard.is_pressed('ctrl+h'):
+            if keyboard.is_pressed('ctrl+g+m'):
                 break
             self.ca.precip_func()
             self.ca.decomposition()
             # self.precip_func()
             # self.decomposition()
             self.ca.diffusion_inward()
+            # self.ca.diffusion_outward()
             self.ca.diffusion_outward_mp()
 
             # self.calc_precipitation_front_only_cells()

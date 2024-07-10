@@ -77,7 +77,7 @@ class Config:
     NUMBER_OF_PROCESSES = 16
     NUMBER_OF_DIVS_PER_PAGE = 2
     DEPTH_PER_DIV = 5
-    MAX_TASK_PER_CHILD = 50000
+    MAX_TASK_PER_CHILD = 10000
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
@@ -86,11 +86,11 @@ class Config:
     # PROBABILITIES.TERNARY = ConfigProbabilities()
     # PROBABILITIES.QUATERNARY = ConfigProbabilities()
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.99999
+    PROBABILITIES.PRIMARY.p0 = 0.5
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.9999999
+    PROBABILITIES.PRIMARY.p1 = 0.7
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1
@@ -100,15 +100,15 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 3
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 1*10**-10
+    PROBABILITIES.PRIMARY.p0_d = 1*10**-1
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 1
-    PROBABILITIES.PRIMARY.p1_d = 1*10**-11
+    PROBABILITIES.PRIMARY.p1_d = 1*10**-2
     PROBABILITIES.PRIMARY.p1_d_f = 0.9999
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 1
-    PROBABILITIES.PRIMARY.p6_d = 1e-12
+    PROBABILITIES.PRIMARY.p6_d = 1e-4
     PROBABILITIES.PRIMARY.p6_d_f = 0.01
     PROBABILITIES.PRIMARY.p6_d_A_const = 1
     PROBABILITIES.PRIMARY.p6_d_B_const = 1

@@ -110,9 +110,21 @@ def ci_single_MP(seeds, oxidant, full_3d, shm_mdata_product, shm_mdata_active, s
             coord = coord.transpose()
             seeds = seeds.transpose()
 
+
+
+            # counts = active[coord[0], coord[1], coord[2]]
+
+
+
+
             active[coord[0], coord[1], coord[2]] -= 1
             oxidant[seeds[0], seeds[1], seeds[2]] -= 1
-
+            # print()
+            # print("For seeds: ", seeds)
+            #
+            # print("Coords: ", coord)
+            # print("counts at Coords: ", counts)
+            # print()
             # self.objs[self.case]["product"].c3d[coord[0], coord[1], coord[2]] += 1  # precip on place of active!
             product[seeds[0], seeds[1], seeds[2]] += 1  # precip on place of oxidant!
 
@@ -1909,6 +1921,8 @@ class CellularAutomata:
                 ind_chunks = [self.comb_indexes[i:i + Config.DEPTH_PER_DIV]
                               for i in range(0, len(self.comb_indexes), Config.DEPTH_PER_DIV)]
 
+                # print(ind_chunks)
+
                 p_tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
                           self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
                           fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
@@ -1920,8 +1934,27 @@ class CellularAutomata:
                      fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
                     ind_chunks for fetch_batch in self.secondary_fetch_ind]
 
+            # p_before = int(np.sum(self.primary_product.c3d[:, :, 0]))
+            # print()
+            # print("P before: ", p_before)
+
+            # a_before = int(np.sum(self.primary_active.c3d[:, :, 0]))
+            # print("A before: ", a_before)
+
             self.pool.map(worker, p_tasks)
             self.pool.map(worker, s_tasks)
+
+            # p_after = int(np.sum(self.primary_product.c3d[:, :, 0]))
+            # print("P after: ", p_after)
+            # print("Delta P: ", p_after-p_before)
+
+            # a_after = int(np.sum(self.primary_active.c3d[:, :, 0]))
+            # print("A after: ", a_after)
+            # print("Delta A: ", a_after - a_before)
+            # print("_______")
+
+            # if  (p_after-p_before) + (a_after - a_before) != 0:
+            #     print("UNEQUAL!!!!!")
 
         self.primary_oxidant.transform_to_descards()
 
@@ -3356,12 +3389,6 @@ class CellularAutomata:
             if len(t_ind) > 0:
                 n_fetch_batch.append(all_coord[:, t_ind])
         return n_fetch_batch
-        # else:
-        #     print()
-        #     print("______________________________________________________________")
-        #     print("Number of Cells per Axis must be divisible by ", size, "!!!")
-        #     print("______________________________________________________________")
-        #     sys.exit()
 
     def generate_fetch_ind_mp(self):
         size = 3 + (Config.NEIGH_RANGE - 1) * 2
@@ -3389,12 +3416,10 @@ class CellularAutomata:
 
             s_chunk_ranges[-1, 1] = Config.N_CELLS_PER_AXIS
 
-            # p_ind = []
             for item in p_chunk_ranges:
                 new_batch = self.generate_batch_fetch_ind_mp(item, size)
                 self.primary_fetch_ind.append(new_batch)
 
-            # s_ind = []
             f_and_l = self.generate_batch_fetch_ind_mp([s_chunk_ranges[0], s_chunk_ranges[-1]], size, switch=True)
             self.secondary_fetch_ind.append(f_and_l)
             for index, item in enumerate(s_chunk_ranges):
@@ -3402,6 +3427,32 @@ class CellularAutomata:
                     continue
                 new_batch = self.generate_batch_fetch_ind_mp(item, size)
                 self.secondary_fetch_ind.append(new_batch)
+
+            # dummy_grid1 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
+            #
+            # for item in self.primary_fetch_ind:
+            #     for coord_set in item:
+            #         for ind in range(len(coord_set[0])):
+            #             z_coord = coord_set[0, ind]
+            #             y_coord = coord_set[1, ind]
+            #             if dummy_grid1[z_coord, y_coord]:
+            #                 print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
+            #             else:
+            #                 dummy_grid1[z_coord, y_coord] = True
+            # print()
+            #
+            # dummy_grid2 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False)
+            #
+            # for item in self.secondary_fetch_ind:
+            #     for coord_set in item:
+            #         for ind in range(len(coord_set[0])):
+            #             z_coord = coord_set[0, ind]
+            #             y_coord = coord_set[1, ind]
+            #             if dummy_grid2[z_coord, y_coord]:
+            #                 print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
+            #             else:
+            #                 dummy_grid2[z_coord, y_coord] = True
+            # print()
 
         else:
             print()

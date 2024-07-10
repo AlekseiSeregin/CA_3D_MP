@@ -1835,6 +1835,7 @@ ELAPSED TIME: {message}
                 return print("No Data to plot secondary precipitation front!")
         plt.show()
 
+
 def plot_kinetics(data_to_plot, with_kinetic=False):
     root = tk.Tk()
     root.withdraw()
@@ -1845,15 +1846,23 @@ def plot_kinetics(data_to_plot, with_kinetic=False):
     x_values = data.iloc[:, 0]
 
     for rows in data_to_plot:
+        x = x_values.copy()
         index = 2 * rows + 1
         y_values = data.iloc[:, index]
+        z_ind = np.where(y_values == 0)[0]
+        y_values = np.delete(y_values, z_ind)
+        x = np.delete(x, z_ind)
         # plt.plot(x_values, y_values, label=f'Layer - {rows}', s=1)
-        plt.plot(x_values, y_values, label=f'Layer - {rows}')
+        plt.plot(x, y_values, label=f'Layer - {rows}')
 
         if with_kinetic:
+            x = x_values.copy()
             y_values_soll = data.iloc[:, index + 1]
+            z_ind = np.where(y_values_soll == 0)[0]
+            y_values_soll = np.delete(y_values_soll, z_ind)
+            x = np.delete(x, z_ind)
             # plt.plot(x_values, y_values_soll, label=f'Layer - {rows} kinetic', s=1)
-            plt.plot(x_values, y_values_soll, label=f'Layer - {rows} kinetic')
+            plt.plot(x, y_values_soll, label=f'Layer - {rows} kinetic')
 
     plt.xlabel("Time [sec]")
     plt.ylabel('Concentration')

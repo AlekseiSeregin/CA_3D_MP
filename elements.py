@@ -50,7 +50,7 @@ class ActiveElem:
 
         # approx concentration space fill
         # ____________________________________________
-        buffer_reserve = 1.5  # MUST BE PREDEFINED IN CONFIG!!!
+        buffer_reserve = 2  # MUST BE PREDEFINED IN CONFIG!!!
 
         self.last_in_diff_arr = int(self.n_per_page * self.cells_per_axis)
         self.diff_arr_buf_size = int(self.last_in_diff_arr * buffer_reserve)
