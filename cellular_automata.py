@@ -1613,9 +1613,9 @@ class CellularAutomata:
         whole_moles = matrix_moles + oxidant_moles + active_moles + product_moles
         product_c = product_moles / whole_moles
 
-        # powers = self.powers[np.arange(ioz_bound + 1)]
-        # soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[:ioz_bound + 1]) ** powers
-        soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[:ioz_bound + 1]) ** 1.1
+        powers = self.powers[np.arange(ioz_bound + 1)]
+        soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[:ioz_bound + 1]) ** powers
+        # soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[:ioz_bound + 1]) ** 1.1
         # soll_prod = product_c
 
         self.diffs = product_c - soll_prod
@@ -2154,9 +2154,9 @@ class CellularAutomata:
         product_c = np.delete(product_c, temp_ind)
         self.comb_indexes = np.delete(self.comb_indexes, temp_ind)
 
-        # powers = self.powers[self.comb_indexes]
-        # soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[self.comb_indexes]) ** powers
-        soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[self.comb_indexes]) ** 1.1
+        powers = self.powers[self.comb_indexes]
+        soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[self.comb_indexes]) ** powers
+        # soll_prod = Config.PROD_INCR_CONST * (self.curr_time - self.active_times[self.comb_indexes]) ** 1.1
 
         self.diffs = product_c - soll_prod
 
