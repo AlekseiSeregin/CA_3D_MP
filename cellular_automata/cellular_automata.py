@@ -3,262 +3,10 @@ import utils
 from elements import *
 import multiprocessing
 from multiprocessing import shared_memory
-import nes_for_mp
+from .nes_for_mp import *
 from utils import physical_data
-
-def fix_full_cells(array_3d, full_array_3d, new_precip):
-    current_precip = np.array(array_3d[new_precip[0], new_precip[1], new_precip[2]], dtype=np.ubyte)
-    indexes = np.where(current_precip == 3)[0]
-    full_precip = new_precip[:, indexes]
-    full_array_3d[full_precip[0], full_precip[1], full_precip[2]] = True
-
-
-def go_around_mult_oxid_n_also_partial_neigh_aip_MP(array_3d, around_coords):
-    return np.sum(go_around_int(array_3d, around_coords), axis=1)
-
-
-def precip_step_standard_MP(product_x_nzs_mdata, shm_mdata_product, shm_mdata_full_product, shm_mdata_product_init,
-                            shm_mdata_active, shm_mdata_oxidant, plane_indexes, fetch_indexes, nucleation_probabilities,
-                            callback):
-    shm_o = shared_memory.SharedMemory(name=shm_mdata_oxidant.name)
-    oxidant = np.ndarray(shm_mdata_oxidant.shape, dtype=shm_mdata_oxidant.dtype, buffer=shm_o.buf)
-
-    shm_p_FULL = shared_memory.SharedMemory(name=shm_mdata_full_product.name)
-    full_3d = np.ndarray(shm_mdata_full_product.shape, dtype=shm_mdata_full_product.dtype, buffer=shm_p_FULL.buf)
-
-    for fetch_ind in fetch_indexes:
-        plane_indexes = np.array(plane_indexes)
-        # oxidant_cells = oxidant[fetch_ind[0], fetch_ind[1], plane_indexes]
-        oxidant_cells1 = oxidant[fetch_ind[0][:, np.newaxis], fetch_ind[1][:, np.newaxis], plane_indexes]
-        nonzero_indices = np.nonzero(oxidant_cells1)
-        oxidant_cells = fetch_ind[:, nonzero_indices[0]]
-        # nz = np.array(nonzero_indices[1])
-        # oxidant_cells = fetch_ind[:, oxidant_cells2]
-
-        if len(oxidant_cells[0]) != 0:
-            # n_plane_indexes = plane_indexes[np.array(nonzero_indices[1])]
-            # oxidant_cells = np.vstack((oxidant_cells, np.full(len(oxidant_cells[0]), plane_indexes)))
-            oxidant_cells = np.vstack((oxidant_cells, plane_indexes[np.array(nonzero_indices[1])]))
-
-            oxidant_cells = np.array(oxidant_cells, dtype=np.short).transpose()
-
-            exists = check_at_coord(full_3d, oxidant_cells)  # precip on place of oxidant!
-            temp_ind = np.where(exists)[0]
-
-            oxidant_cells = np.delete(oxidant_cells, temp_ind, 0)
-
-            if len(oxidant_cells) > 0:
-                # activate if microstructure ___________________________________________________________
-                # in_gb = [self.microstructure[point[0], point[1], point[2]] for point in oxidant_cells]
-                # temp_ind = np.where(in_gb)[0]
-                # oxidant_cells = oxidant_cells[temp_ind]
-                # ______________________________________________________________________________________
-                callback(oxidant_cells, oxidant, full_3d, shm_mdata_product, shm_mdata_active, shm_mdata_product_init,
-                         nucleation_probabilities, product_x_nzs_mdata)
-
-    shm_o.close()
-    shm_p_FULL.close()
-
-
-def ci_single_MP(seeds, oxidant, full_3d, shm_mdata_product, shm_mdata_active, shm_mdata_product_init,
-                 nucleation_probabilities,
-                 product_x_nzs_mdata):
-    shm_p = shared_memory.SharedMemory(name=shm_mdata_product.name)
-    product = np.ndarray(shm_mdata_product.shape, dtype=shm_mdata_product.dtype, buffer=shm_p.buf)
-
-    shm_a = shared_memory.SharedMemory(name=shm_mdata_active.name)
-    active = np.ndarray(shm_mdata_active.shape, dtype=shm_mdata_active.dtype, buffer=shm_a.buf)
-
-    shm_product_init = shared_memory.SharedMemory(name=shm_mdata_product_init.name)
-    product_init = np.ndarray(shm_mdata_product_init.shape, dtype=shm_mdata_product_init.dtype,
-                              buffer=shm_product_init.buf)
-
-    shm_product_x_nzs = shared_memory.SharedMemory(name=product_x_nzs_mdata.name)
-    product_x_nzs = np.ndarray(product_x_nzs_mdata.shape, dtype=product_x_nzs_mdata.dtype,
-                               buffer=shm_product_x_nzs.buf)
-
-    all_arounds = nes_for_mp.calc_sur_ind_formation(seeds, active.shape[2] - 1)
-
-    neighbours = go_around_bool(active, all_arounds[:, :-2])
-    arr_len_out = np.array([np.sum(item) for item in neighbours], dtype=np.short)
-
-    temp_ind = np.where(arr_len_out > 0)[0]
-
-    if len(temp_ind) > 0:
-        seeds = seeds[temp_ind]
-        neighbours = neighbours[temp_ind]
-        all_arounds = all_arounds[temp_ind]
-        flat_arounds = np.concatenate((all_arounds[:, 0:5], all_arounds[:, -2:]), axis=1)
-        arr_len_in_flat = go_around_mult_oxid_n_also_partial_neigh_aip_MP(product_init, flat_arounds)
-        homogeneous_ind = np.where(arr_len_in_flat == 0)[0]
-        needed_prob = nucleation_probabilities.get_probabilities(arr_len_in_flat, seeds[0][2])
-        needed_prob[homogeneous_ind] = nucleation_probabilities.nucl_prob.values_pp[seeds[0][2]]  # seeds[0][2] - current plane index
-        randomise = np.array(np.random.random_sample(arr_len_in_flat.size), dtype=np.float64)
-        temp_ind = np.where(randomise < needed_prob)[0]
-
-        if len(temp_ind) > 0:
-            seeds = seeds[temp_ind]
-            neighbours = neighbours[temp_ind]
-            all_arounds = all_arounds[temp_ind]
-
-            out_to_del = [np.array(np.nonzero(item)[0]) for item in neighbours]
-            to_del = [np.random.choice(item, 1, replace=False) for item in out_to_del]
-            coord = np.array([all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(to_del)],
-                             dtype=np.short)
-
-            coord = np.reshape(coord, (len(coord) * 1, 3))
-            coord = coord.transpose()
-            seeds = seeds.transpose()
-
-
-
-            # counts = active[coord[0], coord[1], coord[2]]
-
-
-
-
-            active[coord[0], coord[1], coord[2]] -= 1
-            oxidant[seeds[0], seeds[1], seeds[2]] -= 1
-            # print()
-            # print("For seeds: ", seeds)
-            #
-            # print("Coords: ", coord)
-            # print("counts at Coords: ", counts)
-            # print()
-            # self.objs[self.case]["product"].c3d[coord[0], coord[1], coord[2]] += 1  # precip on place of active!
-            product[seeds[0], seeds[1], seeds[2]] += 1  # precip on place of oxidant!
-
-            # self.objs[self.case]["product"].fix_full_cells(coord)  # precip on place of active!
-            # self.cur_case.product.fix_full_cells(seeds)  # precip on place of oxidant!
-            fix_full_cells(product, full_3d, seeds)
-
-            # mark the x-plane where the precipitate has happened, so the index of this plane can be called in the
-            # dissolution function
-            product_x_nzs[seeds[2][0]] = True
-
-    shm_p.close()
-    shm_a.close()
-    shm_product_init.close()
-    shm_product_x_nzs.close()
-
-def dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP(shm_mdata, chunk_range, comb_ind, aggregated_ind,
-                                                      dissolution_probabilities):
-    to_dissolve = np.array([[], [], []], dtype=np.short)
-    shm = shared_memory.SharedMemory(name=shm_mdata.name)
-    array_3D = np.ndarray(shm_mdata.shape, dtype=shm_mdata.dtype, buffer=shm.buf)
-    to_dissol_pn_buffer = np.array([[], [], []], dtype=np.short)
-
-    nz_ind = np.array(np.nonzero(array_3D[chunk_range[0]:chunk_range[1], :, comb_ind]))
-    nz_ind[0] += chunk_range[0]
-    coord_buffer = nz_ind
-
-    new_data = comb_ind[nz_ind[2]]
-    coord_buffer[2, :] = new_data
-
-    if len(coord_buffer[0]) > 0:
-        flat_arounds = nes_for_mp.calc_sur_ind_decompose_flat_with_zero(coord_buffer)
-
-        all_neigh = go_around_int(array_3D, flat_arounds)
-        all_neigh[:, 6] -= 1
-
-        all_neigh_block = np.array([])
-        all_neigh_no_block = np.array([])
-        numb_in_prod_block = np.array([], dtype=int)
-        numb_in_prod_no_block = np.array([], dtype=int)
-
-        where_not_null = np.unique(np.where(all_neigh[:, :6] > 0)[0])
-        to_dissol_no_neigh = np.array(np.delete(coord_buffer, where_not_null, axis=1), dtype=np.short)
-        coord_buffer = coord_buffer[:, where_not_null]
-
-        if len(coord_buffer[0]) > 0:
-            all_neigh = all_neigh[where_not_null]
-            numb_in_prod = all_neigh[:, -1]
-
-            all_neigh_bool = np.array(all_neigh[:, :6], dtype=bool)
-
-            arr_len_flat = np.sum(all_neigh_bool, axis=1)
-
-            index_outside = np.where((arr_len_flat < 6))[0]
-            coord_buffer = coord_buffer[:, index_outside]
-
-            all_neigh_bool = all_neigh_bool[index_outside]
-            arr_len_flat = arr_len_flat[index_outside]
-            numb_in_prod = numb_in_prod[index_outside]
-
-            non_flat_arounds = nes_for_mp.calc_sur_ind_decompose_no_flat(coord_buffer)
-            non_flat_neigh = go_around_bool(array_3D, non_flat_arounds)
-            all_neigh_bool = np.concatenate((all_neigh_bool, non_flat_neigh), axis=1)
-            ind_where_blocks = aggregate(aggregated_ind, all_neigh_bool)
-
-            if len(ind_where_blocks) > 0:
-                to_dissol_pn_buffer = np.array(np.delete(coord_buffer, ind_where_blocks, axis=1), dtype=np.short)
-
-                all_neigh_no_block = np.delete(arr_len_flat, ind_where_blocks)
-                numb_in_prod_no_block = np.delete(numb_in_prod, ind_where_blocks, axis=0)
-                coord_buffer = coord_buffer[:, ind_where_blocks]
-                all_neigh_block = arr_len_flat[ind_where_blocks]
-
-                numb_in_prod_block = numb_in_prod[ind_where_blocks]
-            else:
-                to_dissol_pn_buffer = coord_buffer
-                all_neigh_no_block = arr_len_flat
-                numb_in_prod_no_block = numb_in_prod
-
-                coord_buffer = np.array([[], [], []], dtype=np.ushort)
-                all_neigh_block = np.array([])
-                numb_in_prod_block = np.array([], dtype=int)
-
-        to_dissolve_no_block = to_dissol_pn_buffer
-        probs_no_block = dissolution_probabilities.get_probabilities(all_neigh_no_block, to_dissolve_no_block[2])
-
-        non_z_ind = np.where(numb_in_prod_no_block != 0)[0]
-        repeated_coords = np.repeat(to_dissolve_no_block[:, non_z_ind], numb_in_prod_no_block[non_z_ind], axis=1)
-        repeated_probs = np.repeat(probs_no_block[non_z_ind], numb_in_prod_no_block[non_z_ind])
-        to_dissolve_no_block = np.concatenate((to_dissolve_no_block, repeated_coords), axis=1)
-        probs_no_block = np.concatenate((probs_no_block, repeated_probs))
-        randomise = np.random.random_sample(len(to_dissolve_no_block[0]))
-        temp_ind = np.where(randomise < probs_no_block)[0]
-        to_dissolve_no_block = to_dissolve_no_block[:, temp_ind]
-
-        to_dissolve_block = coord_buffer
-        probs_block = dissolution_probabilities.get_probabilities_block(all_neigh_block, to_dissolve_block[2])
-
-        non_z_ind = np.where(numb_in_prod_block != 0)[0]
-        repeated_coords = np.repeat(to_dissolve_block[:, non_z_ind], numb_in_prod_block[non_z_ind], axis=1)
-        repeated_probs = np.repeat(probs_block[non_z_ind], numb_in_prod_block[non_z_ind])
-        to_dissolve_block = np.concatenate((to_dissolve_block, repeated_coords), axis=1)
-        probs_block = np.concatenate((probs_block, repeated_probs))
-        randomise = np.random.random_sample(len(to_dissolve_block[0]))
-        temp_ind = np.where(randomise < probs_block)[0]
-        to_dissolve_block = to_dissolve_block[:, temp_ind]
-
-        probs_no_neigh = dissolution_probabilities.dissol_prob.values_pp[to_dissol_no_neigh[2]]
-        randomise = np.random.random_sample(len(to_dissol_no_neigh[0]))
-        temp_ind = np.where(randomise < probs_no_neigh)[0]
-        to_dissol_no_neigh = to_dissol_no_neigh[:, temp_ind]
-
-        to_dissolve = np.concatenate((to_dissolve_no_block, to_dissol_no_neigh, to_dissolve_block), axis=1)
-
-    shm.close()
-    return to_dissolve
-
-
-def worker(args):
-    callback = args[-1]
-    args = args[:-1]
-    result = callback(*args)
-    return result
-
-
-# def worker(input_queue, output_queue):
-#     while True:
-#         args = input_queue.get()
-#         if args is None:
-#             break
-#         callback = args[-1]
-#         args = args[:-1]
-#         result = callback(*args)
-#         output_queue.put(result)
+from .nucleation_functions import *
+from .dissolution_functions import *
 
 
 class CellularAutomata:
@@ -305,6 +53,7 @@ class CellularAutomata:
             self.precip_func = None  # must be defined elsewhere
             self.get_combi_ind = None  # must be defined elsewhere
             self.precip_step = None  # must be defined elsewhere
+            self.get_cur_ioz_bound = None  # must be defined elsewhere
             self.check_intersection = None  # must be defined elsewhere
             self.decomposition = None  # must be defined elsewhere
             self.decomposition_intrinsic = None  # must be defined elsewhere
@@ -484,8 +233,6 @@ class CellularAutomata:
 
             self.prev_len = 0
             self.powers = physical_data.POWERS
-
-
 
     def dissolution_zhou_wei_original(self):
         """Implementation of original not adapted Zhou and Wei approach. Only two probabilities p for block and pn
@@ -1330,11 +1077,12 @@ class CellularAutomata:
                 self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
 
     def get_combi_ind_standard(self):
+        ioz_bound = self.get_cur_ioz_bound()
         oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.furthest_index + 1)], dtype=np.uint32)
+                            in range(ioz_bound + 1)], dtype=np.uint32)
 
         active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
-                           in range(self.furthest_index + 1)], dtype=np.uint32)
+                           in range(ioz_bound + 1)], dtype=np.uint32)
 
         oxidant_indexes = np.where(oxidant > 0)[0]
         active_indexes = np.where(active > 0)[0]
@@ -1344,7 +1092,7 @@ class CellularAutomata:
             indexs = np.where(oxidant_indexes >= min_act - 1)[0]
             self.comb_indexes = oxidant_indexes[indexs]
         else:
-            self.comb_indexes = [self.furthest_index]
+            self.comb_indexes = [ioz_bound]
 
     def get_combi_ind_cells_around_product(self):
         oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
@@ -1433,22 +1181,29 @@ class CellularAutomata:
         self.comb_indexes = np.unique(np.concatenate((self.comb_indexes, where_solub_prod)))
 
     def get_combi_ind_atomic(self):
+        ioz_bound = self.get_cur_ioz_bound()
+
         oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.furthest_index + 1)], dtype=np.uint32)
+                            in range(ioz_bound + 1)], dtype=np.uint32)
         oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
         active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
-                           in range(self.furthest_index + 1)], dtype=np.uint32)
+                           in range(ioz_bound + 1)], dtype=np.uint32)
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
         product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.furthest_index + 1)], dtype=np.uint32)
+                            in range(ioz_bound + 1)], dtype=np.uint32)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
+        less_than_zero = np.where(matrix_moles < 0)[0]
+        matrix_moles[less_than_zero] = 0
         whole_moles = matrix_moles + oxidant_moles + active_moles + product_moles
-
         product_c = product_moles / whole_moles
+
+        if self.iteration % Config.STRIDE == 0:
+            self.record_prod_per_layer(ioz_bound, product_c, np.zeros(product_c.shape))
+
         self.product_indexes = np.where(product_c <= Config.PHASE_FRACTION_LIMIT)[0]
 
         self.comb_indexes = self.get_active_oxidant_mutual_indexes(oxidant, active)
@@ -1590,10 +1345,11 @@ class CellularAutomata:
         self.comb_indexes = np.intersect1d(self.comb_indexes, self.product_indexes)
 
     def get_combi_ind_atomic_with_kinetic_and_KP(self):
-        self.curr_time = Config.GENERATED_VALUES.TAU * (self.iteration + 1)
+        # self.curr_time = Config.GENERATED_VALUES.TAU * (self.iteration + 1)
+        # active_ind = np.where(self.active_times <= self.curr_time)[0]
+        # ioz_bound = min(np.amax(active_ind), self.furthest_index)
 
-        active_ind = np.where(self.active_times <= self.curr_time)[0]
-        ioz_bound = min(np.amax(active_ind), self.furthest_index)
+        ioz_bound = self.get_cur_ioz_bound()
 
         oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in range(ioz_bound + 1)], dtype=np.uint32)
@@ -1621,11 +1377,12 @@ class CellularAutomata:
         self.diffs = product_c - soll_prod
 
         if self.iteration % Config.STRIDE == 0:
-            itera = np.full(ioz_bound + 1, self.iteration) // Config.STRIDE
-            indexes = np.stack((range(ioz_bound + 1), itera))
-
-            self.cumul_prod.set_at_ind(indexes, product_c)
-            self.growth_rate.set_at_ind(indexes, soll_prod)
+            self.record_prod_per_layer(ioz_bound, product_c, soll_prod)
+            # itera = np.full(ioz_bound + 1, self.iteration) // Config.STRIDE
+            # indexes = np.stack((range(ioz_bound + 1), itera))
+            #
+            # self.cumul_prod.set_at_ind(indexes, product_c)
+            # self.growth_rate.set_at_ind(indexes, soll_prod)
 
         # self.diffs = product_c - soll_prod
         # self.product_indexes = np.where((product_c <= Config.PHASE_FRACTION_LIMIT) & (self.diffs <= 0))[0]
@@ -1903,15 +1660,11 @@ class CellularAutomata:
 
             nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
                                                                      Config.PRODUCTS.PRIMARY)
-            # tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-            #         self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, [ind],
-            #         self.fetch_ind, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in self.comb_indexes]
-
             if len(self.comb_indexes) <= Config.DEPTH_PER_DIV:
                 p_tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                          self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata,
-                          self.comb_indexes, fetch_batch, nucleation_probabilities, ci_single_MP,
-                          precip_step_standard_MP) for fetch_batch in self.primary_fetch_ind]
+                            self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata,
+                            self.comb_indexes, fetch_batch, nucleation_probabilities, ci_single_MP,
+                            precip_step_standard_MP) for fetch_batch in self.primary_fetch_ind]
                 s_tasks = [
                     (self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
                      self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata,
@@ -1921,12 +1674,10 @@ class CellularAutomata:
                 ind_chunks = [self.comb_indexes[i:i + Config.DEPTH_PER_DIV]
                               for i in range(0, len(self.comb_indexes), Config.DEPTH_PER_DIV)]
 
-                # print(ind_chunks)
-
                 p_tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                          self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
-                          fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
-                         ind_chunks for fetch_batch in self.primary_fetch_ind]
+                            self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
+                            fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
+                           ind_chunks for fetch_batch in self.primary_fetch_ind]
 
                 s_tasks = [
                     (self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
@@ -1934,27 +1685,8 @@ class CellularAutomata:
                      fetch_batch, nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind in
                     ind_chunks for fetch_batch in self.secondary_fetch_ind]
 
-            # p_before = int(np.sum(self.primary_product.c3d[:, :, 0]))
-            # print()
-            # print("P before: ", p_before)
-
-            # a_before = int(np.sum(self.primary_active.c3d[:, :, 0]))
-            # print("A before: ", a_before)
-
             self.pool.map(worker, p_tasks)
             self.pool.map(worker, s_tasks)
-
-            # p_after = int(np.sum(self.primary_product.c3d[:, :, 0]))
-            # print("P after: ", p_after)
-            # print("Delta P: ", p_after-p_before)
-
-            # a_after = int(np.sum(self.primary_active.c3d[:, :, 0]))
-            # print("A after: ", a_after)
-            # print("Delta A: ", a_after - a_before)
-            # print("_______")
-
-            # if  (p_after-p_before) + (a_after - a_before) != 0:
-            #     print("UNEQUAL!!!!!")
 
         self.primary_oxidant.transform_to_descards()
 
@@ -2164,25 +1896,27 @@ class CellularAutomata:
         self.comb_indexes = self.comb_indexes[temp]
 
         if len(self.comb_indexes) > 0:
-            dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
-                                                                       Config.PRODUCTS.PRIMARY)
-
-            tasks = [(self.primary_product.shm_mdata, chunk_range, self.comb_indexes, self.aggregated_ind,
-                      dissolution_probabilities, dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP) for chunk_range in
-                     self.chunk_ranges]
-
-            results = self.pool.map(worker, tasks)
-
-            to_dissolve = np.array(np.concatenate(results, axis=1), dtype=np.ushort)
-            if len(to_dissolve[0]) > 0:
-                just_decrease_counts(self.primary_product.c3d, to_dissolve)
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                insert_counts(self.primary_active.c3d, to_dissolve)
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
+            self.decomposition_intrinsic()
+            # dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
+            #                                                            Config.PRODUCTS.PRIMARY)
+            #
+            # tasks = [(self.primary_product.shm_mdata, chunk_range, self.comb_indexes, self.aggregated_ind,
+            #           dissolution_probabilities, dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP)
+            #          for chunk_range in
+            #          self.chunk_ranges]
+            #
+            # results = self.pool.map(worker, tasks)
+            #
+            # to_dissolve = np.array(np.concatenate(results, axis=1), dtype=np.ushort)
+            # if len(to_dissolve[0]) > 0:
+            #     just_decrease_counts(self.primary_product.c3d, to_dissolve)
+            #     self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
+            #     insert_counts(self.primary_active.c3d, to_dissolve)
+            #     self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
+            #     new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
+            #     new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
+            #     new_dirs -= 1
+            #     self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
 
     def dissolution_atomic_if_stable_higer_p(self):
         self.comb_indexes = np.where(self.product_x_nzs)[0]
@@ -2382,7 +2116,7 @@ class CellularAutomata:
                                                                        Config.PRODUCTS.PRIMARY)
 
             tasks = [(self.primary_product.shm_mdata, chunk_range, self.comb_indexes, self.aggregated_ind,
-                      dissolution_probabilities, dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP) for chunk_range in
+                      dissolution_probabilities, df.dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP) for chunk_range in
                      self.chunk_ranges]
 
             results = self.pool.map(worker, tasks)
@@ -3331,7 +3065,6 @@ class CellularAutomata:
         Resolution inside a product: probability adjusted according to a number of neighbours"""
         return np.sum(go_around_int(self.cur_case.precip_3d_init, around_coords), axis=1)
 
-
     def go_around_single_oxid_n_single_neigh(self, around_coords):
         """Does not distinguish between multiple flat neighbours. If at least one flat neighbour P=P1"""
         flat_neighbours = go_around_bool(self.cur_case.precip_3d_init, around_coords)
@@ -3460,6 +3193,43 @@ class CellularAutomata:
             print("Number of Cells per Axis must be divisible by ", size, "!!!")
             print("______________________________________________________________")
             sys.exit()
+
+    def record_prod_per_layer(self, ioz_bound, product_is, product_goal):
+        itera = np.full(ioz_bound + 1, self.iteration) // Config.STRIDE
+        indexes = np.stack((range(ioz_bound + 1), itera))
+        self.cumul_prod.set_at_ind(indexes, product_is)
+        self.growth_rate.set_at_ind(indexes, product_goal)
+
+    def simple_decompose_mp(self):
+        dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
+                                                                   Config.PRODUCTS.PRIMARY)
+
+        tasks = [(self.primary_product.shm_mdata, chunk_range, self.comb_indexes, self.aggregated_ind,
+                  dissolution_probabilities, dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP)
+                 for chunk_range in
+                 self.chunk_ranges]
+
+        results = self.pool.map(worker, tasks)
+
+        to_dissolve = np.array(np.concatenate(results, axis=1), dtype=np.ushort)
+        if len(to_dissolve[0]) > 0:
+            just_decrease_counts(self.primary_product.c3d, to_dissolve)
+            self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
+            insert_counts(self.primary_active.c3d, to_dissolve)
+            self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
+            new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
+            new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
+            new_dirs -= 1
+            self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
+
+    def ioz_depth_from_kinetics(self):
+        self.curr_time = Config.GENERATED_VALUES.TAU * (self.iteration + 1)
+        active_ind = np.where(self.active_times <= self.curr_time)[0]
+        return min(np.amax(active_ind), self.furthest_index)
+
+    def ioz_depth_furthest_inward(self):
+        return self.furthest_index
+
 
 
 

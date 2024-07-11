@@ -16,13 +16,14 @@ class SimulationConfigurator:
         self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_with_scale
         self.ca.primary_active.diffuse = self.ca.primary_active.diffuse_with_scale
 
+        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_from_kinetics
         self.ca.precip_func = self.ca.precipitation_first_case_MP
-        self.ca.get_combi_ind = self.ca.get_combi_ind_atomic_with_kinetic_and_KP
+        self.ca.get_combi_ind = self.ca.get_combi_ind_atomic
         # self.ca.precip_step = self.ca.precip_step_standard_MP
         # self.ca.check_intersection = self.ca.ci_single_MP
 
-        self.ca.decomposition = self.ca.dissolution_atomic_stop_if_stable_MP
-        # self.ca.decomposition_intrinsic = self.ca.dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP
+        self.ca.decomposition = self.ca.dissolution_atomic_stop_if_stable
+        self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
 
         self.ca.cur_case = self.ca.cases.first
         # self.ca.cases.first.go_around_func_ref = self.ca.go_around_mult_oxid_n_also_partial_neigh_aip_MP
@@ -85,7 +86,6 @@ class SimulationConfigurator:
             self.ca.diffusion_inward()
             # self.ca.diffusion_outward()
             self.ca.diffusion_outward_mp()
-
             # self.calc_precipitation_front_only_cells()
             # self.diffusion_outward_with_mult_srtide()
 
@@ -93,8 +93,6 @@ class SimulationConfigurator:
         self.elapsed_time = (end - self.begin)
         self.db.insert_time(self.elapsed_time)
         self.db.conn.commit()
-
-        # self.terminate_workers()
 
     def save_results(self):
         if Config.STRIDE > Config.N_ITERATIONS:
@@ -144,14 +142,6 @@ class SimulationConfigurator:
                 break
 
     def terminate_workers(self):
-        # # Signal workers to terminate
-        # for _ in self.ca.workers:
-        #     self.ca.input_queue.put(None)
-        #
-        # # Wait for all workers to terminate
-        # for wrkr in self.ca.workers:
-        #     wrkr.join()
-
         self.ca.pool.close()
         self.ca.pool.join()
         print()
@@ -198,18 +188,3 @@ class SimulationConfigurator:
 
     def insert_last_it(self):
         self.db.insert_last_iteration(self.ca.iteration)
-
-    # def enforce_gc(self):
-    #     # for _ in self.ca.workers:
-    #     #     args = "GC"
-    #     #     self.ca.input_queue.put(args)
-    #     #
-    #     # results = []
-    #     # for _ in self.ca.workers:
-    #     #     result = self.ca.output_queue.get()
-    #     #     results.append(result)
-    #
-    #     args = [("GC") for _ in range(self.ca.numb_of_proc)]
-    #     results = self.ca.pool.map(CellularAutomata.worker, args)
-    #     gc.collect()
-    #     print("Done GC. Results after: ", results)

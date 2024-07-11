@@ -77,7 +77,7 @@ class Config:
     NUMBER_OF_PROCESSES = 16
     NUMBER_OF_DIVS_PER_PAGE = 2
     DEPTH_PER_DIV = 5
-    MAX_TASK_PER_CHILD = 10000
+    MAX_TASK_PER_CHILD = 25000
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()

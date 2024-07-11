@@ -33,7 +33,7 @@ def get_diff_coeff(temperature, cond):
                   }
     return diff_coeff[cond]
 
-POWERS = np.full(110, 1, dtype=float)
+POWERS = np.full(110, 0.8, dtype=float)
 POWERS[0:6] = 1.1
 
 # POWERS = np.array([1.1,

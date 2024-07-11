@@ -1,5 +1,5 @@
-import numpy as np
 from configuration import Config
+import numpy as np
 
 
 def generate_neigh_indexes_flat():
@@ -76,5 +76,3 @@ def calc_sur_ind_formation(seeds, dummy_ind):
         indexes = np.where(around_seeds[:, :, 0:2] == - shift - 1)
         around_seeds[indexes[0], indexes[1], indexes[2]] = Config.N_CELLS_PER_AXIS - shift - 1
     return around_seeds
-
-

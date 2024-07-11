@@ -1,8 +1,6 @@
 import numba
 import numpy as np
 
-# @numba.njit(nopython=True)
-
 
 @numba.njit(nopython=True, fastmath=True)
 def go_around_bool(array_3d, arounds):

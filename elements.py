@@ -2,6 +2,7 @@
 from utils.numba_functions import *
 from configuration import Config
 from multiprocessing import shared_memory
+from cellular_automata.nes_for_mp import *
 
 
 class ActiveElem:
@@ -730,21 +731,6 @@ class Product:
         counts = self.c3d[precipitations[0], precipitations[1], precipitations[2]]
         return np.array(np.repeat(precipitations, counts, axis=1), dtype=np.short)
 
-
-class SharedMetaData:
-    def __init__(self, shm_name, shape, dtype):
-        self.name = shm_name
-        self.shape = shape
-        self.dtype = dtype
-
-
-class PRanges:
-    def __init__(self, p1_range, p2_range, p3_range, p4_range, p_r_range):
-        self.p1_range = p1_range
-        self.p2_range = p2_range
-        self.p3_range = p3_range
-        self.p4_range = p4_range
-        self.p_r_range = p_r_range
 
 
 def diffuse_bulk_mp(working_range, cells_shm_mdata, dirs_shm_mdata, cells_per_axis, p_ranges):
