@@ -195,18 +195,6 @@ class CellularAutomata:
         self.threshold_inward = Config.THRESHOLD_INWARD
         self.threshold_outward = Config.THRESHOLD_OUTWARD
 
-        # self.cases.first.nucleation_probabilities = None  # must be defined elsewhere
-        # self.cases.first.dissolution_probabilities = None  # must be defined elsewhere
-        #
-        # self.cases.second.nucleation_probabilities = None  # must be defined elsewhere
-        # self.cases.second.dissolution_probabilities = None  # must be defined elsewhere
-        #
-        # self.cases.third.nucleation_probabilities = None  # must be defined elsewhere
-        # self.cases.third.dissolution_probabilities = None  # must be defined elsewhere
-        #
-        # self.cases.fourth.nucleation_probabilities = None  # must be defined elsewhere
-        # self.cases.fourth.dissolution_probabilities = None  # must be defined elsewhere
-
         self.comb_indexes = None
         self.rel_prod_fraction = None
         self.gamma_primes = None
@@ -2852,6 +2840,7 @@ class CellularAutomata:
             just_decrease_counts(self.primary_product.c3d, to_dissolve)
             self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
             insert_counts(self.primary_active.c3d, to_dissolve)
+
             self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
             new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
             new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
@@ -2865,12 +2854,12 @@ class CellularAutomata:
 
         if len(self.comb_indexes) <= Config.DEPTH_PER_DIV:
             p_tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                        self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata,
+                        self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.c3d_shm_mdata,
                         self.comb_indexes, fetch_batch, self.cases.first.nucleation_probabilities, ci_single_MP,
                         precip_step_standard_MP) for fetch_batch in self.primary_fetch_ind]
             s_tasks = [
                 (self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                 self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata,
+                 self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.c3d_shm_mdata,
                  self.comb_indexes, fetch_batch, self.cases.first.nucleation_probabilities, ci_single_MP,
                  precip_step_standard_MP) for fetch_batch in self.secondary_fetch_ind]
         else:
@@ -2878,14 +2867,14 @@ class CellularAutomata:
                           for i in range(0, len(self.comb_indexes), Config.DEPTH_PER_DIV)]
 
             p_tasks = [(self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                        self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
+                        self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.c3d_shm_mdata, ind,
                         fetch_batch, self.cases.first.nucleation_probabilities, ci_single_MP, precip_step_standard_MP)
                        for ind in
                        ind_chunks for fetch_batch in self.primary_fetch_ind]
 
             s_tasks = [
                 (self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                 self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
+                 self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.c3d_shm_mdata, ind,
                  fetch_batch, self.cases.first.nucleation_probabilities, ci_single_MP, precip_step_standard_MP) for ind
                 in
                 ind_chunks for fetch_batch in self.secondary_fetch_ind]

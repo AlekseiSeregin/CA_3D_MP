@@ -35,7 +35,7 @@ class ActiveElem:
         self.c3d_shared = shared_memory.SharedMemory(create=True, size=temp.nbytes)
         self.c3d = np.ndarray(self.extended_shape, dtype=np.ubyte, buffer=self.c3d_shared.buf)
 
-        self.shm_mdata = SharedMetaData(self.c3d_shared.name, self.extended_shape, np.ubyte)
+        self.c3d_shm_mdata = SharedMetaData(self.c3d_shared.name, self.extended_shape, np.ubyte)
         self.in_3D_flag = False
 
         # exact concentration space fill
@@ -349,7 +349,7 @@ class OxidantElem:
         self.c3d_shared = shared_memory.SharedMemory(create=True, size=temp.nbytes)
         self.c3d = np.ndarray(self.extended_shape, dtype=np.ubyte, buffer=self.c3d_shared.buf)
 
-        self.shm_mdata = SharedMetaData(self.c3d_shared.name, self.extended_shape, np.ubyte)
+        self.c3d_shm_mdata = SharedMetaData(self.c3d_shared.name, self.extended_shape, np.ubyte)
 
         self.scale = None
         self.diffuse = None
@@ -705,7 +705,7 @@ class Product:
         temp = np.full(self.shape, 0, dtype=np.ubyte)
         self.c3d_shared = shared_memory.SharedMemory(create=True, size=temp.nbytes)
         self.c3d = np.ndarray(self.shape, dtype=np.ubyte, buffer=self.c3d_shared.buf)
-        self.shm_mdata = SharedMetaData(self.c3d_shared.name, self.shape, np.ubyte)
+        self.c3d_shm_mdata = SharedMetaData(self.c3d_shared.name, self.shape, np.ubyte)
 
         temp = np.full((self.shape[0], self.shape[1], self.shape[2] - 1), 0, dtype=bool)
         self.full_c3d_shared = shared_memory.SharedMemory(create=True, size=temp.nbytes)

@@ -16,26 +16,10 @@ class SimulationConfigurator:
 
         # setting objects for inward diffusion
         if Config.INWARD_DIFFUSION:
-            self.ca.primary_oxidant = elements.OxidantElem(Config.OXIDANTS.PRIMARY, self.utils)
-            self.ca.cases.first.oxidant = self.ca.primary_oxidant
-            self.ca.cases.second.oxidant = self.ca.primary_oxidant
-            # ---------------------------------------------------
-            if Config.OXIDANTS.SECONDARY_EXISTENCE:
-                self.ca.secondary_oxidant = elements.OxidantElem(Config.OXIDANTS.SECONDARY, self.utils)
-                self.ca.cases.third.oxidant = self.ca.secondary_oxidant
-                self.ca.cases.fourth.oxidant = self.ca.secondary_oxidant
-
+            self.init_inward()
         # setting objects for outward diffusion
         if Config.OUTWARD_DIFFUSION:
-            self.ca.primary_active = elements.ActiveElem(Config.ACTIVES.PRIMARY)
-            self.ca.cases.first.active = self.ca.primary_active
-            self.ca.cases.third.active = self.ca.primary_active
-            # ---------------------------------------------------
-            if Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.ca.secondary_active = elements.ActiveElem(Config.ACTIVES.SECONDARY)
-                self.ca.cases.second.active = self.ca.secondary_active
-                self.ca.cases.fourth.active = self.ca.secondary_active
-                # ---------------------------------------------------
+            self.init_outward()
 
         if Config.COMPUTE_PRECIPITATION:
             self.ca.primary_product = elements.Product(Config.PRODUCTS.PRIMARY)
@@ -45,6 +29,8 @@ class SimulationConfigurator:
                 print("NO IMPLEMENTATION YET")
 
             elif Config.ACTIVES.SECONDARY_EXISTENCE and not Config.OXIDANTS.SECONDARY_EXISTENCE:
+
+
                 self.ca.secondary_product = elements.Product(Config.PRODUCTS.SECONDARY)
                 self.ca.cases.second.product = self.ca.secondary_product
                 self.ca.cases.first.to_check_with = self.ca.secondary_product
@@ -153,6 +139,167 @@ class SimulationConfigurator:
         self.elapsed_time = (end - self.begin)
         self.db.insert_time(self.elapsed_time)
         self.db.conn.commit()
+
+    def init_inward(self):
+        self.ca.primary_oxidant = elements.OxidantElem(Config.OXIDANTS.PRIMARY, self.utils)
+        self.ca.cases.first.oxidant = self.ca.primary_oxidant
+        self.ca.cases.second.oxidant = self.ca.primary_oxidant
+
+        self.ca.cases.first_mp.oxidant_c3d_shm_mdata = self.ca.primary_oxidant.c3d_shm_mdata
+        self.ca.cases.second_mp.oxidant_c3d_shm_mdata = self.ca.primary_oxidant.c3d_shm_mdata
+        # ---------------------------------------------------
+        if Config.OXIDANTS.SECONDARY_EXISTENCE:
+            self.ca.secondary_oxidant = elements.OxidantElem(Config.OXIDANTS.SECONDARY, self.utils)
+            self.ca.cases.third.oxidant = self.ca.secondary_oxidant
+            self.ca.cases.fourth.oxidant = self.ca.secondary_oxidant
+
+            self.ca.cases.third_mp.oxidant_c3d_shm_mdata = self.ca.secondary_oxidant.c3d_shm_mdata
+            self.ca.cases.fourth_mp.oxidant_c3d_shm_mdata = self.ca.secondary_oxidant.c3d_shm_mdata
+
+    def init_outward(self):
+        self.ca.primary_active = elements.ActiveElem(Config.ACTIVES.PRIMARY)
+        self.ca.cases.first.active = self.ca.primary_active
+        self.ca.cases.third.active = self.ca.primary_active
+        # ---------------------------------------------------
+        # c3d
+        self.ca.cases.first_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata
+        self.ca.cases.third_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata
+        # cells
+        self.ca.cases.first_mp.active_cells_shm_mdata = self.ca.primary_active.cells_shm_mdata
+        self.ca.cases.third_mp.active_cells_shm_mdata = self.ca.primary_active.cells_shm_mdata
+        # dirs
+        self.ca.cases.first_mp.active_dirs_shm_mdata = self.ca.primary_active.dirs_shm_mdata
+        self.ca.cases.third_mp.active_dirs_shm_mdata = self.ca.primary_active.dirs_shm_mdata
+
+        # ---------------------------------------------------
+        if Config.ACTIVES.SECONDARY_EXISTENCE:
+            self.ca.secondary_active = elements.ActiveElem(Config.ACTIVES.SECONDARY)
+            self.ca.cases.second.active = self.ca.secondary_active
+            self.ca.cases.fourth.active = self.ca.secondary_active
+            # ---------------------------------------------------
+            # c3d
+            self.ca.cases.second_mp.active_c3d_shm_mdata = self.ca.secondary_active.c3d_shm_mdata
+            self.ca.cases.fourth_mp.active_c3d_shm_mdata = self.ca.secondary_active.c3d_shm_mdata
+            # cells
+            self.ca.cases.second_mp.active_cells_shm_mdata = self.ca.secondary_active.cells_shm_mdata
+            self.ca.cases.fourth_mp.active_cells_shm_mdata = self.ca.secondary_active.cells_shm_mdata
+            # dirs
+            self.ca.cases.second_mp.active_dirs_shm_mdata = self.ca.secondary_active.dirs_shm_mdata
+            self.ca.cases.fourth_mp.active_dirs_shm_mdata = self.ca.secondary_active.dirs_shm_mdata
+
+    def init_product(self):
+        self.ca.primary_product = elements.Product(Config.PRODUCTS.PRIMARY)
+        self.ca.cases.first.product = self.ca.primary_product
+
+        self.ca.primary_oxidant.scale = self.ca.primary_product
+        self.ca.primary_active.scale = self.ca.primary_product
+
+        # c3d
+        self.ca.cases.first_mp.product_c3d_shm_mdata = self.ca.primary_product.c3d_shm_mdata
+        # full_c3d
+        self.ca.cases.first_mp.full_shm_mdata = self.ca.primary_product.full_shm_mdata
+        # product indexes
+        tmp = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
+        self.ca.cases.first.shm_pool["product_indexes"] = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
+        self.ca.cases.first.prod_indexes = np.ndarray(tmp.shape, dtype=tmp.dtype,
+                                                      buffer=self.ca.cases.first.shm_pool["product_indexes"].buf)
+        np.copyto(self.ca.cases.first.prod_indexes, tmp)
+        self.ca.cases.first_mp.prod_indexes_shm_mdata = SharedMetaData(self.ca.cases.first.shm_pool["product_indexes"].name,
+                                                                       tmp.shape, tmp.dtype)
+
+        if Config.ACTIVES.SECONDARY_EXISTENCE and Config.OXIDANTS.SECONDARY_EXISTENCE:
+            print("NO IMPLEMENTATION YET")
+
+        elif Config.ACTIVES.SECONDARY_EXISTENCE and not Config.OXIDANTS.SECONDARY_EXISTENCE:
+            self.ca.secondary_product = elements.Product(Config.PRODUCTS.SECONDARY)
+            self.ca.cases.second.product = self.ca.secondary_product
+            self.ca.cases.first.to_check_with = self.ca.secondary_product
+            self.ca.cases.second.to_check_with = self.ca.primary_product
+
+            self.ca.cases.first.prod_indexes = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
+            self.ca.cases.second.prod_indexes = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
+
+            if self.ca.cases.first.product.oxidation_number == 1:
+                self.ca.cases.first.go_around_func_ref = self.ca.go_around_single_oxid_n
+                self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
+                my_type = bool
+            else:
+                self.ca.cases.first.go_around_func_ref = self.ca.go_around_mult_oxid_n
+                self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_int
+                my_type = np.ubyte
+            self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
+                                                          Config.N_CELLS_PER_AXIS + 1), 0, dtype=my_type)
+
+            if self.ca.cases.second.product.oxidation_number == 1:
+                self.ca.cases.second.go_around_func_ref = self.ca.go_around_single_oxid_n
+                self.ca.cases.second.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
+                my_type = bool
+            else:
+                self.ca.cases.second.go_around_func_ref = self.ca.go_around_mult_oxid_n
+                self.ca.cases.second.fix_init_precip_func_ref = self.ca.fix_init_precip_int
+                my_type = np.ubyte
+            self.ca.cases.second.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
+                                                           Config.N_CELLS_PER_AXIS + 1), 0, dtype=my_type)
+
+        else:
+            if self.ca.cases.first.product.oxidation_number == 1:
+                self.ca.cases.first.go_around_func_ref = self.ca.go_around_single_oxid_n
+                self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
+                self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
+                                                              Config.N_CELLS_PER_AXIS + 1), False, dtype=bool)
+            else:
+                # self.cases.first.go_around_func_ref = self.go_around_mult_oxid_n
+                self.ca.cases.first.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
+                # self.cases.first.go_around_func_ref = self.go_around_mult_oxid_n_also_partial_neigh  # CHANGE!!!!
+                # self.cases.first.fix_init_precip_func_ref = self.fix_init_precip_int
+                self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
+                                                              Config.N_CELLS_PER_AXIS + 1), 0, dtype=np.ubyte)
+
+    def init_first_case(self):
+        self.ca.primary_product = elements.Product(Config.PRODUCTS.PRIMARY)
+        self.ca.cases.first.product = self.ca.primary_product
+
+        self.ca.primary_oxidant.scale = self.ca.primary_product
+        self.ca.primary_active.scale = self.ca.primary_product
+        # c3d
+        self.ca.cases.first_mp.product_c3d_shm_mdata = self.ca.primary_product.c3d_shm_mdata
+        # full_c3d
+        self.ca.cases.first_mp.full_shm_mdata = self.ca.primary_product.full_shm_mdata
+        # product indexes
+        tmp = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
+        self.ca.cases.first.shm_pool["product_indexes"] = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
+        self.ca.cases.first.prod_indexes = np.ndarray(tmp.shape, dtype=tmp.dtype, buffer=self.ca.cases.first.shm_pool["product_indexes"].buf)
+        np.copyto(self.ca.cases.first.prod_indexes, tmp)
+        self.ca.cases.first_mp.prod_indexes_shm_mdata = SharedMetaData(self.ca.cases.first.shm_pool["product_indexes"].name,
+                                                                       tmp.shape, tmp.dtype)
+        if self.ca.cases.first.product.oxidation_number == 1:
+            self.ca.cases.first.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
+            self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
+            my_type = bool
+        else:
+            self.ca.cases.first.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
+            self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_int
+            my_type = np.ubyte
+
+        tmp = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), False,
+                      dtype=my_type)
+        self.ca.cases.first.shm_pool["precip_3d_init"] = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
+        self.ca.cases.first.precip_3d_init = np.ndarray(tmp.shape, dtype=tmp.dtype, buffer=self.ca.cases.first.shm_pool["precip_3d_init"].buf)
+        np.copyto(self.ca.cases.first.precip_3d_init, tmp)
+        self.ca.cases.first_mp.precip_3d_init_shm_mdata = SharedMetaData(self.ca.cases.first.shm_pool["precip_3d_init"].name,
+                                                                         tmp.shape, tmp.dtype)
+
+    def init_second_case(self):
+        self.init_first_case()
+
+        self.ca.secondary_product = elements.Product(Config.PRODUCTS.SECONDARY)
+        self.ca.cases.second.product = self.ca.secondary_product
+
+        self.ca.cases.second.to_check_with = self.ca.primary_product
+
+        self.ca.cases.first.to_check_with = self.ca.secondary_product
+
+        self.ca.cases.second.prod_indexes = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
 
     def save_results(self):
         if Config.STRIDE > Config.N_ITERATIONS:
