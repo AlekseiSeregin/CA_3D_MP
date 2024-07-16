@@ -17,13 +17,13 @@ class CompPool:
 
 class TdDATA:
     def __init__(self):
-        self.TD_file = "C:/Users/aseregin/PycharmProjects/CA_3D/thermodynamics/TD_look_up.pkl"
+        self.TD_file = "C:/CA_3D_MP/thermodynamics/TD_look_up.pkl"
 
         self.TD_lookup = None
         self.keys = None
         self.tree = None
 
-        self.fetch_look_up_from_file()
+        # self.fetch_look_up_from_file()
 
     def gen_table_nested_dict(self):
         # Define the composition ranges for Cr, Al, and O

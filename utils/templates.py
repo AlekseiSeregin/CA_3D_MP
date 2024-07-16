@@ -12,9 +12,26 @@ class CaseSetUp:
         self.dissolution_probabilities = None
 
 
+class CaseSetUpMP:
+    def __init__(self):
+        self.active_c3d_shm_mdata = None
+        self.active_cells_shm_mdata = None
+        self.active_dirs_shm_mdata = None
+        self.product_c3d_shm_mdata = None
+        self.full_shm_mdata = None
+        self.to_check_with = None
+        self.prod_indexes_shm_mdata = None
+        self.go_around_func_ref = None
+        self.precip_3d_init_shm_mdata = None
+
+
 class CaseRef:
     def __init__(self):
         self.first = CaseSetUp()
+        self.first_mp = CaseSetUpMP()
         self.second = CaseSetUp()
+        self.second_mp = CaseSetUpMP()
         self.third = CaseSetUp()
+        self.third_mp = CaseSetUpMP()
         self.fourth = CaseSetUp()
+        self.fourth_mp = CaseSetUpMP()

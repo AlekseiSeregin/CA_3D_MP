@@ -2,6 +2,13 @@ from new_engine import *
 
 
 if __name__ == '__main__':
+
+    class CompPool:
+        def __init__(self):
+            self.primary = 0
+            self.secondary = 0
+
+
     Config.COMMENT = """
 
     Nucleation and dissolution throughout the whole simulation (both schemes applied). Also with kinetic coefficient!!!
@@ -68,6 +75,5 @@ if __name__ == '__main__':
         print("Simulation was closed at Iteration: ", new_system.ca.iteration)
         print("____________________________________________________________")
         print()
-        # traceback.print_exc()
 
 

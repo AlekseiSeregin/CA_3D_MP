@@ -8,21 +8,15 @@ def precip_step_standard_MP(product_x_nzs_mdata, shm_mdata_product, shm_mdata_fu
                             callback):
     shm_o = shared_memory.SharedMemory(name=shm_mdata_oxidant.name)
     oxidant = np.ndarray(shm_mdata_oxidant.shape, dtype=shm_mdata_oxidant.dtype, buffer=shm_o.buf)
-
     shm_p_FULL = shared_memory.SharedMemory(name=shm_mdata_full_product.name)
     full_3d = np.ndarray(shm_mdata_full_product.shape, dtype=shm_mdata_full_product.dtype, buffer=shm_p_FULL.buf)
 
     for fetch_ind in fetch_indexes:
         plane_indexes = np.array(plane_indexes)
-        # oxidant_cells1 = oxidant[fetch_ind[0][:, np.newaxis], fetch_ind[1][:, np.newaxis], plane_indexes]
         nonzero_indices = np.nonzero(oxidant[fetch_ind[0][:, np.newaxis], fetch_ind[1][:, np.newaxis], plane_indexes])
         oxidant_cells = fetch_ind[:, nonzero_indices[0]]
-        # nz = np.array(nonzero_indices[1])
-        # oxidant_cells = fetch_ind[:, oxidant_cells2]
 
         if len(oxidant_cells[0]) != 0:
-            # n_plane_indexes = plane_indexes[np.array(nonzero_indices[1])]
-            # oxidant_cells = np.vstack((oxidant_cells, np.full(len(oxidant_cells[0]), plane_indexes)))
             oxidant_cells = np.vstack((oxidant_cells, plane_indexes[np.array(nonzero_indices[1])]))
             oxidant_cells = np.array(oxidant_cells, dtype=np.short).transpose()
             exists = check_at_coord(full_3d, oxidant_cells)  # precip on place of oxidant!
@@ -37,7 +31,6 @@ def precip_step_standard_MP(product_x_nzs_mdata, shm_mdata_product, shm_mdata_fu
                 # ______________________________________________________________________________________
                 callback(oxidant_cells, oxidant, full_3d, shm_mdata_product, shm_mdata_active, shm_mdata_product_init,
                          nucleation_probabilities, product_x_nzs_mdata)
-
     shm_o.close()
     shm_p_FULL.close()
 
@@ -47,34 +40,34 @@ def ci_single_MP(seeds, oxidant, full_3d, shm_mdata_product, shm_mdata_active, s
                  product_x_nzs_mdata):
     shm_p = shared_memory.SharedMemory(name=shm_mdata_product.name)
     product = np.ndarray(shm_mdata_product.shape, dtype=shm_mdata_product.dtype, buffer=shm_p.buf)
-
     shm_a = shared_memory.SharedMemory(name=shm_mdata_active.name)
     active = np.ndarray(shm_mdata_active.shape, dtype=shm_mdata_active.dtype, buffer=shm_a.buf)
-
     shm_product_init = shared_memory.SharedMemory(name=shm_mdata_product_init.name)
     product_init = np.ndarray(shm_mdata_product_init.shape, dtype=shm_mdata_product_init.dtype,
                               buffer=shm_product_init.buf)
-
     shm_product_x_nzs = shared_memory.SharedMemory(name=product_x_nzs_mdata.name)
     product_x_nzs = np.ndarray(product_x_nzs_mdata.shape, dtype=product_x_nzs_mdata.dtype,
                                buffer=shm_product_x_nzs.buf)
 
     all_arounds = calc_sur_ind_formation(seeds, active.shape[2] - 1)
-
     neighbours = go_around_bool(active, all_arounds[:, :-2])
     arr_len_out = np.array([np.sum(item) for item in neighbours], dtype=np.short)
-
     temp_ind = np.where(arr_len_out > 0)[0]
 
     if len(temp_ind) > 0:
         seeds = seeds[temp_ind]
         neighbours = neighbours[temp_ind]
         all_arounds = all_arounds[temp_ind]
+
         flat_arounds = np.concatenate((all_arounds[:, 0:5], all_arounds[:, -2:]), axis=1)
+
         arr_len_in_flat = go_around_mult_oxid_n_also_partial_neigh_aip_MP(product_init, flat_arounds)
+
         homogeneous_ind = np.where(arr_len_in_flat == 0)[0]
-        needed_prob = nucleation_probabilities.get_probabilities(arr_len_in_flat, seeds[0][2])
-        needed_prob[homogeneous_ind] = nucleation_probabilities.nucl_prob.values_pp[seeds[0][2]]  # seeds[0][2] - current plane index
+        # print(homogeneous_ind)
+        needed_prob = nucleation_probabilities.get_probabilities(arr_len_in_flat, seeds[:, 2])
+        # print(seeds)
+        needed_prob[homogeneous_ind] = nucleation_probabilities.nucl_prob.values_pp[seeds[homogeneous_ind, 2]]
         randomise = np.array(np.random.random_sample(arr_len_in_flat.size), dtype=np.float64)
         temp_ind = np.where(randomise < needed_prob)[0]
 
@@ -106,7 +99,6 @@ def ci_single_MP(seeds, oxidant, full_3d, shm_mdata_product, shm_mdata_active, s
             # mark the x-plane where the precipitate has happened, so the index of this plane can be called in the
             # dissolution function
             product_x_nzs[seeds[2][0]] = True
-
     shm_p.close()
     shm_a.close()
     shm_product_init.close()

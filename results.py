@@ -1,5 +1,4 @@
 # from visualisation import *
-import numpy as np
 
 from visualisation import *
 import tkinter as tk
@@ -32,5 +31,5 @@ visualise.plot_concentration(plot_separate=False, conc_type="atomic", analytic_s
 
 # visualise.calculate_phase_size()
 
-plot_kinetics(np.arange(12), with_kinetic=True)
+plot_kinetics(np.arange(100), with_kinetic=True)
 # plot_kinetics([0,1,5,10, 15, 20, 25], with_kinetic=True)

@@ -1866,6 +1866,6 @@ def plot_kinetics(data_to_plot, with_kinetic=False):
 
     plt.xlabel("Time [sec]")
     plt.ylabel('Concentration')
-    plt.legend()
+    # plt.legend()
     plt.show()
 

@@ -36,13 +36,13 @@ class Config:
     # ACTIVES.SECONDARY.ELEMENT = "Al"
     # ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
     # ACTIVES.SECONDARY.MASS_CONCENTRATION = 0.025
-    # ACTIVES.SECONDARY.CELLS_CONCENTRATION = 0.1
+    # ACTIVES.SECONDARY.CELLS_CONCENTRATION = 0.077037037
     # matrix
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 110  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 300000  # must be >= n_cells_per_axis
+    N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_ITERATIONS = 600000  # must be >= n_cells_per_axis
     STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
@@ -50,10 +50,10 @@ class Config:
     SIZE = 100 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
-    PHASE_FRACTION_LIMIT = 0.056
+    PHASE_FRACTION_LIMIT = 0.07
     THRESHOLD_INWARD = 1
     THRESHOLD_OUTWARD = 1
-    NEIGH_RANGE = 5   # neighbouring ranges    1, 2, 3, 4, 5,  6,  7,  8,  9,  10
+    NEIGH_RANGE = 1   # neighbouring ranges    1, 2, 3, 4, 5,  6,  7,  8,  9,  10
                       #          and           |  |  |  |  |   |   |   |   |   |
                       # corresponding divisors 3, 5, 7, 9, 11, 13, 15, 17, 19, 21
     N_BOOST_STEPS = 3
@@ -69,15 +69,15 @@ class Config:
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = True
     FULL_CELLS = False
-    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
+    SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 16
+    NUMBER_OF_PROCESSES = 24
     NUMBER_OF_DIVS_PER_PAGE = 2
-    DEPTH_PER_DIV = 5
-    MAX_TASK_PER_CHILD = 25000
+    DEPTH_PER_DIV = 1
+    MAX_TASK_PER_CHILD = 100000
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
@@ -100,7 +100,7 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 3
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 1*10**-2
+    PROBABILITIES.PRIMARY.p0_d = 5*10**-2
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 1
@@ -108,15 +108,15 @@ class Config:
     PROBABILITIES.PRIMARY.p1_d_f = 0.9999
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 1
-    PROBABILITIES.PRIMARY.p6_d = 1e-5
+    PROBABILITIES.PRIMARY.p6_d = 1e-6
     PROBABILITIES.PRIMARY.p6_d_f = 0.01
     PROBABILITIES.PRIMARY.p6_d_A_const = 1
     PROBABILITIES.PRIMARY.p6_d_B_const = 1
     PROBABILITIES.PRIMARY.global_d_A = 1
-    PROBABILITIES.PRIMARY.global_d_B = -1.2
+    PROBABILITIES.PRIMARY.global_d_B = -1.7
     PROBABILITIES.PRIMARY.global_d_B_f = -0.33
     PROBABILITIES.PRIMARY.n = 2
-    PROBABILITIES.PRIMARY.bsf = 5
+    PROBABILITIES.PRIMARY.bsf = 10
     PROBABILITIES.PRIMARY.dissol_adapt_function = 5
     # ________________________
 
