@@ -156,25 +156,25 @@ class CellularAutomata:
 
         # if Config.MULTIPROCESSING:
 
-        self.precip_3d_init_shm = shared_memory.SharedMemory(create=True,
-                                                             size=self.cases.first.precip_3d_init.nbytes)
-        self.precip_3d_init = np.ndarray(self.cases.first.precip_3d_init.shape,
-                                           dtype=self.cases.first.precip_3d_init.dtype,
-                                           buffer=self.precip_3d_init_shm.buf)
-        np.copyto(self.precip_3d_init, self.cases.first.precip_3d_init)
-
-        self.precip_3d_init_mdata = SharedMetaData(self.precip_3d_init_shm.name,
-                                                   self.cases.first.precip_3d_init.shape,
-                                                   self.cases.first.precip_3d_init.dtype)
-
-        product_x_nzs = np.full(self.cells_per_axis, False, dtype=bool)
-        self.product_x_nzs_shm = shared_memory.SharedMemory(create=True, size=product_x_nzs.nbytes)
-        self.product_x_nzs = np.ndarray(product_x_nzs.shape, dtype=product_x_nzs.dtype,
-                                        buffer=self.product_x_nzs_shm.buf)
-        np.copyto(self.product_x_nzs, product_x_nzs)
-
-        self.product_x_nzs_mdata = SharedMetaData(self.product_x_nzs_shm.name, product_x_nzs.shape,
-                                                  product_x_nzs.dtype)
+        # self.precip_3d_init_shm = shared_memory.SharedMemory(create=True,
+        #                                                      size=self.cases.first.precip_3d_init.nbytes)
+        # self.precip_3d_init = np.ndarray(self.cases.first.precip_3d_init.shape,
+        #                                    dtype=self.cases.first.precip_3d_init.dtype,
+        #                                    buffer=self.precip_3d_init_shm.buf)
+        # np.copyto(self.precip_3d_init, self.cases.first.precip_3d_init)
+        #
+        # self.precip_3d_init_mdata = SharedMetaData(self.precip_3d_init_shm.name,
+        #                                            self.cases.first.precip_3d_init.shape,
+        #                                            self.cases.first.precip_3d_init.dtype)
+        #
+        # product_x_nzs = np.full(self.cells_per_axis, False, dtype=bool)
+        # self.product_x_nzs_shm = shared_memory.SharedMemory(create=True, size=product_x_nzs.nbytes)
+        # self.product_x_nzs = np.ndarray(product_x_nzs.shape, dtype=product_x_nzs.dtype,
+        #                                 buffer=self.product_x_nzs_shm.buf)
+        # np.copyto(self.product_x_nzs, product_x_nzs)
+        #
+        # self.product_x_nzs_mdata = SharedMetaData(self.product_x_nzs_shm.name, product_x_nzs.shape,
+        #                                           product_x_nzs.dtype)
 
         self.numb_of_proc = Config.NUMBER_OF_PROCESSES
         if self.cells_per_axis % self.numb_of_proc == 0:

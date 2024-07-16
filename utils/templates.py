@@ -26,7 +26,7 @@ class CaseSetUpMP:
 
         self.product_c3d_shm_mdata = None
         self.full_shm_mdata = None
-        self.to_check_with = None
+        self.to_check_with_shm_mdata = None
         self.prod_indexes_shm_mdata = None
 
         self.go_around_func_ref = None
