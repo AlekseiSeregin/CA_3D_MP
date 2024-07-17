@@ -1666,9 +1666,9 @@ ELAPSED TIME: {message}
             ax.plot(x, inward, color='b', linewidth=lokal_linewidth)
             # ax.plot(x, sinward, color='deeppink')
             ax.plot(x, outward, color='g', linewidth=lokal_linewidth)
-            # ax.plot(x, soutward, color='darkorange')
+            ax.plot(x, soutward, color='darkorange')
             ax.plot(x, primary_product, color='r', linewidth=lokal_linewidth)
-            # ax.plot(x, secondary_product, color='cyan')
+            ax.plot(x, secondary_product, color='cyan')
             # ax.plot(x, ternary_product, color='darkgreen')
             # ax.plot(x, quaternary_product, color='steelblue')
 

@@ -3,7 +3,7 @@ from utils.numba_functions import *
 from .neigh_indexes import *
 
 
-def dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP(shm_mdata, chunk_range, comb_ind, aggregated_ind, dissolution_probabilities):
+def dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL(shm_mdata, chunk_range, comb_ind, aggregated_ind, dissolution_probabilities):
     to_dissolve = np.array([[], [], []], dtype=np.short)
     shm = shared_memory.SharedMemory(name=shm_mdata.name)
     array_3D = np.ndarray(shm_mdata.shape, dtype=shm_mdata.dtype, buffer=shm.buf)

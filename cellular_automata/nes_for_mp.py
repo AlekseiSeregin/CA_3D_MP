@@ -19,6 +19,7 @@ def worker(args):
     args = args[:-1]
     result = callback(*args)
     return result
+
 # def generate_neigh_indexes_flat():
 #     size = 3 + (Config.NEIGH_RANGE - 1) * 2
 #     neigh_shape = (size, size, 3)

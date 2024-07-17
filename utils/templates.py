@@ -6,14 +6,17 @@ class CaseSetUp:
         self.to_check_with = None
         self.prod_indexes = None
         self.product_ind_not_stab = None
-        self.go_around_func_ref = None
         self.fix_init_precip_func_ref = None
         self.precip_3d_init = None
-        self.nucleation_probabilities = None
-        self.dissolution_probabilities = None
         self.shm_pool = {"product_indexes": None,
                          "product_ind_not_stab": None,
                          "precip_3d_init": None}
+
+    def close_and_unlink_shared_memory(self):
+        for key, shm in self.shm_pool.items():
+            if shm is not None:
+                shm.close()
+                shm.unlink()
 
 
 class CaseSetUpMP:
@@ -28,9 +31,18 @@ class CaseSetUpMP:
         self.full_shm_mdata = None
         self.to_check_with_shm_mdata = None
         self.prod_indexes_shm_mdata = None
+        self.prod_indexes_not_stab_shm_mdata = None
 
         self.go_around_func_ref = None
         self.precip_3d_init_shm_mdata = None
+
+        self.nucleation_probabilities = None
+        self.dissolution_probabilities = None
+
+        self.precip_step = None
+        self.check_intersection = None
+
+        self.decomposition = None
 
 
 class CaseRef:
@@ -43,3 +55,15 @@ class CaseRef:
         self.third_mp = CaseSetUpMP()
         self.fourth = CaseSetUp()
         self.fourth_mp = CaseSetUpMP()
+
+        # self.cases = []
+        # self.cases_mp = []
+        # self.oxidants = []
+        # self.actives = []
+        # self.products = []
+
+    def close_shms(self):
+        self.first.close_and_unlink_shared_memory()
+        self.second.close_and_unlink_shared_memory()
+        self.third.close_and_unlink_shared_memory()
+        self.fourth.close_and_unlink_shared_memory()

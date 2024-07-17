@@ -7,6 +7,7 @@ from cellular_automata.nes_for_mp import *
 
 class ActiveElem:
     def __init__(self, settings):
+        self.elem_name = settings.ELEMENT
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
         self.neigh_range = Config.NEIGH_RANGE
         self.shape = (self.cells_per_axis, self.cells_per_axis, self.cells_per_axis)
@@ -328,6 +329,7 @@ class ActiveElem:
 
 class OxidantElem:
     def __init__(self, settings, utils):
+        self.elem_name = settings.ELEMENT
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
         self.p1_range = settings.PROBABILITIES[0]
         self.p2_range = 2 * self.p1_range
