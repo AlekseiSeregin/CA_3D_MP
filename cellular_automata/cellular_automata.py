@@ -1222,8 +1222,8 @@ class CellularAutomata:
         product_c = product_moles / whole_moles
         secondary_product_c = secondary_product_moles / whole_moles
 
-        t_ind_p = np.where(product_c < Config.PHASE_FRACTION_LIMIT)[0]
-        t_ind_s = np.where(secondary_product_c < Config.PHASE_FRACTION_LIMIT)[0]
+        t_ind_p = np.where(product_c < Config.PRODUCTS.PRIMARY.PHASE_FRACTION_LIMIT)[0]
+        t_ind_s = np.where(secondary_product_c < Config.PRODUCTS.SECONDARY.PHASE_FRACTION_LIMIT)[0]
 
         comb_indexes = []
 
@@ -1809,10 +1809,6 @@ class CellularAutomata:
 
         product_c = product_moles / whole_moles
         secondary_product_c = secondary_product_moles / whole_moles
-
-        # self.product_indexes = np.array([0,2,3,5,7,8], dtype=int)
-        # product_c = np.array([0.1,1,0,0,0,1], dtype=float)
-        # secondary_product_c = np.array([1, 0, 0.1, 1, 1, 0], dtype=float)
 
         temp_ind_p = np.where(product_c == 0)[0]
         self.cases.first.prod_indexes[self.product_indexes[temp_ind_p]] = False

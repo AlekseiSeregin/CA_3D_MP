@@ -69,7 +69,7 @@ class ProdGroups:
 
 class ProdInput:
     def __init__(self):
-        pass
+        self.PHASE_FRACTION_LIMIT = None
 
 
 class GeneratedValues:
