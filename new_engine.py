@@ -110,7 +110,7 @@ class SimulationConfigurator:
         self.ca.primary_active.diffuse = self.ca.primary_active.diffuse_bulk
         self.ca.secondary_active.diffuse = self.ca.secondary_active.diffuse_bulk
 
-        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_furthest_inward
+        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_from_kinetics
 
         self.ca.precip_func = self.ca.precipitation_second_case
         self.ca.get_combi_ind = self.ca.get_combi_ind_atomic_two_products
