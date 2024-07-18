@@ -28,6 +28,7 @@ class CaseSetUpMP:
         self.oxidant_c3d_shm_mdata = None
 
         self.product_c3d_shm_mdata = None
+        self.oxidation_number = None
         self.full_shm_mdata = None
         self.to_check_with_shm_mdata = None
         self.prod_indexes_shm_mdata = None
@@ -43,6 +44,7 @@ class CaseSetUpMP:
         self.check_intersection = None
 
         self.decomposition = None
+        self.fix_full_cells = None
 
 
 class CaseRef:
@@ -55,12 +57,6 @@ class CaseRef:
         self.third_mp = CaseSetUpMP()
         self.fourth = CaseSetUp()
         self.fourth_mp = CaseSetUpMP()
-
-        # self.cases = []
-        # self.cases_mp = []
-        # self.oxidants = []
-        # self.actives = []
-        # self.products = []
 
     def close_shms(self):
         self.first.close_and_unlink_shared_memory()

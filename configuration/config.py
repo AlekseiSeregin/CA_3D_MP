@@ -50,7 +50,7 @@ class Config:
     SIZE = 100 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
-    PHASE_FRACTION_LIMIT = 2
+    PHASE_FRACTION_LIMIT = 0.2
     THRESHOLD_INWARD = 1
     THRESHOLD_OUTWARD = 1
     NEIGH_RANGE = 1   # neighbouring ranges    1, 2, 3, 4, 5,  6,  7,  8,  9,  10
@@ -69,7 +69,7 @@ class Config:
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = True
     FULL_CELLS = False
-    SAVE_PATH = 'C:/test_runs_data/'
+    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________

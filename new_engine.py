@@ -8,8 +8,6 @@ import keyboard
 class SimulationConfigurator:
     """
     TODO: 1. Host elements in the CaseRef class instead of CellularAutomata
-          2. Oxidation number into case ref mp!!! And change in fix_full_cells!!
-
     """
     def __init__(self):
         self.ca = CellularAutomata()
@@ -123,7 +121,7 @@ class SimulationConfigurator:
         self.ca.cases.second_mp.precip_step = precip_step_two_products
         self.ca.cases.second_mp.check_intersection = ci_single
 
-        self.ca.decomposition = self.ca.dissolution_atomic_stop_if_stable
+        self.ca.decomposition = self.ca.dissolution_atomic_stop_if_stable_two_products
         self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
 
         self.ca.cases.first_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
@@ -168,7 +166,7 @@ class SimulationConfigurator:
             self.ca.precip_func()
             self.ca.decomposition()
             self.ca.diffusion_inward()
-            self.ca.diffusion_outward_mp()
+            self.ca.diffusion_outward()
             # self.calc_precipitation_front_only_cells()
             # self.diffusion_outward_with_mult_srtide()
 
@@ -296,6 +294,7 @@ class SimulationConfigurator:
     def init_first_case(self):
         self.ca.primary_product = elements.Product(Config.PRODUCTS.PRIMARY)
         self.ca.cases.first.product = self.ca.primary_product
+        self.ca.cases.first_mp.oxidation_number = self.ca.primary_product.oxidation_number
 
         self.ca.primary_oxidant.scale = self.ca.primary_product
         self.ca.primary_active.scale = self.ca.primary_product
@@ -335,12 +334,15 @@ class SimulationConfigurator:
         np.copyto(self.ca.cases.first.precip_3d_init, tmp)
         self.ca.cases.first_mp.precip_3d_init_shm_mdata = SharedMetaData(self.ca.cases.first.shm_pool["precip_3d_init"].name,
                                                                          tmp.shape, tmp.dtype)
+        # fix full cells
+        self.ca.cases.first_mp.fix_full_cells = elements.fix_full_cells
 
     def init_second_case(self):
         self.init_first_case()
 
         self.ca.secondary_product = elements.Product(Config.PRODUCTS.SECONDARY)
         self.ca.cases.second.product = self.ca.secondary_product
+        self.ca.cases.second_mp.oxidation_number = self.ca.secondary_product.oxidation_number
 
         self.ca.cases.first_mp.to_check_with_shm_mdata = self.ca.secondary_product.c3d_shm_mdata
         self.ca.cases.second_mp.to_check_with_shm_mdata = self.ca.primary_product.c3d_shm_mdata
@@ -383,6 +385,8 @@ class SimulationConfigurator:
         np.copyto(self.ca.cases.second.precip_3d_init, tmp)
         self.ca.cases.second_mp.precip_3d_init_shm_mdata = SharedMetaData(self.ca.cases.second.shm_pool["precip_3d_init"].name,
                                                                           tmp.shape, tmp.dtype)
+        # fix full cells
+        self.ca.cases.second_mp.fix_full_cells = elements.fix_full_cells
 
     def save_results(self):
         if Config.STRIDE > Config.N_ITERATIONS:

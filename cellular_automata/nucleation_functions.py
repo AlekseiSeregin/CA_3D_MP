@@ -189,7 +189,7 @@ def ci_single(cur_case, seeds, oxidant, full_3d):
             # self.objs[self.case]["product"].fix_full_cells(coord)  # precip on place of active!
             # self.cur_case.product.fix_full_cells(seeds)  # precip on place of oxidant!
 
-            fix_full_cells(product, full_3d, seeds)
+            cur_case.fix_full_cells(product, full_3d, seeds, cur_case.oxidation_number)
 
             # mark the x-plane where the precipitate has happened, so the index of this plane can be called in the
             # dissolution function
@@ -247,9 +247,9 @@ def go_around_mult_oxid_n_also_partial_neigh_aip_MP(array_3d, around_coords):
     return np.sum(go_around_int(array_3d, around_coords), axis=1)
 
 
-def fix_full_cells(array_3d, full_array_3d, new_precip):
-    current_precip = np.array(array_3d[new_precip[0], new_precip[1], new_precip[2]], dtype=np.ubyte)
-    indexes = np.where(current_precip == 1)[0]
-    full_precip = new_precip[:, indexes]
-    full_array_3d[full_precip[0], full_precip[1], full_precip[2]] = True
+# def fix_full_cells(array_3d, full_array_3d, new_precip):
+#     current_precip = np.array(array_3d[new_precip[0], new_precip[1], new_precip[2]], dtype=np.ubyte)
+#     indexes = np.where(current_precip == 1)[0]
+#     full_precip = new_precip[:, indexes]
+#     full_array_3d[full_precip[0], full_precip[1], full_precip[2]] = True
 

@@ -205,8 +205,8 @@ class CellularAutomata:
         self.save_flag = False
 
         self.product_x_not_stab = np.full(self.cells_per_axis, True, dtype=bool)
-        self.TdDATA = td_data.TdDATA()
-        self.TdDATA.fetch_look_up_from_file()
+        # self.TdDATA = td_data.TdDATA()
+        # self.TdDATA.fetch_look_up_from_file()
         self.curr_look_up = None
 
         self.prev_stab_count = 0
@@ -1586,9 +1586,9 @@ class CellularAutomata:
         if len(self.comb_indexes[0]) > 0:
             self.comb_indexes = self.comb_indexes[0]
 
-            if len(self.comb_indexes) > self.prev_len:
-                print("New depth: ", self.comb_indexes)
-                self.prev_len = len(self.comb_indexes)
+            # if len(self.comb_indexes) > self.prev_len:
+            #     print("New depth: ", self.comb_indexes)
+            #     self.prev_len = len(self.comb_indexes)
 
             self.cur_case = self.cases.first
             self.cur_case_mp = self.cases.first_mp
@@ -1597,9 +1597,9 @@ class CellularAutomata:
 
         if len(saved_ind) > 0:
             self.comb_indexes = saved_ind
-            if len(self.comb_indexes) > self.prev_len:
-                print("New depth: ", self.comb_indexes)
-                self.prev_len = len(self.comb_indexes)
+            # if len(self.comb_indexes) > self.prev_len:
+            #     print("New depth: ", self.comb_indexes)
+            #     self.prev_len = len(self.comb_indexes)
 
             self.cur_case = self.cases.second
             self.cur_case_mp = self.cases.second_mp
@@ -1756,6 +1756,93 @@ class CellularAutomata:
         self.comb_indexes = np.delete(self.comb_indexes, temp_ind)
 
         if len(self.comb_indexes) > 0:
+            self.decomposition_intrinsic()
+
+    def dissolution_atomic_stop_if_stable_two_products(self):
+        p_product_indexes = np.where(self.cases.first.prod_indexes)[0]
+        p_where_not_stab = np.where(self.cases.first.product_ind_not_stab)[0]
+        p_product_indexes = np.intersect1d(p_product_indexes, p_where_not_stab)
+
+        s_product_indexes = np.where(self.cases.second.prod_indexes)[0]
+        s_where_not_stab = np.where(self.cases.second.product_ind_not_stab)[0]
+        s_product_indexes = np.intersect1d(s_product_indexes, s_where_not_stab)
+
+        self.product_indexes = np.union1d(p_product_indexes, s_product_indexes)
+        self.comb_indexes = []
+        # new_stab_count = np.count_nonzero(~self.cur_case.product_ind_not_stab)
+        # if new_stab_count > self.prev_stab_count:
+        #     self.prev_stab_count = new_stab_count
+        #     print("stable now at: ", np.nonzero(~self.cur_case.product_ind_not_stab))
+
+        self.primary_oxidant.transform_to_3d()
+        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
+                            in self.product_indexes], dtype=np.uint32)
+        oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
+        self.primary_oxidant.transform_to_descards()
+
+        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
+                           in self.product_indexes], dtype=np.uint32)
+        active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
+        outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
+
+        secondary_active = np.array([np.sum(self.secondary_active.c3d[:, :, plane_ind]) for plane_ind
+                                     in self.product_indexes], dtype=np.uint32)
+        secondary_active_moles = secondary_active * Config.ACTIVES.SECONDARY.MOLES_PER_CELL
+        secondary_outward_eq_mat_moles = secondary_active * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
+
+        product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
+                            in self.product_indexes], dtype=np.uint32)
+        product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
+        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
+
+        secondary_product = np.array([np.sum(self.secondary_product.c3d[:, :, plane_ind]) for plane_ind
+                                      in self.product_indexes], dtype=np.uint32)
+        secondary_product_moles = secondary_product * Config.PRODUCTS.SECONDARY.MOLES_PER_CELL
+        secondary_product_eq_mat_moles = secondary_product * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
+
+        matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles - \
+                       secondary_outward_eq_mat_moles - secondary_product_eq_mat_moles
+        less_than_zero = np.where(matrix_moles < 0)[0]
+        matrix_moles[less_than_zero] = 0
+        whole_moles = matrix_moles + oxidant_moles + active_moles + product_moles + \
+                      secondary_active_moles + secondary_product_moles
+
+        product_c = product_moles / whole_moles
+        secondary_product_c = secondary_product_moles / whole_moles
+
+        # self.product_indexes = np.array([0,2,3,5,7,8], dtype=int)
+        # product_c = np.array([0.1,1,0,0,0,1], dtype=float)
+        # secondary_product_c = np.array([1, 0, 0.1, 1, 1, 0], dtype=float)
+
+        temp_ind_p = np.where(product_c == 0)[0]
+        self.cases.first.prod_indexes[self.product_indexes[temp_ind_p]] = False
+        product_c = np.delete(product_c, temp_ind_p)
+        self.comb_indexes.append(np.delete(self.product_indexes, temp_ind_p))
+
+        temp_ind_s = np.where(secondary_product_c == 0)[0]
+        self.cases.second.prod_indexes[self.product_indexes[temp_ind_s]] = False
+        secondary_product_c = np.delete(secondary_product_c, temp_ind_s)
+        self.comb_indexes.append(np.delete(self.product_indexes, temp_ind_s))
+
+        temp_ind = np.where(product_c > Config.PHASE_FRACTION_LIMIT)[0]
+        self.cases.first.product_ind_not_stab[self.comb_indexes[0][temp_ind]] = False
+        self.comb_indexes[0] = np.delete(self.comb_indexes[0], temp_ind)
+
+        temp_ind = np.where(secondary_product_c > Config.PHASE_FRACTION_LIMIT)[0]
+        self.cases.second.product_ind_not_stab[self.comb_indexes[1][temp_ind]] = False
+        self.comb_indexes[1] = np.delete(self.comb_indexes[1], temp_ind)
+
+        saved_ind = self.comb_indexes[1]
+        if len(self.comb_indexes[0]) > 0:
+            self.comb_indexes = self.comb_indexes[0]
+            self.cur_case = self.cases.first
+            self.cur_case_mp = self.cases.first_mp
+            self.decomposition_intrinsic()
+
+        if len(saved_ind) > 0:
+            self.comb_indexes = saved_ind
+            self.cur_case = self.cases.second
+            self.cur_case_mp = self.cases.second_mp
             self.decomposition_intrinsic()
 
     def dissolution_atomic_stop_if_stable_MP(self):
@@ -2623,29 +2710,31 @@ class CellularAutomata:
 
     def diffusion_outward(self):
         if (self.iteration + 1) % Config.STRIDE == 0:
-            self.primary_active.transform_to_descards()
-            self.primary_active.diffuse()
+            self.cur_case = self.cases.first
+            self.cur_case_mp = self.cases.first_mp
+            self.diffusion_outward_mp()
             if Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.secondary_active.transform_to_descards()
-                self.secondary_active.diffuse()
+                self.cur_case = self.cases.second
+                self.cur_case_mp = self.cases.second_mp
+                self.diffusion_outward_mp()
 
     def diffusion_outward_mp(self):
         if (self.iteration + 1) % Config.STRIDE == 0:
-            self.primary_active.transform_to_descards()
-            chunk_size = self.primary_active.last_in_diff_arr // self.numb_of_proc
-            remainder = self.primary_active.last_in_diff_arr % self.numb_of_proc
+            self.cur_case.active.transform_to_descards()
+            chunk_size = self.cur_case.active.last_in_diff_arr // self.numb_of_proc
+            remainder = self.cur_case.active.last_in_diff_arr % self.numb_of_proc
             indices = []
             start = 0
             for i in range(self.numb_of_proc):
                 end = start + chunk_size + (1 if i < remainder else 0)
                 indices.append([start, end])
                 start = end
-            tasks = [(wr, self.primary_active.cells_shm_mdata, self.primary_active.dirs_shm_mdata,
-                      self.cells_per_axis, self.primary_active.p_ranges, elements.diffuse_bulk_mp) for wr in indices]
+            tasks = [(wr, self.cur_case.active.cells_shm_mdata, self.cur_case.active.dirs_shm_mdata,
+                      self.cells_per_axis, self.cur_case.active.p_ranges, elements.diffuse_bulk_mp) for wr in indices]
             results = self.pool.map(worker, tasks)
             to_del = np.array(np.concatenate(results))
-            self.primary_active.dell_cells_from_diff_arrays(to_del)
-            self.primary_active.fill_first_page()
+            self.cur_case.active.dell_cells_from_diff_arrays(to_del)
+            self.cur_case.active.fill_first_page()
 
     def diffusion_outward_with_mult_srtide(self):
         if self.iteration % Config.STRIDE == 0:
@@ -2874,15 +2963,15 @@ class CellularAutomata:
 
         to_dissolve = np.array(np.concatenate(results, axis=1), dtype=np.ushort)
         if len(to_dissolve[0]) > 0:
-            just_decrease_counts(self.primary_product.c3d, to_dissolve)
-            self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-            insert_counts(self.primary_active.c3d, to_dissolve)
+            just_decrease_counts(self.cur_case.product.c3d, to_dissolve)
+            self.cur_case.product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
+            insert_counts(self.cur_case.active.c3d, to_dissolve)
 
-            self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
+            self.cur_case.oxidant.cells = np.concatenate((self.cur_case.oxidant.cells, to_dissolve), axis=1)
             new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
             new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
             new_dirs -= 1
-            self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
+            self.cur_case.oxidant.dirs = np.concatenate((self.cur_case.oxidant.dirs, new_dirs), axis=1)
 
     def precip_mp(self):
         self.cur_case.fix_init_precip_func_ref(self.ioz_bound)
@@ -2927,40 +3016,6 @@ class CellularAutomata:
 
             s_tasks = [(self.cur_case_mp, ind, fetch_batch, self.cur_case_mp.check_intersection,
                         self.cur_case_mp.precip_step) for ind in ind_chunks for fetch_batch in self.secondary_fetch_ind]
-
-        self.pool.map(worker, p_tasks)
-        self.pool.map(worker, s_tasks)
-
-    def second_case_mp(self, product, active):
-        self.precip_3d_init[:, :, 0:self.furthest_index + 2] = 0
-        self.precip_3d_init[:, :, 0:self.furthest_index + 2] = product.c3d[:, :, 0:self.furthest_index + 2]
-
-        if len(self.comb_indexes) <= Config.DEPTH_PER_DIV:
-            p_tasks = [(self.product_x_nzs_mdata, product.shm_mdata, product.full_shm_mdata,
-                        self.precip_3d_init_mdata, active.shm_mdata, self.primary_oxidant.shm_mdata,
-                        self.comb_indexes, fetch_batch, self.cur_case.nucleation_probabilities, ci_single,
-                        precip_step_standard) for fetch_batch in self.primary_fetch_ind]
-            s_tasks = [
-                (self.product_x_nzs_mdata, product.shm_mdata, product.full_shm_mdata,
-                 self.precip_3d_init_mdata, active.shm_mdata, self.primary_oxidant.shm_mdata,
-                 self.comb_indexes, fetch_batch, self.cur_case.nucleation_probabilities, ci_single,
-                 precip_step_standard) for fetch_batch in self.secondary_fetch_ind]
-        else:
-            ind_chunks = [self.comb_indexes[i:i + Config.DEPTH_PER_DIV]
-                          for i in range(0, len(self.comb_indexes), Config.DEPTH_PER_DIV)]
-
-            p_tasks = [(self.product_x_nzs_mdata, product.shm_mdata, product.full_shm_mdata,
-                        self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
-                        fetch_batch, self.cases.first.nucleation_probabilities, ci_single, precip_step_standard)
-                       for ind in
-                       ind_chunks for fetch_batch in self.primary_fetch_ind]
-
-            s_tasks = [
-                (self.product_x_nzs_mdata, self.primary_product.shm_mdata, self.primary_product.full_shm_mdata,
-                 self.precip_3d_init_mdata, self.primary_active.shm_mdata, self.primary_oxidant.shm_mdata, ind,
-                 fetch_batch, self.cases.first.nucleation_probabilities, ci_single, precip_step_standard) for ind
-                in
-                ind_chunks for fetch_batch in self.secondary_fetch_ind]
 
         self.pool.map(worker, p_tasks)
         self.pool.map(worker, s_tasks)

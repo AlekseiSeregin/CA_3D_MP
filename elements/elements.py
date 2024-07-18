@@ -720,7 +720,7 @@ class Product:
         self.full_c3d[new_precip[0], new_precip[1], new_precip[2]] = True
 
     def fix_full_cells_ox_numb_mult(self, new_precip):
-        current_precip = np.array(self.c3d[new_precip[0], new_precip[1], new_precip[2]])
+        current_precip = np.array(self.c3d[new_precip[0], new_precip[1], new_precip[2]], dtype=np.ubyte)
         indexes = np.where(current_precip == self.oxidation_number)[0]
         full_precip = new_precip[:, indexes]
         self.full_c3d[full_precip[0], full_precip[1], full_precip[2]] = True
@@ -732,3 +732,6 @@ class Product:
         precipitations = np.array(np.nonzero(self.c3d), dtype=np.short)
         counts = self.c3d[precipitations[0], precipitations[1], precipitations[2]]
         return np.array(np.repeat(precipitations, counts, axis=1), dtype=np.short)
+
+
+
