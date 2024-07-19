@@ -1,4 +1,4 @@
-from engine import *
+from tests.old_engine import *
 import traceback
 from configuration import Config
 

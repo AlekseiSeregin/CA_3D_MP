@@ -711,7 +711,8 @@ class Product:
 
         temp = np.full((self.shape[0], self.shape[1], self.shape[2] - 1), 0, dtype=bool)
         self.full_c3d_shared = shared_memory.SharedMemory(create=True, size=temp.nbytes)
-        self.full_c3d = np.ndarray((self.shape[0], self.shape[1], self.shape[2] - 1), dtype=bool, buffer=self.full_c3d_shared.buf)
+        self.full_c3d = np.ndarray((self.shape[0], self.shape[1], self.shape[2] - 1), dtype=bool,
+                                   buffer=self.full_c3d_shared.buf)
 
         full_c3d_shared_shape = (self.shape[0], self.shape[1], self.shape[2] - 1)
         self.full_shm_mdata = SharedMetaData(self.full_c3d_shared.name, full_c3d_shared_shape, bool)
