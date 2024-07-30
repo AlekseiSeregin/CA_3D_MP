@@ -12,7 +12,7 @@ visualise = Visualisation(database_name)
 
 # visualise.animate_3d(animate_separate=False, const_cam_pos=False)
 
-visualise.plot_3d(plot_separate=False, const_cam_pos=False)
+visualise.plot_3d(plot_separate=False, const_cam_pos=True)
 # visualise.plot_3d(plot_separate=False, const_cam_pos=True, iteration=iter)
 # visualise.animate_2d(plot_separate=False)
 
@@ -31,5 +31,5 @@ visualise.plot_concentration(plot_separate=False, conc_type="atomic", analytic_s
 
 # visualise.calculate_phase_size()
 
-plot_kinetics(np.arange(100), with_kinetic=True)
+# plot_kinetics(np.arange(100), with_kinetic=True)
 # plot_kinetics([0,1,5,10, 15, 20, 25], with_kinetic=True)

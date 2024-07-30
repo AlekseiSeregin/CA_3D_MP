@@ -28,8 +28,8 @@ class Visualisation:
         self.oxid_numb = None
         self.utils = utils.Utils()
         self.generate_param_from_db()
-        self.cell_size = 40
-        self.linewidth = 0.3
+        self.cell_size = 10
+        self.linewidth = 0.1
         self.alpha = 1
         self.cm = {1: np.array([255, 200, 200])/255.0,
                    2: np.array([255, 75, 75])/255.0,
@@ -740,25 +740,25 @@ ELAPSED TIME: {message}
             ax_all.set_ylim3d(0, self.axlim * rescale_factor)
             ax_all.set_zlim3d(0, self.axlim * rescale_factor)
             if const_cam_pos:
-                ax_all.azim = -62
-                ax_all.elev = 17
+                ax_all.azim = -135
+                ax_all.elev = 30
                 ax_all.dist = 2
 
         cm = 1 / 2.54  # centimeters in inches
-        #
-        # # fig.set_size_inches((12*cm, 12*cm))
-        # # plt.savefig(f'C:/test_runs_data/{iteration}.jpeg')
-        # # plt.savefig(f"//juno/homes/user/aseregin/Desktop/simuls/{iteration}.jpeg")
-        #
+
+        # fig.set_size_inches((12*cm, 12*cm))
+        # plt.savefig(f'C:/test_runs_data/{iteration}.jpeg')
+        # plt.savefig(f"//juno/homes/user/aseregin/Desktop/simuls/{iteration}.jpeg")
+
         # csfont = {'fontname': 'Times New Roman'}
         # # # # Rescale the axis values
-        # ticks = np.arange(0, new_axlim + 1, 500)
+        # ticks = np.arange(0, new_axlim + 1, 100)
         # ax_all.set_xticks(ticks)
         # ax_all.set_yticks(ticks)
         # ax_all.set_zticks(ticks)
         #
         # # Set font properties for the ticks
-        # f_size = 40
+        # f_size = 60
         # ax_all.tick_params(axis='x', labelsize=f_size * cm, labelcolor='black', pad=10)
         # ax_all.tick_params(axis='y', labelsize=f_size * cm, labelcolor='black', pad=10)
         # ax_all.tick_params(axis='z', labelsize=f_size * cm, labelcolor='black', pad=10)
@@ -1646,7 +1646,7 @@ ELAPSED TIME: {message}
                 diff_in = self.Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
                 diff_out = self.Config.ACTIVES.PRIMARY.DIFFUSION_COEFFICIENT
 
-                analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.onfig.SIM_TIME)))
+                analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.Config.SIM_TIME)))
                 analytical_concentration_out = (y_max_out / 2) * (1 - special.erf((- x + 0.0005) / (2 * sqrt(
                     diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
 
@@ -1683,11 +1683,30 @@ ELAPSED TIME: {message}
             # ax.plot(x, precipitations,  color='r')
 
             if analytic_sol:
-                y_max = self.Config.OXIDANTS.PRIMARY.CELLS_CONCENTRATION * 100
-                analytical_concentration = y_max * special.erfc(x / (2 * sqrt(self.Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT *
-                                                                              self.Config.SIM_TIME)))
-                ax.set_ylim(0, y_max + y_max * 0.2)
-                ax.plot(x, analytical_concentration, color='r', linewidth=1.5)
+                if conc_type == "atomic":
+                    y_max = max(inward)
+                    y_max_out = self.Config.ACTIVES.PRIMARY.ATOMIC_CONCENTRATION * 100
+
+                elif conc_type == "cells":
+                    y_max = self.Config.OXIDANTS.PRIMARY.CELLS_CONCENTRATION * 100
+                    y_max_out = self.Config.ACTIVES.PRIMARY.CELLS_CONCENTRATION * 100
+
+                elif conc_type == "mass":
+                    y_max = max(inward)
+                    y_max_out = self.Config.ACTIVES.PRIMARY.MASS_CONCENTRATION * 100
+
+                diff_in = self.Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
+                diff_out = self.Config.ACTIVES.PRIMARY.DIFFUSION_COEFFICIENT
+
+                analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.Config.SIM_TIME)))
+                analytical_concentration_out = (y_max_out / 2) * (1 - special.erf((- x + 0.00025) / (2 * sqrt(
+                    diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
+
+                # ax.set_ylim(0, y_max + y_max * 0.2)
+                ax.set_ylim(0, y_max_out + y_max_out * 0.1)
+                ax.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
+                # ax.plot(x, analytical_concentration, color='r', linewidth=1.5)
+
 
             # if analytic_sol_sand:
             #     self.c.execute("SELECT y_max_sand from description")
@@ -1711,8 +1730,8 @@ ELAPSED TIME: {message}
 
         # plt.savefig(f'W:/SIMCA/test_runs_data/{iteration}.jpeg', dpi=500)
         #
-        # for x_pos, inw, outw, prod in zip(x, inward, outward, primary_product):
-            # print(x_pos * 1000000, " ", inw, " ", outw,  " ", prod)
+        # for x_pos, out, an in zip(x, outward, analytical_concentration_out):
+        #     print(x_pos * 1000000, " ", out, " ", an)
             # print(x_pos * 1000000, " ", inw)
 
         # for inw in inward:

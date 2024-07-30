@@ -8,6 +8,7 @@ import keyboard
 class SimulationConfigurator:
     """
     TODO: 1. Host elements in the CaseRef class instead of CellularAutomata
+          2. Buffer reserve for cells array to Config!!
     """
     def __init__(self):
         self.ca = CellularAutomata()
@@ -82,22 +83,24 @@ class SimulationConfigurator:
             #                                                       Config.N_CELLS_PER_AXIS + 1), 0, dtype=np.ubyte)
 
     def configurate_functions(self):
-        self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_with_scale
-        self.ca.primary_active.diffuse = self.ca.primary_active.diffuse_with_scale
+        self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_bulk
+        self.ca.primary_active.diffuse = elements.diffuse_bulk_mp
 
-        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_from_kinetics
+        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_furthest_inward
 
         self.ca.precip_func = self.ca.precipitation_first_case
-        self.ca.get_combi_ind = self.ca.get_combi_ind_atomic
+        self.ca.get_combi_ind = self.ca.get_combi_ind_standard
 
         self.ca.cases.first_mp.precip_step = precip_step_standard
-        self.ca.cases.first_mp.check_intersection = ci_single
+        self.ca.cases.first_mp.check_intersection = ci_single_no_growth
 
         self.ca.decomposition = self.ca.dissolution_atomic_stop_if_stable
         self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
         self.ca.cases.first_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
 
         self.ca.cur_case = self.ca.cases.first
+        self.ca.cur_case_mp = self.ca.cases.first_mp
+        self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_dummy
         # self.ca.cases.first.go_around_func_ref = self.ca.go_around_mult_oxid_n_also_partial_neigh_aip_MP
 
         self.ca.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
@@ -107,8 +110,8 @@ class SimulationConfigurator:
 
     def functions_sec_case(self):
         self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_bulk
-        self.ca.primary_active.diffuse = self.ca.primary_active.diffuse_bulk
-        self.ca.secondary_active.diffuse = self.ca.secondary_active.diffuse_bulk
+        self.ca.primary_active.diffuse = elements.diffuse_bulk_mp
+        self.ca.secondary_active.diffuse = elements.diffuse_bulk_mp
 
         self.ca.get_cur_ioz_bound = self.ca.ioz_depth_from_kinetics
 
@@ -139,24 +142,35 @@ class SimulationConfigurator:
 
     def configurate_functions_td(self):
         self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_bulk
-        self.ca.primary_active.diffuse = self.ca.primary_active.diffuse_bulk
+        self.ca.primary_active.diffuse = elements.diffuse_bulk_mp
+        self.ca.secondary_active.diffuse = elements.diffuse_bulk_mp
 
         self.ca.precip_func = self.ca.precipitation_with_td
         self.ca.get_combi_ind = None
-        self.ca.precip_step = self.ca.precip_step_standard
-        self.ca.check_intersection = self.ca.ci_single_no_growth
 
-        # self.ca.decomposition = self.ca.dissolution_atomic_with_kinetic_MP
-        # self.ca.decomposition_intrinsic = self.ca.dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL_MP
+        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_furthest_inward
 
-        self.ca.cur_case = self.ca.cases.first
-        # self.ca.cases.first.go_around_func_ref = self.ca.go_around_mult_oxid_n_also_partial_neigh_aip
-        self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_dummy
+        self.ca.cases.first_mp.precip_step = precip_step_two_products
+        self.ca.cases.first_mp.check_intersection = ci_single
 
-        # self.ca.cur_case.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
-        #                                                                           Config.PRODUCTS.PRIMARY)
-        # self.ca.cur_case.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
-        #                                                                             Config.PRODUCTS.PRIMARY)
+        self.ca.cases.second_mp.precip_step = precip_step_two_products
+        self.ca.cases.second_mp.check_intersection = ci_single
+
+        self.ca.decomposition = None
+        self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
+
+        self.ca.cases.first_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
+        self.ca.cases.second_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
+
+        self.ca.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
+                                                                                        Config.PRODUCTS.PRIMARY)
+        self.ca.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
+                                                                                          Config.PRODUCTS.PRIMARY)
+        self.ca.cases.second_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.SECONDARY,
+                                                                                         Config.PRODUCTS.SECONDARY)
+        self.ca.cases.second_mp.dissolution_probabilities = utils.DissolutionProbabilities(
+            Config.PROBABILITIES.SECONDARY,
+            Config.PRODUCTS.SECONDARY)
 
     def run_simulation(self):
         self.begin = time.time()
@@ -164,7 +178,7 @@ class SimulationConfigurator:
             if keyboard.is_pressed('ctrl+g+m'):
                 break
             self.ca.precip_func()
-            self.ca.decomposition()
+            # self.ca.decomposition()
             self.ca.diffusion_inward()
             self.ca.diffusion_outward()
             # self.calc_precipitation_front_only_cells()
@@ -338,7 +352,7 @@ class SimulationConfigurator:
         self.ca.cases.first_mp.fix_full_cells = elements.fix_full_cells
 
     def init_second_case(self):
-        self.init_first_case()
+        # self.init_first_case()
 
         self.ca.secondary_product = elements.Product(Config.PRODUCTS.SECONDARY)
         self.ca.cases.second.product = self.ca.secondary_product

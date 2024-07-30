@@ -58,8 +58,8 @@ def diffuse_bulk_mp(working_range, cells_shm_mdata, dirs_shm_mdata, cells_per_ax
 
     ind_right = np.where(cells[2, working_range] > cells_per_axis - 1)[0]
     # closed right bound (reflection)____________
-    # self.cells[2, ind_right] = self.cells_per_axis - 2
-    # self.dirs[2, ind_right] = -1
+    # cells[2, ind_right] = cells_per_axis - 2
+    # dirs[2, ind_right] = -1
     # ind_right = []
     # ___________________________________________
     # open right bound___________________________

@@ -52,7 +52,7 @@ class ActiveElem:
 
         # approx concentration space fill
         # ____________________________________________
-        buffer_reserve = 2  # MUST BE PREDEFINED IN CONFIG!!!
+        buffer_reserve = 2   # MUST BE PREDEFINED IN CONFIG!!!
 
         self.last_in_diff_arr = int(self.n_per_page * self.cells_per_axis)
         self.diff_arr_buf_size = int(self.last_in_diff_arr * buffer_reserve)
@@ -85,8 +85,10 @@ class ActiveElem:
 
         # half space fill
         # ____________________________________________
-        # ind = np.where(self.cells[2] < int(self.cells_per_axis / 2))
-        # self.cells = np.delete(self.cells, ind, 1)
+        # ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < int(self.cells_per_axis / 2))
+        # to_move = np.delete(self.cells[:, :self.last_in_diff_arr], ind_to_del, axis=1)
+        # self.cells[:, :to_move.shape[1]] = to_move
+        # self.last_in_diff_arr = to_move.shape[1]
         # ____________________________________________
 
         dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(self.cells[0]))
@@ -292,12 +294,10 @@ class ActiveElem:
 
     def transform_to_descards(self):
         ind_out = decrease_counts(self.c3d, self.i_descards)
-        # self.cells = np.delete(self.cells, self.i_ind[ind_out], 1)
 
         to_move = np.delete(self.cells[:, :self.last_in_diff_arr], self.i_ind[ind_out], axis=1)
         self.cells[:, :to_move.shape[1]] = to_move
 
-        # self.dirs = np.delete(self.dirs, self.i_ind[ind_out], 1)
         to_move = np.delete(self.dirs[:, :self.last_in_diff_arr], self.i_ind[ind_out], axis=1)
         self.dirs[:, :to_move.shape[1]] = to_move
 

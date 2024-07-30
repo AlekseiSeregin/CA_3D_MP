@@ -30,22 +30,22 @@ class Config:
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
     # OXIDANTS.SECONDARY.CELLS_CONCENTRATION = 0.01
     # primary actives
-    ACTIVES.PRIMARY.ELEMENT = "Cr"
-    ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Cr in Ni Krupp"
-    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.25
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.4
+    ACTIVES.PRIMARY.ELEMENT = "Al"
+    ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
+    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.025
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.2
     # secondary actives
-    ACTIVES.SECONDARY.ELEMENT = "Al"
-    ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
-    ACTIVES.SECONDARY.MASS_CONCENTRATION = 0.025
-    ACTIVES.SECONDARY.CELLS_CONCENTRATION = 0.077037037
+    # ACTIVES.SECONDARY.ELEMENT = "Al"
+    # ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
+    # ACTIVES.SECONDARY.MASS_CONCENTRATION = 0.025
+    # ACTIVES.SECONDARY.CELLS_CONCENTRATION = 0.077037037
     # matrix
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 600000  # must be >= n_cells_per_axis
-    STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
+    N_ITERATIONS = 1000000  # must be >= n_cells_per_axis
+    STRIDE = 400  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
     SIM_TIME = 72000  # [sek]
@@ -71,14 +71,14 @@ class Config:
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = True
     FULL_CELLS = False
-    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
+    SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 12
+    NUMBER_OF_PROCESSES = 22
     NUMBER_OF_DIVS_PER_PAGE = 2
-    DEPTH_PER_DIV = 2
+    DEPTH_PER_DIV = 1
     MAX_TASK_PER_CHILD = 100000
 
     # PROBABILITIES_______________________________________________________________
@@ -88,7 +88,7 @@ class Config:
     # PROBABILITIES.TERNARY = ConfigProbabilities()
     # PROBABILITIES.QUATERNARY = ConfigProbabilities()
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.1
+    PROBABILITIES.PRIMARY.p0 = 1
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
@@ -107,11 +107,11 @@ class Config:
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 1
     PROBABILITIES.PRIMARY.p1_d = 1*10**-3
-    PROBABILITIES.PRIMARY.p1_d_f = 0.9999
+    PROBABILITIES.PRIMARY.p1_d_f = 1
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 1
     PROBABILITIES.PRIMARY.p6_d = 1e-6
-    PROBABILITIES.PRIMARY.p6_d_f = 0.01
+    PROBABILITIES.PRIMARY.p6_d_f = 0.99
     PROBABILITIES.PRIMARY.p6_d_A_const = 1
     PROBABILITIES.PRIMARY.p6_d_B_const = 1
     PROBABILITIES.PRIMARY.global_d_A = 1
@@ -146,7 +146,7 @@ class Config:
     PROBABILITIES.SECONDARY.p1_d_A_const = 1
     PROBABILITIES.SECONDARY.p1_d_B_const = 1
     PROBABILITIES.SECONDARY.p6_d = 1 * 10 ** -7
-    PROBABILITIES.SECONDARY.p6_d_f = 0.1
+    PROBABILITIES.SECONDARY.p6_d_f = 0.99
     PROBABILITIES.SECONDARY.p6_d_A_const = 1
     PROBABILITIES.SECONDARY.p6_d_B_const = 1
     PROBABILITIES.SECONDARY.global_d_A = 1
