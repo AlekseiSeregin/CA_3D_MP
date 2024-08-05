@@ -24,7 +24,7 @@ class Config:
     # primary oxidants
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.0012
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.01
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
@@ -32,8 +32,8 @@ class Config:
     # primary actives
     ACTIVES.PRIMARY.ELEMENT = "Al"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
-    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.025
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.2
+    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.15
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.5
     # secondary actives
     # ACTIVES.SECONDARY.ELEMENT = "Al"
     # ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
@@ -44,12 +44,12 @@ class Config:
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 1000000  # must be >= n_cells_per_axis
-    STRIDE = 400  # n_iterations / stride = n_iterations for outward diffusion
+    N_ITERATIONS = 500000  # must be >= n_cells_per_axis
+    STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
     SIM_TIME = 72000  # [sek]
-    SIZE = 100 * (10 ** -6)  # [m]
+    SIZE = 500 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 0.07
@@ -76,10 +76,10 @@ class Config:
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 22
+    NUMBER_OF_PROCESSES = 24
     NUMBER_OF_DIVS_PER_PAGE = 2
     DEPTH_PER_DIV = 1
-    MAX_TASK_PER_CHILD = 100000
+    MAX_TASK_PER_CHILD = 50000
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
@@ -88,16 +88,16 @@ class Config:
     # PROBABILITIES.TERNARY = ConfigProbabilities()
     # PROBABILITIES.QUATERNARY = ConfigProbabilities()
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 1
+    PROBABILITIES.PRIMARY.p0 = 0.000001
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.3
+    PROBABILITIES.PRIMARY.p1 = 0.001
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1
     PROBABILITIES.PRIMARY.global_A = 1
-    PROBABILITIES.PRIMARY.global_B = 1.05
+    PROBABILITIES.PRIMARY.global_B = 1.4
     PROBABILITIES.PRIMARY.global_B_f = -20
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 3
@@ -111,7 +111,7 @@ class Config:
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 1
     PROBABILITIES.PRIMARY.p6_d = 1e-6
-    PROBABILITIES.PRIMARY.p6_d_f = 0.99
+    PROBABILITIES.PRIMARY.p6_d_f = 0.95
     PROBABILITIES.PRIMARY.p6_d_A_const = 1
     PROBABILITIES.PRIMARY.p6_d_B_const = 1
     PROBABILITIES.PRIMARY.global_d_A = 1

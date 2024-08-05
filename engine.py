@@ -7,8 +7,9 @@ import keyboard
 
 class SimulationConfigurator:
     """
-    TODO: 1. Host elements in the CaseRef class instead of CellularAutomata
+    TODO: 1. Host elements in the CaseRef class instead of CellularAutomata!
           2. Buffer reserve for cells array to Config!!
+          3. DEFAULT_PARAMS in templates, move out or create different script for cases!
     """
     def __init__(self):
         self.ca = CellularAutomata()
@@ -92,7 +93,7 @@ class SimulationConfigurator:
         self.ca.get_combi_ind = self.ca.get_combi_ind_standard
 
         self.ca.cases.first_mp.precip_step = precip_step_standard
-        self.ca.cases.first_mp.check_intersection = ci_single_no_growth
+        self.ca.cases.first_mp.check_intersection = ci_single
 
         self.ca.decomposition = self.ca.dissolution_atomic_stop_if_stable
         self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
@@ -100,7 +101,7 @@ class SimulationConfigurator:
 
         self.ca.cur_case = self.ca.cases.first
         self.ca.cur_case_mp = self.ca.cases.first_mp
-        self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_dummy
+        # self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_dummy
         # self.ca.cases.first.go_around_func_ref = self.ca.go_around_mult_oxid_n_also_partial_neigh_aip_MP
 
         self.ca.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
@@ -237,73 +238,12 @@ class SimulationConfigurator:
             self.ca.cases.fourth_mp.active_dirs_shm_mdata = self.ca.secondary_active.dirs_shm_mdata
 
     def init_product(self):
-        # self.ca.primary_product = elements.Product(Config.PRODUCTS.PRIMARY)
-        # self.ca.cases.first.product = self.ca.primary_product
-        #
-        # self.ca.primary_oxidant.scale = self.ca.primary_product
-        # self.ca.primary_active.scale = self.ca.primary_product
-        #
-        # # c3d
-        # self.ca.cases.first_mp.product_c3d_shm_mdata = self.ca.primary_product.c3d_shm_mdata
-        # # full_c3d
-        # self.ca.cases.first_mp.full_shm_mdata = self.ca.primary_product.full_shm_mdata
-        # # product indexes
-        # tmp = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
-        # self.ca.cases.first.shm_pool["product_indexes"] = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
-        # self.ca.cases.first.prod_indexes = np.ndarray(tmp.shape, dtype=tmp.dtype,
-        #                                               buffer=self.ca.cases.first.shm_pool["product_indexes"].buf)
-        # np.copyto(self.ca.cases.first.prod_indexes, tmp)
-        # self.ca.cases.first_mp.prod_indexes_shm_mdata = SharedMetaData(self.ca.cases.first.shm_pool["product_indexes"].name,
-        #                                                                tmp.shape, tmp.dtype)
         self.init_first_case()
         if Config.ACTIVES.SECONDARY_EXISTENCE and Config.OXIDANTS.SECONDARY_EXISTENCE:
             print("NO IMPLEMENTATION YET")
 
         elif Config.ACTIVES.SECONDARY_EXISTENCE and not Config.OXIDANTS.SECONDARY_EXISTENCE:
             self.init_second_case()
-            # self.ca.secondary_product = elements.Product(Config.PRODUCTS.SECONDARY)
-            # self.ca.cases.second.product = self.ca.secondary_product
-            # self.ca.cases.first.to_check_with = self.ca.secondary_product
-            # self.ca.cases.second.to_check_with = self.ca.primary_product
-            #
-            # self.ca.cases.first.prod_indexes = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
-            # self.ca.cases.second.prod_indexes = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
-            #
-            # if self.ca.cases.first.product.oxidation_number == 1:
-            #     self.ca.cases.first.go_around_func_ref = self.ca.go_around_single_oxid_n
-            #     self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
-            #     my_type = bool
-            # else:
-            #     self.ca.cases.first.go_around_func_ref = self.ca.go_around_mult_oxid_n
-            #     self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_int
-            #     my_type = np.ubyte
-            # self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
-            #                                               Config.N_CELLS_PER_AXIS + 1), 0, dtype=my_type)
-            #
-            # if self.ca.cases.second.product.oxidation_number == 1:
-            #     self.ca.cases.second.go_around_func_ref = self.ca.go_around_single_oxid_n
-            #     self.ca.cases.second.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
-            #     my_type = bool
-            # else:
-            #     self.ca.cases.second.go_around_func_ref = self.ca.go_around_mult_oxid_n
-            #     self.ca.cases.second.fix_init_precip_func_ref = self.ca.fix_init_precip_int
-            #     my_type = np.ubyte
-            # self.ca.cases.second.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
-            #                                                Config.N_CELLS_PER_AXIS + 1), 0, dtype=my_type)
-        # else:
-        #
-            # if self.ca.cases.first.product.oxidation_number == 1:
-            #     self.ca.cases.first.go_around_func_ref = self.ca.go_around_single_oxid_n
-            #     self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
-            #     self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
-            #                                                   Config.N_CELLS_PER_AXIS + 1), False, dtype=bool)
-            # else:
-            #     # self.cases.first.go_around_func_ref = self.go_around_mult_oxid_n
-            #     self.ca.cases.first.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
-            #     # self.cases.first.go_around_func_ref = self.go_around_mult_oxid_n_also_partial_neigh  # CHANGE!!!!
-            #     # self.cases.first.fix_init_precip_func_ref = self.fix_init_precip_int
-            #     self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
-            #                                                   Config.N_CELLS_PER_AXIS + 1), 0, dtype=np.ubyte)
 
     def init_first_case(self):
         self.ca.primary_product = elements.Product(Config.PRODUCTS.PRIMARY)

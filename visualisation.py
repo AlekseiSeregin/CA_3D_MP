@@ -28,7 +28,7 @@ class Visualisation:
         self.oxid_numb = None
         self.utils = utils.Utils()
         self.generate_param_from_db()
-        self.cell_size = 10
+        self.cell_size = 30
         self.linewidth = 0.1
         self.alpha = 1
         self.cm = {1: np.array([255, 200, 200])/255.0,
@@ -463,8 +463,9 @@ ELAPSED TIME: {message}
         if iteration is None:
             iteration = self.last_i
         fig = plt.figure()
-        new_axlim = self.axlim
-        rescale_factor = new_axlim / self.axlim
+        new_axlim = 500
+        rescale_factor = int(new_axlim / self.axlim)
+        rescale_factor = 5
         if plot_separate:
             ax_inward = fig.add_subplot(341, projection='3d')
             ax_sinward = fig.add_subplot(345, projection='3d')
@@ -698,7 +699,10 @@ ELAPSED TIME: {message}
                     full_ind = np.where(counts == self.oxid_numb)[0]
 
                     fulls = dec[full_ind]
+                    fulls *= rescale_factor
+
                     not_fulls = np.delete(dec, full_ind, axis=0)
+                    not_fulls *= rescale_factor
 
                     ax_all.scatter(fulls[:, 2], fulls[:, 1], fulls[:, 0], marker=',', color="darkred",
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
@@ -740,8 +744,8 @@ ELAPSED TIME: {message}
             ax_all.set_ylim3d(0, self.axlim * rescale_factor)
             ax_all.set_zlim3d(0, self.axlim * rescale_factor)
             if const_cam_pos:
-                ax_all.azim = -135
-                ax_all.elev = 30
+                ax_all.azim = -55
+                ax_all.elev = 24
                 ax_all.dist = 2
 
         cm = 1 / 2.54  # centimeters in inches
@@ -750,30 +754,30 @@ ELAPSED TIME: {message}
         # plt.savefig(f'C:/test_runs_data/{iteration}.jpeg')
         # plt.savefig(f"//juno/homes/user/aseregin/Desktop/simuls/{iteration}.jpeg")
 
-        # csfont = {'fontname': 'Times New Roman'}
-        # # # # Rescale the axis values
-        # ticks = np.arange(0, new_axlim + 1, 100)
-        # ax_all.set_xticks(ticks)
-        # ax_all.set_yticks(ticks)
-        # ax_all.set_zticks(ticks)
-        #
-        # # Set font properties for the ticks
-        # f_size = 60
-        # ax_all.tick_params(axis='x', labelsize=f_size * cm, labelcolor='black', pad=10)
-        # ax_all.tick_params(axis='y', labelsize=f_size * cm, labelcolor='black', pad=10)
-        # ax_all.tick_params(axis='z', labelsize=f_size * cm, labelcolor='black', pad=10)
-        #
-        # # Get the tick labels and set font properties
-        # for tick in ax_all.get_xticklabels():
-        #     tick.set_fontname('Times New Roman')
-        # for tick in ax_all.get_yticklabels():
-        #     tick.set_fontname('Times New Roman')
-        # for tick in ax_all.get_zticklabels():
-        #     tick.set_fontname('Times New Roman')
-        #
-        # ax_all.set_xlabel("X [µm]", **csfont, fontsize=f_size*cm, labelpad=17)
-        # ax_all.set_ylabel("Y [µm]", **csfont, fontsize=f_size*cm, labelpad=17)
-        # ax_all.set_zlabel("Z [µm]", **csfont, fontsize=f_size*cm, labelpad=17)
+        csfont = {'fontname': 'Times New Roman'}
+        # # # Rescale the axis values
+        ticks = np.arange(0, new_axlim + 1, 100)
+        ax_all.set_xticks(ticks)
+        ax_all.set_yticks(ticks)
+        ax_all.set_zticks(ticks)
+
+        # Set font properties for the ticks
+        f_size = 60
+        ax_all.tick_params(axis='x', labelsize=f_size * cm, labelcolor='black', pad=10)
+        ax_all.tick_params(axis='y', labelsize=f_size * cm, labelcolor='black', pad=10)
+        ax_all.tick_params(axis='z', labelsize=f_size * cm, labelcolor='black', pad=10)
+
+        # Get the tick labels and set font properties
+        for tick in ax_all.get_xticklabels():
+            tick.set_fontname('Times New Roman')
+        for tick in ax_all.get_yticklabels():
+            tick.set_fontname('Times New Roman')
+        for tick in ax_all.get_zticklabels():
+            tick.set_fontname('Times New Roman')
+
+        ax_all.set_xlabel("X [µm]", **csfont, fontsize=f_size*cm, labelpad=20)
+        ax_all.set_ylabel("Y [µm]", **csfont, fontsize=f_size*cm, labelpad=20)
+        ax_all.set_zlabel("Z [µm]", **csfont, fontsize=f_size*cm, labelpad=20)
 
         # fig.set_size_inches((40 * cm, 40 * cm))
         plt.show()
@@ -785,6 +789,12 @@ ELAPSED TIME: {message}
             iteration = self.last_i
         if slice_pos is None:
             slice_pos = int(self.axlim / 2)
+
+        new_axlim = 500
+        rescale_factor = int(new_axlim / self.axlim)
+        rescale_factor = 5
+        slice_pos *= rescale_factor
+
         fig = plt.figure()
         if plot_separate:
             ax_inward = fig.add_subplot(341)
@@ -882,6 +892,7 @@ ELAPSED TIME: {message}
                 self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
                 if np.any(items):
+                    items = items * rescale_factor
                     ind = np.where(items[:, 0] == slice_pos)
                     ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='b',
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
@@ -889,6 +900,7 @@ ELAPSED TIME: {message}
                     self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
+                        items = items * rescale_factor
                         ind = np.where(items[:, 0] == slice_pos)
                         ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='deeppink',
                                        s=self.cell_size * (72. / fig.dpi) ** 2)
@@ -896,6 +908,7 @@ ELAPSED TIME: {message}
                 self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
                 if np.any(items):
+                    items = items * rescale_factor
                     ind = np.where(items[:, 0] == slice_pos)
                     ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='g',
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
@@ -903,19 +916,21 @@ ELAPSED TIME: {message}
                     self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
+                        items = items * rescale_factor
                         ind = np.where(items[:, 0] == slice_pos)
                         ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='darkorange',
                                        s=self.cell_size * (72. / fig.dpi) ** 2)
-            #
+
             if self.Config.COMPUTE_PRECIPITATION:
                 self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
                 if np.any(items):
+                    items = np.array(items * rescale_factor, dtype=int)
                     ind = np.where(items[:, 0] == slice_pos)
                     # ind = np.where(items[:, 2] == slice_pos)
 
                     items = np.array(items[ind]).transpose()
-
+                    self.shape = (self.shape[0] * rescale_factor, self.shape[0] * rescale_factor, self.shape[0] * rescale_factor)
                     counts = np.unique(np.ravel_multi_index(items, self.shape), return_counts=True)
                     dec = np.array(np.unravel_index(counts[0], self.shape), dtype=np.short).transpose()
                     counts = np.array(counts[1], dtype=np.ubyte)
@@ -971,8 +986,36 @@ ELAPSED TIME: {message}
                         ind = np.where(items[:, 0] == slice_pos)
                         ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='cyan',
                                        s=self.cell_size * (72. / fig.dpi) ** 2)
-            ax_all.set_xlim(0, self.axlim)
-            ax_all.set_ylim(0, self.axlim)
+
+            cm = 1 / 2.54  # centimeters in inches
+
+            fig.set_size_inches((20*cm, 20*cm))
+            # plt.savefig(f'C:/test_runs_data/{iteration}.jpeg')
+            # plt.savefig(f"//juno/homes/user/aseregin/Desktop/simuls/{iteration}.jpeg")
+
+            csfont = {'fontname': 'Times New Roman'}
+            # # # Rescale the axis values
+            ticks = np.arange(0, new_axlim + 1, 100)
+            ax_all.set_xticks(ticks)
+            ax_all.set_yticks(ticks)
+            # ax_all.set_zticks(ticks)
+            #
+            # Set font properties for the ticks
+            f_size = 50
+            ax_all.tick_params(axis='x', labelsize=f_size * cm, labelcolor='black', pad=1)
+            ax_all.tick_params(axis='y', labelsize=f_size * cm, labelcolor='black', pad=1)
+
+            # Get the tick labels and set font properties
+            for tick in ax_all.get_xticklabels():
+                tick.set_fontname('Times New Roman')
+            for tick in ax_all.get_yticklabels():
+                tick.set_fontname('Times New Roman')
+
+            ax_all.set_xlabel("X [µm]", **csfont, fontsize=f_size*cm, labelpad=1)
+            ax_all.set_ylabel("Y [µm]", **csfont, fontsize=f_size*cm, labelpad=1)
+
+            ax_all.set_xlim(0, self.axlim * rescale_factor)
+            ax_all.set_ylim(0, self.axlim * rescale_factor)
         self.conn.commit()
         # plt.savefig(f'W:/SIMCA/test_runs_data/{slice_pos}.jpeg')
         # plt.savefig(f"//juno/homes/user/aseregin/Desktop/Neuer Ordner/{slice_pos}.jpeg")

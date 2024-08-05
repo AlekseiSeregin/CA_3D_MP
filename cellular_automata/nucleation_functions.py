@@ -205,7 +205,6 @@ def ci_single_no_growth(cur_case, seeds, oxidant, full_3d):
     neighbours = go_around_bool(active, all_arounds[:, :-2])
     arr_len_out = np.array([np.sum(item) for item in neighbours], dtype=np.short)
     temp_ind = np.where(arr_len_out > 0)[0]
-
     if len(temp_ind) > 0:
         seeds = seeds[temp_ind]
         neighbours = neighbours[temp_ind]
@@ -223,7 +222,6 @@ def ci_single_no_growth(cur_case, seeds, oxidant, full_3d):
         product[seeds[0], seeds[1], seeds[2]] += 1  # precip on place of oxidant!
         # self.cur_case.product.fix_full_cells(coord)  # precip on place of active!
         cur_case.fix_full_cells(product, full_3d, seeds, cur_case.oxidation_number)   # precip on place of oxidant!
-
         # mark the x-plane where the precipitate has happened, so the index of this plane can be called in the
         # dissolution function
         product_x_nzs[seeds[2][0]] = True
