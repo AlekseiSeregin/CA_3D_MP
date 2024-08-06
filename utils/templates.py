@@ -46,6 +46,9 @@ class CaseSetUpMP:
         self.decomposition = None
         self.fix_full_cells = None
 
+        self.threshold_inward = None
+        self.threshold_outward = None
+
 
 class CaseRef:
     def __init__(self):

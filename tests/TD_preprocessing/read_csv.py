@@ -7,8 +7,14 @@ import random
 
 class CompPool:
     def __init__(self):
-        self.primary = 0
-        self.secondary = 0
+        # self.primary = 0
+        # self.secondary = 0
+        self.corundum_cr = 0.0
+        self.corundum_al = 0.0
+        self.spinel_cr = 0.0
+        self.spinel_al = 0.0
+        # self.halite = 0.0
+        # self.sum = 0
 
 
 def read_csv_files(directory):
@@ -124,6 +130,75 @@ def read_csv_files3(directory):
     return data
 
 
+def read_csv_files4(directory):
+    data = {}
+    last_added_pool = CompPool()
+    for filename in os.listdir(directory):
+        if filename.endswith(".csv"):
+            file_path = os.path.join(directory, filename)
+            with open(file_path, "r") as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    concentrations = {'Cr': float(row['Cr']), 'Al': float(row['Al']), 'O': float(row['O'])}
+                    comp_pool = CompPool()
+
+                    corundum1_cont = float(row.get('Corundum1_Content', 0).strip() or 0)
+                    corundum2_cont = float(row.get('Corundum2_Content', 0).strip() or 0)
+                    spinel1_cont = float(row.get('Spinel1_Content', 0).strip() or 0)
+                    spinel2_cont = float(row.get('Spinel2_Content', 0).strip() or 0)
+                    halite_cont = float(row.get('Halite_Content', 0).strip() or 0)
+
+                    sum_all = corundum1_cont + corundum2_cont + spinel1_cont + spinel2_cont + halite_cont
+                    if sum_all > 0:
+                        if corundum1_cont > 0:
+                            corundum1_cr_cont = float(row.get('Corundum1_Cr_Cont', 0).strip() or 0)
+                            corundum1_al_cont = float(row.get('Corundum1_Al_Cont', 0).strip() or 0)
+                            if corundum1_cr_cont > corundum1_al_cont:
+                                comp_pool.corundum_cr += corundum1_cont
+                            else:
+                                comp_pool.corundum_al += corundum1_cont
+
+                        if corundum2_cont > 0:
+                            corundum2_cr_cont = float(row.get('Corundum2_Cr_Cont', 0).strip() or 0)
+                            corundum2_al_cont = float(row.get('Corundum2_Al_Cont', 0).strip() or 0)
+                            if corundum2_cr_cont > corundum2_al_cont:
+                                comp_pool.corundum_cr += corundum2_cont
+                            else:
+                                comp_pool.corundum_al += corundum2_cont
+
+                        if spinel1_cont > 0:
+                            spinel1_cr_cont = float(row.get('Spinel1_Cr_Cont', 0).strip() or 0)
+                            spinel1_al_cont = float(row.get('Spinel1_Al_Cont', 0).strip() or 0)
+                            if spinel1_cr_cont > spinel1_al_cont:
+                                comp_pool.spinel_cr += spinel1_cont
+                            else:
+                                comp_pool.spinel_al += spinel1_cont
+
+                        spinel2_cont = float(row.get('Spinel2_Content', 0).strip() or 0)
+                        if spinel2_cont > 0:
+                            spinel2_cr_cont = float(row.get('Spinel2_Cr_Cont', 0).strip() or 0)
+                            spinel2_al_cont = float(row.get('Spinel2_Al_Cont', 0).strip() or 0)
+                            if spinel2_cr_cont > spinel2_al_cont:
+                                comp_pool.spinel_cr += spinel2_cont
+                            else:
+                                comp_pool.spinel_al += spinel2_cont
+
+                        # comp_pool.halite = halite_cont
+                        # comp_pool.sum = comp_pool.corundum_cr + comp_pool.corundum_al + comp_pool.spinel_cr + comp_pool.spinel_al + comp_pool.halite
+                        data[tuple(concentrations.values())] = comp_pool
+
+                        last_added_pool.corundum_cr = comp_pool.corundum_cr
+                        last_added_pool.corundum_al = comp_pool.corundum_al
+                        last_added_pool.spinel_cr = comp_pool.spinel_cr
+                        last_added_pool.spinel_al = comp_pool.spinel_al
+                        # last_added_pool.halite = comp_pool.halite
+                        # last_added_pool.sum = comp_pool.sum
+                    else:
+                        data[tuple(concentrations.values())] = last_added_pool
+
+    return data
+
+
 def write_data_to_file(data, output_file):
     with open(output_file, "wb") as file:
         pickle.dump(data, file)
@@ -152,15 +227,15 @@ def find_closest_key(target, tree, keys):
 
 if __name__ == "__main__":
     # Example usage:
-    # directory = "W:/SIMCA/TC/Simulations_Klaus_first_ALL/"
-    # output_file = "consolidated_data.pkl"
-    p_output_file = "TD_look_up.pkl"
+    directory = "D:/PhD/TC/Simulations_Klaus_first_ALL/"
+    output_file = "C:/CA_3D_MP/thermodynamics/TD_look_up.pkl"
+    # p_output_file = "TD_look_up.pkl"
 
     # Read data from CSV files
-    # data = read_csv_files3(directory)
+    data = read_csv_files4(directory)
 
     # Write data to a single file
-    # write_data_to_file(data, output_file)
+    write_data_to_file(data, output_file)
 
     # Load data from the consolidated file
     # consolidated_data = load_data_from_file(output_file)
@@ -169,7 +244,7 @@ if __name__ == "__main__":
 
     # write_data_to_file(consolidated_data, p_output_file)
 
-    p_consolidated_data = load_data_from_file(p_output_file)
+    p_consolidated_data = load_data_from_file(output_file)
 
     keys = list(p_consolidated_data.keys())
     tree = KDTree(keys)
@@ -202,5 +277,10 @@ if __name__ == "__main__":
 
         value_from_dict = p_consolidated_data[closest_key]
 
-        print("Cr_oxide: ", value_from_dict.primary)
-        print("Al_oxide: ", value_from_dict.secondary)
+        print("Cr_oxide: ", value_from_dict.corundum_cr)
+        print("Al_oxide: ", value_from_dict.corundum_al)
+        print("Cr_spinel: ", value_from_dict.spinel_cr)
+        print("Al_spinel: ", value_from_dict.spinel_al)
+        # print("Halite: ", value_from_dict.halite)
+        # print("Sum: ", value_from_dict.sum)
+

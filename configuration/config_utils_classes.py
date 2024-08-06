@@ -70,6 +70,8 @@ class ProdGroups:
 class ProdInput:
     def __init__(self):
         self.PHASE_FRACTION_LIMIT = None
+        self.THRESHOLD_INWARD = None
+        self.THRESHOLD_OUTWARD = None
 
 
 class GeneratedValues:

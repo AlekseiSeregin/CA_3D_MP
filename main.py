@@ -5,8 +5,10 @@ if __name__ == '__main__':
 
     class CompPool:
         def __init__(self):
-            self.primary = 0
-            self.secondary = 0
+            self.corundum_cr = 0.0
+            self.corundum_al = 0.0
+            self.spinel_cr = 0.0
+            self.spinel_al = 0.0
 
 
     Config.COMMENT = """

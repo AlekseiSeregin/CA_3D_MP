@@ -81,7 +81,12 @@ class Utils:
         self.check_c_min_and_calc_ncells()
         self.calc_active_data()
         self.calc_oxidant_data()
-        self.calc_product_data()
+
+        if Config.MAP_PRODUCTS_TO_ELEMENTS:
+            self.calc_product_data()
+        else:
+            self.calc_product_data_custom()
+
         self.calc_initial_conc_and_moles()
 
         time_stamp = int(time.time())
@@ -163,6 +168,88 @@ class Utils:
                 Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 6
             else:
                 Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 7
+
+    @staticmethod
+    def calc_product_data_custom():
+        # Primary
+        Config.PRODUCTS.PRIMARY.MASS_PER_CELL = Config.OXIDANTS.PRIMARY.MASS_PER_CELL + Config.ACTIVES.PRIMARY.MASS_PER_CELL
+        Config.PRODUCTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL / 2
+        Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC = Config.PRODUCTS.PRIMARY.MOLES_PER_CELL * 5
+        Config.PRODUCTS.PRIMARY.CONSTITUTION = Config.ACTIVES.PRIMARY.ELEMENT + "+" + Config.OXIDANTS.PRIMARY.ELEMENT
+        # Secondary
+        Config.PRODUCTS.SECONDARY.MASS_PER_CELL = Config.OXIDANTS.PRIMARY.MASS_PER_CELL + Config.ACTIVES.SECONDARY.MASS_PER_CELL
+        Config.PRODUCTS.SECONDARY.MOLES_PER_CELL = Config.ACTIVES.SECONDARY.MOLES_PER_CELL / 2
+        Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC = Config.PRODUCTS.SECONDARY.MOLES_PER_CELL * 5
+        Config.PRODUCTS.SECONDARY.CONSTITUTION = Config.ACTIVES.SECONDARY.ELEMENT + "+" + Config.OXIDANTS.PRIMARY.ELEMENT
+
+        # Ternary
+        active_moles_needed = Config.ACTIVES.PRIMARY.MOLES_PER_CELL * 3
+        active_mass_needed = active_moles_needed * Config.ACTIVES.PRIMARY.MOLAR_MASS
+
+        matrix_moles_needed = active_moles_needed / 2
+        matrix_mas_needed = matrix_moles_needed * Config.MATRIX.MOLAR_MASS
+
+        oxidant_moles_needed = active_moles_needed * 2
+        oxidant_mass_needed = oxidant_moles_needed * Config.OXIDANTS.PRIMARY.MOLAR_MASS
+
+        Config.PRODUCTS.TERNARY.MOLES_PER_CELL = active_moles_needed / 2
+        Config.PRODUCTS.TERNARY.MOLES_PER_CELL_TC = Config.PRODUCTS.TERNARY.MOLES_PER_CELL * 7
+
+        Config.PRODUCTS.TERNARY.MASS_PER_CELL = oxidant_mass_needed + active_mass_needed + matrix_mas_needed
+        Config.PRODUCTS.TERNARY.CONSTITUTION = Config.MATRIX.ELEMENT + Config.ACTIVES.PRIMARY.ELEMENT + "2" + Config.OXIDANTS.PRIMARY.ELEMENT + "4"
+
+        # Quaternary
+        active_moles_needed = Config.ACTIVES.SECONDARY.MOLES_PER_CELL * 3
+        active_mass_needed = active_moles_needed * Config.ACTIVES.SECONDARY.MOLAR_MASS
+
+        matrix_moles_needed = active_moles_needed / 2
+        matrix_mas_needed = matrix_moles_needed * Config.MATRIX.MOLAR_MASS
+
+        oxidant_moles_needed = active_moles_needed * 2
+        oxidant_mass_needed = oxidant_moles_needed * Config.OXIDANTS.PRIMARY.MOLAR_MASS
+
+        Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL = active_moles_needed / 2
+        Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC = Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL * 7
+
+        Config.PRODUCTS.QUATERNARY.MASS_PER_CELL = oxidant_mass_needed + active_mass_needed + matrix_mas_needed
+        Config.PRODUCTS.QUATERNARY.CONSTITUTION = Config.MATRIX.ELEMENT + Config.ACTIVES.SECONDARY.ELEMENT + "2" + Config.OXIDANTS.PRIMARY.ELEMENT + "4"
+
+        t_1 = Config.ACTIVES.PRIMARY.MOLAR_MASS * Config.MATRIX.DENSITY / (Config.ACTIVES.PRIMARY.DENSITY * Config.MATRIX.MOLAR_MASS)
+        t_2 = Config.ACTIVES.SECONDARY.MOLAR_MASS * Config.MATRIX.DENSITY / (Config.ACTIVES.SECONDARY.DENSITY * Config.MATRIX.MOLAR_MASS)
+
+        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER =\
+            round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
+
+        if Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER == 1:
+            Config.PRODUCTS.PRIMARY.LIND_FLAT_ARRAY = 6
+        else:
+            Config.PRODUCTS.PRIMARY.LIND_FLAT_ARRAY = 7
+
+        Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = \
+            round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2))
+
+        if Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER == 1:
+            Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 6
+        else:
+            Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 7
+
+        # Config.PRODUCTS.TERNARY.OXIDATION_NUMBER = \
+        #     round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
+        Config.PRODUCTS.TERNARY.OXIDATION_NUMBER = 1
+
+        if Config.PRODUCTS.TERNARY.OXIDATION_NUMBER == 1:
+            Config.PRODUCTS.TERNARY.LIND_FLAT_ARRAY = 6
+        else:
+            Config.PRODUCTS.TERNARY.LIND_FLAT_ARRAY = 7
+
+        # Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER = \
+        #     round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2))
+        Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER = 1
+
+        if Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER == 1:
+            Config.PRODUCTS.QUATERNARY.LIND_FLAT_ARRAY = 6
+        else:
+            Config.PRODUCTS.QUATERNARY.LIND_FLAT_ARRAY = 7
 
     def calc_oxidant_data(self):
         diff_coeff = Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
