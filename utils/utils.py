@@ -4,6 +4,7 @@ import numpy as np
 import time
 import datetime
 from configuration import Config
+import math
 
 
 class Utils:
@@ -217,8 +218,12 @@ class Utils:
         t_1 = Config.ACTIVES.PRIMARY.MOLAR_MASS * Config.MATRIX.DENSITY / (Config.ACTIVES.PRIMARY.DENSITY * Config.MATRIX.MOLAR_MASS)
         t_2 = Config.ACTIVES.SECONDARY.MOLAR_MASS * Config.MATRIX.DENSITY / (Config.ACTIVES.SECONDARY.DENSITY * Config.MATRIX.MOLAR_MASS)
 
-        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER =\
-            round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
+        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = \
+            math.ceil(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
+        # Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER =\
+        #     round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
+
+
 
         if Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER == 1:
             Config.PRODUCTS.PRIMARY.LIND_FLAT_ARRAY = 6

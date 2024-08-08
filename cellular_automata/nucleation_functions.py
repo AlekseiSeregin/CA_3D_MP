@@ -32,7 +32,7 @@ def precip_step_standard(cur_case, plane_indexes, fetch_indexes, callback):
     shm_p_FULL.close()
 
 
-def precip_step_two_products(cur_case, plane_indexes, fetch_indexes, callback):
+def precip_step_multi_products(cur_case, plane_indexes, fetch_indexes, callback):
 
     shm_o = shared_memory.SharedMemory(name=cur_case.oxidant_c3d_shm_mdata.name)
     oxidant = np.ndarray(cur_case.oxidant_c3d_shm_mdata.shape, dtype=cur_case.oxidant_c3d_shm_mdata.dtype,

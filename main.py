@@ -18,14 +18,14 @@ if __name__ == '__main__':
 """
 
     new_system = SimulationConfigurator()
-    new_system.configurate_functions()
+    new_system.configurate_functions_td_all()
 
     try:
         new_system.run_simulation()
     finally:
         try:
             if not Config.SAVE_WHOLE:
-                new_system.save_results()
+                new_system.save_results_custom()
 
         except (Exception,):
             # new_system.save_results()

@@ -1,9 +1,12 @@
+import numpy as np
+
+
 class CaseSetUp:
     def __init__(self):
         self.oxidant = None
         self.active = None
         self.product = None
-        self.to_check_with = None
+        # self.to_check_with = None
         self.prod_indexes = None
         self.product_ind_not_stab = None
         self.fix_init_precip_func_ref = None
@@ -61,11 +64,24 @@ class CaseRef:
         self.fourth = CaseSetUp()
         self.fourth_mp = CaseSetUpMP()
 
+        self.accumulated_products = None
+        self.accumulated_products_shm = None
+        self.accumulated_products_shm_mdata = None
+
     def close_shms(self):
         self.first.close_and_unlink_shared_memory()
         self.second.close_and_unlink_shared_memory()
         self.third.close_and_unlink_shared_memory()
         self.fourth.close_and_unlink_shared_memory()
+
+        if self.accumulated_products_shm is not None:
+            self.accumulated_products_shm.close()
+            self.accumulated_products_shm.unlink()
+
+    def reaccumulate_products(self):
+        np.add(self.first.product.c3d, self.second.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+        np.add(self.accumulated_products, self.third.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+        np.add(self.accumulated_products, self.fourth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
 
 
 DEFAULT_PARAM = {
