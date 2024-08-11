@@ -85,12 +85,12 @@ class ActiveElem:
 
         # half space fill
         # ____________________________________________
-        if self.elem_name == "Al":
-            # ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < int(self.cells_per_axis / 2))
-            ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < 7)[0]
-            to_move = np.delete(self.cells[:, :self.last_in_diff_arr], ind_to_del, axis=1)
-            self.cells[:, :to_move.shape[1]] = to_move
-            self.last_in_diff_arr = to_move.shape[1]
+        # if self.elem_name == "Al":
+        #     ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < int(self.cells_per_axis / 2))
+        #     ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < 7)[0]
+        #     to_move = np.delete(self.cells[:, :self.last_in_diff_arr], ind_to_del, axis=1)
+        #     self.cells[:, :to_move.shape[1]] = to_move
+        #     self.last_in_diff_arr = to_move.shape[1]
         # ____________________________________________
 
         dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(self.cells[0]))
@@ -290,7 +290,7 @@ class ActiveElem:
 
         self.i_ind = np.array(np.where(self.cells[2, :self.last_in_diff_arr] < last_i)[0], dtype=np.uint32)
         self.i_descards = np.array(self.cells[:, self.i_ind], dtype=np.short)
-        insert_counts(self.c3d, self.i_descards)
+        insert_counts(self.c3d, self.i_descards, 1)
 
         self.in_3D_flag = True
 
@@ -538,7 +538,7 @@ class OxidantElem:
 
         # Diffusion through the scale. If the current particle is inside the product particle
         # it will be reflected
-        out_scale = check_in_scale(self.scale.full_c3d, self.cells, self.dirs)
+        out_scale = check_in_scale(self.scale, self.cells, self.dirs)
 
         # Diffusion along grain boundaries
         # ______________________________________________________________________________________________________________
@@ -677,7 +677,7 @@ class OxidantElem:
             self.dirs = np.concatenate((self.dirs, new_dirs), axis=1)
 
     def transform_to_3d(self):
-        insert_counts(self.c3d, self.cells)
+        insert_counts(self.c3d, self.cells, 1)
 
     def transform_to_descards(self):
         ind_out = decrease_counts(self.c3d, self.cells)

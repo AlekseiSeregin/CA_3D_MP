@@ -1,3 +1,5 @@
+import numpy as np
+
 from utils.numba_functions import *
 from multiprocessing import shared_memory
 from .neigh_indexes import *
@@ -166,7 +168,7 @@ def ci_multi(cur_case, seeds, oxidant, full_3d):
     all_arounds = calc_sur_ind_formation(seeds, active.shape[2] - 1)
     self_neighbours = go_around_int(oxidant, all_arounds[:, :-2])
     self_neighbours[:, 4] -= 1
-    self_neighbours = np.array(self_neighbours, dtype=bool)
+    # self_neighbours = np.array(self_neighbours, dtype=bool)
     arr_len_self = np.array([np.sum(item) for item in self_neighbours], dtype=np.short)
     temp_ind = np.where(arr_len_self >= cur_case.threshold_inward - 1)[0]
 
@@ -175,7 +177,7 @@ def ci_multi(cur_case, seeds, oxidant, full_3d):
         self_neighbours = self_neighbours[temp_ind]
         all_arounds = all_arounds[temp_ind]
 
-        neighbours = go_around_bool(active, all_arounds[:, :-2])
+        neighbours = go_around_int(active, all_arounds[:, :-2])
         arr_len_out = np.array([np.sum(item) for item in neighbours], dtype=np.short)
         temp_ind = np.where(arr_len_out >= cur_case.threshold_outward)[0]
 
@@ -209,25 +211,40 @@ def ci_multi(cur_case, seeds, oxidant, full_3d):
                 #                  dtype=np.short)
 
                 out_to_del = [np.array(np.nonzero(item)[0]) for item in neighbours]
-                to_del = [np.random.choice(item, cur_case.threshold_outward, replace=False) for item in out_to_del]
-                out_coord = np.array([all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(to_del)],
-                                 dtype=np.short)
+                n_rep = [neighbours[ind][pos] for ind, pos in enumerate(out_to_del)]
+                corr_arounds = [all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(out_to_del)]
+                # repeated_coords = np.array([np.repeat(arounds, n_r, axis=0) for arounds, n_r in zip(corr_arounds, n_rep)], dtype=object)
+                repeated_coords = [np.repeat(arounds, n_r, axis=0) for arounds, n_r in zip(corr_arounds, n_rep)]
+                ind_to_choose = [np.random.choice(len(coord), cur_case.threshold_outward, replace=False) for coord in repeated_coords]
+                out_coord = np.array([repeated_coords[ind][pos] for ind, pos in enumerate(ind_to_choose)], dtype=np.short)
+                # out_to_del = [np.array(np.nonzero(item)[0]) for item in neighbours]
+                # to_del = [np.random.choice(item, cur_case.threshold_outward, replace=False) for item in out_to_del]
+                # out_coord = np.array([all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(to_del)],
+                #                  dtype=np.short)
 
                 in_to_del = [np.array(np.nonzero(item)[0]) for item in self_neighbours]
-                to_del = [np.random.choice(item, cur_case.threshold_inward - 1, replace=False) for item in in_to_del]
-                in_coord = np.array([all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(to_del)],
-                                 dtype=np.short)
+                n_rep = [self_neighbours[ind][pos] for ind, pos in enumerate(in_to_del)]
+                corr_arounds = [all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(in_to_del)]
+                # repeated_coords = np.array([np.repeat(arounds, n_r, axis=0) for arounds, n_r in zip(corr_arounds, n_rep)], dtype=object)
+                repeated_coords = [np.repeat(arounds, n_r, axis=0) for arounds, n_r in zip(corr_arounds, n_rep)]
+                ind_to_choose = [np.random.choice(len(coord), cur_case.threshold_inward - 1, replace=False) for coord in
+                                 repeated_coords]
+                in_coord = np.array([repeated_coords[ind][pos] for ind, pos in enumerate(ind_to_choose)], dtype=np.short)
+                # in_to_del = [np.array(np.nonzero(item)[0]) for item in self_neighbours]
+                # to_del = [np.random.choice(item, cur_case.threshold_inward - 1, replace=False) for item in in_to_del]
+                # in_coord = np.array([all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(to_del)],
+                #                  dtype=np.short)
 
-                # coord = np.reshape(coord, (len(coord) * self.threshold_inward, 3)).transpose()
                 out_coord = np.reshape(out_coord, (len(out_coord) * cur_case.threshold_outward, 3))
-                in_coord = np.reshape(in_coord, (len(in_coord) * cur_case.threshold_inward - 1, 3))
-
+                in_coord = np.reshape(in_coord, (len(in_coord) * (cur_case.threshold_inward - 1), 3))
                 out_coord = out_coord.transpose()
                 in_coord = in_coord.transpose()
                 seeds = seeds.transpose()
 
-                active[out_coord[0], out_coord[1], out_coord[2]] -= 1
-                oxidant[in_coord[0], in_coord[1], in_coord[2]] -= 1
+                # active[out_coord[0], out_coord[1], out_coord[2]] -= 1
+                just_decrease_counts(active, out_coord)
+                # oxidant[in_coord[0], in_coord[1], in_coord[2]] -= 1
+                just_decrease_counts(oxidant, in_coord)
                 oxidant[seeds[0], seeds[1], seeds[2]] -= 1
 
                 # self.objs[self.case]["product"].c3d[coord[0], coord[1], coord[2]] += 1  # precip on place of active!

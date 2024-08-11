@@ -74,9 +74,9 @@ def check_at_coord_new(array_3d, coordinates):
 
 
 @numba.njit(nopython=True, fastmath=True)
-def insert_counts(array_3d, points):
+def insert_counts(array_3d, points, threshold):
     for point in points.transpose():
-        array_3d[point[0], point[1], point[2]] += 1
+        array_3d[point[0], point[1], point[2]] += threshold
 
 
 @numba.njit(nopython=True, fastmath=True)
@@ -105,6 +105,18 @@ def check_in_scale(scale, cells, dirs):
             out_scale.append(np.uint32(index))
         else:
             dirs[:, index] *= -1
+    return np.array(out_scale, dtype=np.uint32)
+
+
+@numba.njit(nopython=True, fastmath=True)
+def check_in_scale_mp(scale, cells, dirs, working_range):
+    # trick to initialize an empty list with known type
+    out_scale = [np.uint32(x) for x in range(0)]
+    for index, coordinate in enumerate(cells[:, working_range].transpose()):
+        if not scale[coordinate[0], coordinate[1], coordinate[2]]:
+            out_scale.append(np.uint32(index))
+        else:
+            dirs[:, working_range[index]] *= -1
     return np.array(out_scale, dtype=np.uint32)
 
 

@@ -173,7 +173,7 @@ class SimulationConfigurator:
                                                                                            Config.PRODUCTS.SECONDARY)
 
     def configurate_functions_td_all(self):
-        self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_bulk
+        self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_with_scale
         self.ca.primary_active.diffuse = elements.diffuse_bulk_mp
         self.ca.secondary_active.diffuse = elements.diffuse_bulk_mp
 
@@ -183,10 +183,10 @@ class SimulationConfigurator:
         self.ca.get_cur_ioz_bound = self.ca.ioz_depth_from_kinetics
 
         self.ca.cases.first_mp.precip_step = precip_step_multi_products
-        self.ca.cases.first_mp.check_intersection = ci_single
+        self.ca.cases.first_mp.check_intersection = ci_multi
 
         self.ca.cases.second_mp.precip_step = precip_step_multi_products
-        self.ca.cases.second_mp.check_intersection = ci_single
+        self.ca.cases.second_mp.check_intersection = ci_multi
 
         self.ca.cases.third_mp.precip_step = precip_step_multi_products
         self.ca.cases.third_mp.check_intersection = ci_multi
@@ -327,7 +327,9 @@ class SimulationConfigurator:
             self.init_first_case()
 
     def init_first_case(self):
+        self.ca.cases.first_mp.cells_per_axis = self.ca.cells_per_axis
         self.ca.primary_product = elements.Product(Config.PRODUCTS.PRIMARY)
+
         self.ca.cases.first.product = self.ca.primary_product
         self.ca.cases.first_mp.oxidation_number = self.ca.primary_product.oxidation_number
 
@@ -336,8 +338,8 @@ class SimulationConfigurator:
 
         # to check with
         self.ca.cases.first_mp.to_check_with_shm_mdata = self.ca.cases.accumulated_products_shm_mdata
-
-        self.ca.primary_oxidant.scale = self.ca.primary_product
+        # scale
+        self.ca.primary_oxidant.scale = self.ca.cases.accumulated_products
         self.ca.primary_active.scale = self.ca.primary_product
         # c3d
         self.ca.cases.first_mp.product_c3d_shm_mdata = self.ca.primary_product.c3d_shm_mdata
@@ -379,6 +381,7 @@ class SimulationConfigurator:
         self.ca.cases.first_mp.fix_full_cells = elements.fix_full_cells
 
     def init_second_case(self):
+        self.ca.cases.second_mp.cells_per_axis = self.ca.cells_per_axis
         self.ca.secondary_product = elements.Product(Config.PRODUCTS.SECONDARY)
         self.ca.cases.second.product = self.ca.secondary_product
         self.ca.cases.second_mp.oxidation_number = self.ca.secondary_product.oxidation_number
@@ -431,6 +434,7 @@ class SimulationConfigurator:
         self.ca.cases.second_mp.fix_full_cells = elements.fix_full_cells
 
     def init_third_case(self):
+        self.ca.cases.third_mp.cells_per_axis = self.ca.cells_per_axis
         self.ca.ternary_product = elements.Product(Config.PRODUCTS.TERNARY)
         self.ca.cases.third.product = self.ca.ternary_product
         self.ca.cases.third_mp.oxidation_number = self.ca.ternary_product.oxidation_number
@@ -487,6 +491,7 @@ class SimulationConfigurator:
         self.ca.cases.third_mp.fix_full_cells = elements.fix_full_cells
 
     def init_fourth_case(self):
+        self.ca.cases.fourth_mp.cells_per_axis = self.ca.cells_per_axis
         self.ca.quaternary_product = elements.Product(Config.PRODUCTS.QUATERNARY)
         self.ca.cases.fourth.product = self.ca.quaternary_product
         self.ca.cases.fourth_mp.oxidation_number = self.ca.quaternary_product.oxidation_number

@@ -235,7 +235,7 @@ if __name__ == "__main__":
     data = read_csv_files4(directory)
 
     # Write data to a single file
-    write_data_to_file(data, output_file)
+    # write_data_to_file(data, output_file)
 
     # Load data from the consolidated file
     # consolidated_data = load_data_from_file(output_file)
@@ -244,7 +244,8 @@ if __name__ == "__main__":
 
     # write_data_to_file(consolidated_data, p_output_file)
 
-    p_consolidated_data = load_data_from_file(output_file)
+    # p_consolidated_data = load_data_from_file(output_file)
+    p_consolidated_data = data
 
     keys = list(p_consolidated_data.keys())
     tree = KDTree(keys)

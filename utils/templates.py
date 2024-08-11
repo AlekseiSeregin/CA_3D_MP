@@ -52,6 +52,8 @@ class CaseSetUpMP:
         self.threshold_inward = None
         self.threshold_outward = None
 
+        self.cells_per_axis = None
+
 
 class CaseRef:
     def __init__(self):

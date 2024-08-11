@@ -1532,12 +1532,12 @@ class CellularAutomata:
         product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
-        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
+        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL * Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
 
         secondary_product = np.array([np.sum(self.secondary_product.c3d[:, :, plane_ind]) for plane_ind
                                       in range(self.ioz_bound + 1)], dtype=np.uint32)
         secondary_product_moles = secondary_product * Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC
-        secondary_product_eq_mat_moles = secondary_product * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
+        secondary_product_eq_mat_moles = secondary_product * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL * Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD
 
 
         ternary_product = np.array([np.sum(self.ternary_product.c3d[:, :, plane_ind]) for plane_ind
@@ -1587,21 +1587,21 @@ class CellularAutomata:
         active_pure_c = active_pure_moles * 100 / whole_moles_pure
         secondary_active_pure_c = secondary_active_pure_moles * 100 / whole_moles_pure
 
-        self.curr_look_up = self.TdDATA.get_look_up_data(active_pure_c, secondary_active_pure_c, oxidant_pure_c)
+        curr_look_up = self.TdDATA.get_look_up_data(active_pure_c, secondary_active_pure_c, oxidant_pure_c)
 
-        primary_diff = self.curr_look_up[0] - product_c
+        primary_diff = curr_look_up[0] - product_c
         primary_pos_ind = np.where(primary_diff > 0)[0]
         primary_neg_ind = np.where(primary_diff < 0)[0]
 
-        secondary_diff = self.curr_look_up[1] - secondary_product_c
+        secondary_diff = curr_look_up[1] - secondary_product_c
         secondary_pos_ind = np.where(secondary_diff >= 0)[0]
         secondary_neg_ind = np.where(secondary_diff < 0)[0]
 
-        ternary_diff = self.curr_look_up[2] - ternary_product_c
+        ternary_diff = curr_look_up[2] - ternary_product_c
         ternary_pos_ind = np.where(ternary_diff > 0)[0]
         ternary_neg_ind = np.where(ternary_diff < 0)[0]
 
-        quaternary_diff = self.curr_look_up[3] - quaternary_product_c
+        quaternary_diff = curr_look_up[3] - quaternary_product_c
         quaternary_pos_ind = np.where(quaternary_diff > 0)[0]
         quaternary_neg_ind = np.where(quaternary_diff < 0)[0]
 
@@ -1619,7 +1619,7 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products()
                 self.precip_mp()
-                self.decomposition_intrinsic()
+                # self.decomposition_intrinsic()
 
         if len(primary_neg_ind) > 0:
             self.comb_indexes = primary_neg_ind
@@ -1637,7 +1637,7 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products()
                 self.precip_mp()
-                self.decomposition_intrinsic()
+                # self.decomposition_intrinsic()
 
         if len(secondary_neg_ind) > 0:
             self.comb_indexes = secondary_neg_ind
@@ -1656,7 +1656,7 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products()
                 self.precip_mp()
-                self.decomposition_intrinsic()
+                # self.decomposition_intrinsic()
 
         if len(ternary_neg_ind) > 0:
             self.comb_indexes = ternary_neg_ind
@@ -1675,7 +1675,7 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products()
                 self.precip_mp()
-                self.decomposition_intrinsic()
+                # self.decomposition_intrinsic()
 
         if len(quaternary_neg_ind) > 0:
             self.comb_indexes = quaternary_neg_ind
@@ -2858,6 +2858,7 @@ class CellularAutomata:
             self.cur_case.product.fix_full_cells(seeds)  # precip on place of oxidant!
 
     def diffusion_inward(self):
+        self.cases.reaccumulate_products()
         self.primary_oxidant.diffuse()
         if Config.OXIDANTS.SECONDARY_EXISTENCE:
             self.secondary_oxidant.diffuse()
@@ -2885,8 +2886,8 @@ class CellularAutomata:
                 end = start + chunk_size + (1 if i < remainder else 0)
                 indices.append([start, end])
                 start = end
-            tasks = [(wr, self.cur_case.active.cells_shm_mdata, self.cur_case.active.dirs_shm_mdata,
-                      self.cells_per_axis, self.cur_case.active.p_ranges, self.cur_case.active.diffuse) for wr in indices]
+
+            tasks = [(wr, self.cur_case_mp, self.cur_case.active.p_ranges, self.cur_case.active.diffuse) for wr in indices]
             results = self.pool.map(worker, tasks)
             to_del = np.array(np.concatenate(results))
             self.cur_case.active.dell_cells_from_diff_arrays(to_del)
@@ -3128,10 +3129,10 @@ class CellularAutomata:
         if len(to_dissolve[0]) > 0:
             just_decrease_counts(self.cur_case.product.c3d, to_dissolve)
             self.cur_case.product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-            insert_counts(self.cur_case.active.c3d, to_dissolve)
-
-            self.cur_case.oxidant.cells = np.concatenate((self.cur_case.oxidant.cells, to_dissolve), axis=1)
-            new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
+            insert_counts(self.cur_case.active.c3d, to_dissolve, self.cur_case_mp.threshold_outward)
+            repeated_coords = np.repeat(to_dissolve, self.cur_case_mp.threshold_inward, axis=1)
+            self.cur_case.oxidant.cells = np.concatenate((self.cur_case.oxidant.cells, repeated_coords), axis=1)
+            new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(repeated_coords[0]))
             new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
             new_dirs -= 1
             self.cur_case.oxidant.dirs = np.concatenate((self.cur_case.oxidant.dirs, new_dirs), axis=1)

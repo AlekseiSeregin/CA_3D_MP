@@ -1725,8 +1725,8 @@ ELAPSED TIME: {message}
             ax.plot(x, soutward, color='darkorange')
             ax.plot(x, primary_product, color='r', linewidth=lokal_linewidth)
             ax.plot(x, secondary_product, color='cyan')
-            # ax.plot(x, ternary_product, color='darkgreen')
-            # ax.plot(x, quaternary_product, color='steelblue')
+            ax.plot(x, ternary_product, color='darkgreen')
+            ax.plot(x, quaternary_product, color='steelblue')
 
             ax.set_xlabel("Depth [µm]", **csfont)
             ax.set_ylabel(conc_type_caption, **csfont)
