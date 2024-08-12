@@ -62,6 +62,7 @@ class ProdGroups:
         self.SECONDARY = None
         self.TERNARY = None
         self.QUATERNARY = None
+        self.QUINT = None
 
     def __bool__(self):
         return True

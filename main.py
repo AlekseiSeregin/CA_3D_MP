@@ -9,6 +9,7 @@ if __name__ == '__main__':
             self.corundum_al = 0.0
             self.spinel_cr = 0.0
             self.spinel_al = 0.0
+            self.halite = 0.0
 
 
     Config.COMMENT = """

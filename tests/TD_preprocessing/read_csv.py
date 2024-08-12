@@ -13,7 +13,7 @@ class CompPool:
         self.corundum_al = 0.0
         self.spinel_cr = 0.0
         self.spinel_al = 0.0
-        # self.halite = 0.0
+        self.halite = 0.0
         # self.sum = 0
 
 
@@ -148,6 +148,9 @@ def read_csv_files4(directory):
                     spinel2_cont = float(row.get('Spinel2_Content', 0).strip() or 0)
                     halite_cont = float(row.get('Halite_Content', 0).strip() or 0)
 
+                    if halite_cont >0:
+                        print()
+
                     sum_all = corundum1_cont + corundum2_cont + spinel1_cont + spinel2_cont + halite_cont
                     if sum_all > 0:
                         if corundum1_cont > 0:
@@ -183,7 +186,7 @@ def read_csv_files4(directory):
                             else:
                                 comp_pool.spinel_al += spinel2_cont
 
-                        # comp_pool.halite = halite_cont
+                        comp_pool.halite = halite_cont
                         # comp_pool.sum = comp_pool.corundum_cr + comp_pool.corundum_al + comp_pool.spinel_cr + comp_pool.spinel_al + comp_pool.halite
                         data[tuple(concentrations.values())] = comp_pool
 
@@ -191,7 +194,7 @@ def read_csv_files4(directory):
                         last_added_pool.corundum_al = comp_pool.corundum_al
                         last_added_pool.spinel_cr = comp_pool.spinel_cr
                         last_added_pool.spinel_al = comp_pool.spinel_al
-                        # last_added_pool.halite = comp_pool.halite
+                        last_added_pool.halite = comp_pool.halite
                         # last_added_pool.sum = comp_pool.sum
                     else:
                         data[tuple(concentrations.values())] = last_added_pool
@@ -227,8 +230,10 @@ def find_closest_key(target, tree, keys):
 
 if __name__ == "__main__":
     # Example usage:
-    directory = "D:/PhD/TC/Simulations_Klaus_first_ALL/"
-    output_file = "C:/CA_3D_MP/thermodynamics/TD_look_up.pkl"
+    # directory = "D:/PhD/TC/Simulations_Klaus_first_ALL/"
+    directory = "W:/SIMCA/TC/Simulations_Klaus_first_ALL/"
+    # output_file = "C:/CA_3D_MP/thermodynamics/TD_look_up.pkl"
+    output_file = "C:/Users/adam-wrmjvo101twvweh/PycharmProjects/CA_3D_MP/thermodynamics/TD_look_up.pkl"
     # p_output_file = "TD_look_up.pkl"
 
     # Read data from CSV files

@@ -194,6 +194,9 @@ class SimulationConfigurator:
         self.ca.cases.fourth_mp.precip_step = precip_step_multi_products
         self.ca.cases.fourth_mp.check_intersection = ci_multi
 
+        self.ca.cases.fifth_mp.precip_step = precip_step_multi_products
+        self.ca.cases.fifth_mp.check_intersection = ci_multi_no_active
+
         self.ca.decomposition = None
         self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
 
@@ -222,6 +225,13 @@ class SimulationConfigurator:
         self.ca.cases.fourth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.QUATERNARY,
                                                                                            Config.PRODUCTS.QUATERNARY)
 
+        self.ca.cases.fifth_mp.nucleation_probabilities = utils.NucleationProbabilities(
+            Config.PROBABILITIES.QUINT,
+            Config.PRODUCTS.QUINT)
+        self.ca.cases.fifth_mp.dissolution_probabilities = utils.DissolutionProbabilities(
+            Config.PROBABILITIES.QUINT,
+            Config.PRODUCTS.QUINT)
+
     def run_simulation(self):
         self.begin = time.time()
         for self.ca.iteration in progressbar.progressbar(range(Config.N_ITERATIONS)):
@@ -249,9 +259,11 @@ class SimulationConfigurator:
 
         self.ca.cases.third.oxidant = self.ca.primary_oxidant
         self.ca.cases.fourth.oxidant = self.ca.primary_oxidant
+        self.ca.cases.fifth.oxidant = self.ca.primary_oxidant
 
         self.ca.cases.third_mp.oxidant_c3d_shm_mdata = self.ca.primary_oxidant.c3d_shm_mdata
         self.ca.cases.fourth_mp.oxidant_c3d_shm_mdata = self.ca.primary_oxidant.c3d_shm_mdata
+        self.ca.cases.fifth_mp.oxidant_c3d_shm_mdata = self.ca.primary_oxidant.c3d_shm_mdata
 
         # ---------------------------------------------------
         if Config.OXIDANTS.SECONDARY_EXISTENCE:
@@ -270,6 +282,9 @@ class SimulationConfigurator:
         # c3d
         self.ca.cases.first_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata
         self.ca.cases.third_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata
+
+        self.ca.cases.fifth_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata # JUST FOR SHAPE!!!
+
         # cells
         self.ca.cases.first_mp.active_cells_shm_mdata = self.ca.primary_active.cells_shm_mdata
         self.ca.cases.third_mp.active_cells_shm_mdata = self.ca.primary_active.cells_shm_mdata
@@ -308,6 +323,7 @@ class SimulationConfigurator:
             self.init_second_case()
             self.init_third_case()
             self.init_fourth_case()
+            self.init_fifth_case()
 
         elif Config.ACTIVES.SECONDARY_EXISTENCE and not Config.OXIDANTS.SECONDARY_EXISTENCE:
             # accumulated products
@@ -323,6 +339,7 @@ class SimulationConfigurator:
             self.init_second_case()
             self.init_third_case()
             self.init_fourth_case()
+            self.init_fifth_case()
         else:
             self.init_first_case()
 
@@ -546,6 +563,63 @@ class SimulationConfigurator:
             tmp.shape, tmp.dtype)
         # fix full cells
         self.ca.cases.fourth_mp.fix_full_cells = elements.fix_full_cells
+
+    def init_fifth_case(self):
+        self.ca.cases.fifth_mp.cells_per_axis = self.ca.cells_per_axis
+        self.ca.quint_product = elements.Product(Config.PRODUCTS.QUINT)
+        self.ca.cases.fifth.product = self.ca.quint_product
+        self.ca.cases.fifth_mp.oxidation_number = self.ca.quint_product.oxidation_number
+
+        self.ca.cases.fifth_mp.threshold_inward = Config.PRODUCTS.QUINT.THRESHOLD_INWARD
+        self.ca.cases.fifth_mp.threshold_outward = Config.PRODUCTS.QUINT.THRESHOLD_OUTWARD
+
+        # to check with
+        self.ca.cases.fifth_mp.to_check_with_shm_mdata = self.ca.cases.accumulated_products_shm_mdata
+
+        # c3d
+        self.ca.cases.fifth_mp.product_c3d_shm_mdata = self.ca.quint_product.c3d_shm_mdata
+        # full_c3d
+        self.ca.cases.fifth_mp.full_shm_mdata = self.ca.quint_product.full_shm_mdata
+        # product indexes
+        tmp = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
+        self.ca.cases.fifth.shm_pool["product_indexes"] = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
+        self.ca.cases.fifth.prod_indexes = np.ndarray(tmp.shape, dtype=tmp.dtype,
+                                                       buffer=self.ca.cases.fifth.shm_pool["product_indexes"].buf)
+        np.copyto(self.ca.cases.fifth.prod_indexes, tmp)
+        self.ca.cases.fifth_mp.prod_indexes_shm_mdata = SharedMetaData(
+            self.ca.cases.fifth.shm_pool["product_indexes"].name,
+            tmp.shape, tmp.dtype)
+        # ind not stable
+        tmp = np.full(Config.N_CELLS_PER_AXIS, True, dtype=bool)
+        self.ca.cases.fifth.shm_pool["product_ind_not_stab"] = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
+        self.ca.cases.fifth.product_ind_not_stab = np.ndarray(tmp.shape, dtype=tmp.dtype,
+                                                               buffer=self.ca.cases.fifth.shm_pool[
+                                                                   "product_ind_not_stab"].buf)
+        np.copyto(self.ca.cases.fifth.product_ind_not_stab, tmp)
+        self.ca.cases.fifth_mp.prod_indexes_not_stab_shm_mdata = SharedMetaData(
+            self.ca.cases.fifth.shm_pool["product_ind_not_stab"].name,
+            tmp.shape, tmp.dtype)
+        # c3d_init
+        if self.ca.cases.fifth.product.oxidation_number == 1:
+            self.ca.cases.fifth_mp.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
+            self.ca.cases.fifth.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
+            my_type = bool
+        else:
+            self.ca.cases.fifth_mp.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
+            self.ca.cases.fifth.fix_init_precip_func_ref = self.ca.fix_init_precip_int
+            my_type = np.ubyte
+
+        tmp = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), False,
+                      dtype=my_type)
+        self.ca.cases.fifth.shm_pool["precip_3d_init"] = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
+        self.ca.cases.fifth.precip_3d_init = np.ndarray(tmp.shape, dtype=tmp.dtype,
+                                                         buffer=self.ca.cases.fifth.shm_pool["precip_3d_init"].buf)
+        np.copyto(self.ca.cases.fifth.precip_3d_init, tmp)
+        self.ca.cases.fifth_mp.precip_3d_init_shm_mdata = SharedMetaData(
+            self.ca.cases.fifth.shm_pool["precip_3d_init"].name,
+            tmp.shape, tmp.dtype)
+        # fix full cells
+        self.ca.cases.fifth_mp.fix_full_cells = elements.fix_full_cells
 
     def save_results(self):
         if Config.STRIDE > Config.N_ITERATIONS:

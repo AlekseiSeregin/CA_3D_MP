@@ -65,6 +65,8 @@ class CaseRef:
         self.third_mp = CaseSetUpMP()
         self.fourth = CaseSetUp()
         self.fourth_mp = CaseSetUpMP()
+        self.fifth = CaseSetUp()
+        self.fifth_mp = CaseSetUpMP()
 
         self.accumulated_products = None
         self.accumulated_products_shm = None
@@ -75,6 +77,7 @@ class CaseRef:
         self.second.close_and_unlink_shared_memory()
         self.third.close_and_unlink_shared_memory()
         self.fourth.close_and_unlink_shared_memory()
+        self.fifth.close_and_unlink_shared_memory()
 
         if self.accumulated_products_shm is not None:
             self.accumulated_products_shm.close()
@@ -84,6 +87,7 @@ class CaseRef:
         np.add(self.first.product.c3d, self.second.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
         np.add(self.accumulated_products, self.third.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
         np.add(self.accumulated_products, self.fourth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+        np.add(self.accumulated_products, self.fifth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
 
 
 DEFAULT_PARAM = {

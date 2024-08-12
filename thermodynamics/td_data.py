@@ -15,11 +15,12 @@ class CompPool:
         self.corundum_al = 0.0
         self.spinel_cr = 0.0
         self.spinel_al = 0.0
+        self.halite = 0.0
 
 
 class TdDATA:
     def __init__(self):
-        self.TD_file = "C:/CA_3D_MP/thermodynamics/TD_look_up.pkl"
+        self.TD_file = "C:/Users/adam-wrmjvo101twvweh/PycharmProjects/CA_3D_MP/thermodynamics/TD_look_up.pkl"
 
         self.TD_lookup = None
         self.keys = None
@@ -98,7 +99,7 @@ class TdDATA:
         objects = [self.TD_lookup[tuple(key)] for key in nearest_keys]
 
         # Extract primary and secondary attributes from objects
-        return np.array([[obj.corundum_cr, obj.corundum_al, obj.spinel_cr, obj.spinel_al] for obj in objects]).T
+        return np.array([[obj.corundum_cr, obj.corundum_al, obj.spinel_cr, obj.spinel_al, obj.halite] for obj in objects]).T
 
 
 if __name__ == '__main__':

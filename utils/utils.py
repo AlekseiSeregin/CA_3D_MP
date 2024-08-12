@@ -226,6 +226,28 @@ class Utils:
         Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = \
             int(math.ceil(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)) / Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD)
 
+        # QUINT
+        matrix_moles_needed = Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
+        matrix_mas_needed = matrix_moles_needed * Config.MATRIX.MOLAR_MASS
+
+        oxidant_moles_needed = Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
+        oxidant_mass_needed = oxidant_moles_needed * Config.OXIDANTS.PRIMARY.MOLAR_MASS
+
+        Config.PRODUCTS.QUINT.MOLES_PER_CELL = Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
+        Config.PRODUCTS.QUINT.MOLES_PER_CELL_TC = Config.PRODUCTS.QUINT.MOLES_PER_CELL * 2
+
+        Config.PRODUCTS.QUINT.MASS_PER_CELL = oxidant_mass_needed + matrix_mas_needed
+        Config.PRODUCTS.QUINT.CONSTITUTION = Config.MATRIX.ELEMENT + Config.OXIDANTS.PRIMARY.ELEMENT
+
+
+
+
+        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = Config.MATRIX.MOLES_PER_CELL / (
+                    Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)
+        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = \
+            int(math.ceil(Config.MATRIX.MOLES_PER_CELL / (
+                        Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)) / Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD)
+
         if Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER == 1:
             Config.PRODUCTS.PRIMARY.LIND_FLAT_ARRAY = 6
         else:
@@ -257,6 +279,15 @@ class Utils:
             Config.PRODUCTS.QUATERNARY.LIND_FLAT_ARRAY = 6
         else:
             Config.PRODUCTS.QUATERNARY.LIND_FLAT_ARRAY = 7
+
+        Config.PRODUCTS.QUINT.OXIDATION_NUMBER = int(math.ceil(Config.MATRIX.MOLES_PER_CELL /
+                                                               Config.PRODUCTS.QUINT.MOLES_PER_CELL))
+
+        if Config.PRODUCTS.QUINT.OXIDATION_NUMBER == 1:
+            Config.PRODUCTS.QUINT.LIND_FLAT_ARRAY = 6
+        else:
+            Config.PRODUCTS.QUINT.LIND_FLAT_ARRAY = 7
+
 
     def calc_oxidant_data(self):
         diff_coeff = Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
