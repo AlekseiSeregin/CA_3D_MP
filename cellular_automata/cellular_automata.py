@@ -1629,7 +1629,7 @@ class CellularAutomata:
             self.comb_indexes = np.intersect1d(primary_pos_ind, self.comb_indexes)
 
             if len(self.comb_indexes) > 0:
-                self.cases.reaccumulate_products()
+                self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
                 # self.decomposition_intrinsic()
 
@@ -1647,7 +1647,7 @@ class CellularAutomata:
             self.comb_indexes = np.intersect1d(secondary_pos_ind, self.comb_indexes)
 
             if len(self.comb_indexes) > 0:
-                self.cases.reaccumulate_products()
+                self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
                 # self.decomposition_intrinsic()
 
@@ -1666,7 +1666,7 @@ class CellularAutomata:
             self.comb_indexes = np.intersect1d(ternary_pos_ind, self.comb_indexes)
 
             if len(self.comb_indexes) > 0:
-                self.cases.reaccumulate_products()
+                self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
                 # self.decomposition_intrinsic()
 
@@ -1685,7 +1685,7 @@ class CellularAutomata:
             self.comb_indexes = np.intersect1d(quaternary_pos_ind, self.comb_indexes)
 
             if len(self.comb_indexes) > 0:
-                self.cases.reaccumulate_products()
+                self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
                 # self.decomposition_intrinsic()
 
@@ -1704,18 +1704,18 @@ class CellularAutomata:
             self.comb_indexes = np.arange(self.ioz_bound + 1)
 
             if len(self.comb_indexes) > 0:
-                self.cases.reaccumulate_products()
+                self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
                 # self.decomposition_intrinsic()
 
-        # if len(quint_neg_ind) > 0:
-        #     self.comb_indexes = quint_neg_ind
-        #     self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
-        #                                                                    np.ones(len(self.comb_indexes)))
-        #     self.decomposition_intrinsic()
-        #     self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
-        #                                                                    np.zeros(len(self.comb_indexes)))
-        #
+        if len(quint_neg_ind) > 0:
+            self.comb_indexes = quint_neg_ind
+            self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
+                                                                           np.ones(len(self.comb_indexes)))
+            self.decomposition_intrinsic()
+            self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
+                                                                           np.zeros(len(self.comb_indexes)))
+
 
     def precipitation_with_td(self):
         self.furthest_index = self.primary_oxidant.calc_furthest_index()
@@ -2890,7 +2890,7 @@ class CellularAutomata:
             self.cur_case.product.fix_full_cells(seeds)  # precip on place of oxidant!
 
     def diffusion_inward(self):
-        self.cases.reaccumulate_products()
+        self.cases.reaccumulate_products_no_exclusion()
         self.primary_oxidant.diffuse()
         if Config.OXIDANTS.SECONDARY_EXISTENCE:
             self.secondary_oxidant.diffuse()
@@ -3161,7 +3161,8 @@ class CellularAutomata:
         if len(to_dissolve[0]) > 0:
             just_decrease_counts(self.cur_case.product.c3d, to_dissolve)
             self.cur_case.product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-            insert_counts(self.cur_case.active.c3d, to_dissolve, self.cur_case_mp.threshold_outward)
+            if self.cur_case_mp.threshold_outward > 0:
+                insert_counts(self.cur_case.active.c3d, to_dissolve, self.cur_case_mp.threshold_outward)
             repeated_coords = np.repeat(to_dissolve, self.cur_case_mp.threshold_inward, axis=1)
             self.cur_case.oxidant.cells = np.concatenate((self.cur_case.oxidant.cells, repeated_coords), axis=1)
             new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(repeated_coords[0]))

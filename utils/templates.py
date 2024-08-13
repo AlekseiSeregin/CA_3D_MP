@@ -83,7 +83,14 @@ class CaseRef:
             self.accumulated_products_shm.close()
             self.accumulated_products_shm.unlink()
 
-    def reaccumulate_products(self):
+    def reaccumulate_products(self, exclude_case):
+        np.add(self.first.product.c3d, self.second.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+        np.add(self.accumulated_products, self.third.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+        np.add(self.accumulated_products, self.fourth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+        np.add(self.accumulated_products, self.fifth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+        np.subtract(self.accumulated_products, exclude_case.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+
+    def reaccumulate_products_no_exclusion(self):
         np.add(self.first.product.c3d, self.second.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
         np.add(self.accumulated_products, self.third.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
         np.add(self.accumulated_products, self.fourth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)

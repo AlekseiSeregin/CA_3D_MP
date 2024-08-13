@@ -149,7 +149,7 @@ class SimulationConfigurator:
         self.ca.precip_func = self.ca.precipitation_with_td
         self.ca.get_combi_ind = None
 
-        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_furthest_inward
+        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_from_kinetics
 
         self.ca.cases.first_mp.precip_step = precip_step_multi_products
         self.ca.cases.first_mp.check_intersection = ci_single
@@ -180,7 +180,7 @@ class SimulationConfigurator:
         self.ca.precip_func = self.ca.precipitation_with_td
         self.ca.get_combi_ind = None
 
-        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_from_kinetics
+        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_furthest_inward
 
         self.ca.cases.first_mp.precip_step = precip_step_multi_products
         self.ca.cases.first_mp.check_intersection = ci_multi
@@ -204,6 +204,7 @@ class SimulationConfigurator:
         self.ca.cases.second_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
         self.ca.cases.third_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
         self.ca.cases.fourth_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
+        self.ca.cases.fifth_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
 
         self.ca.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
                                                                                         Config.PRODUCTS.PRIMARY)
@@ -357,7 +358,7 @@ class SimulationConfigurator:
         self.ca.cases.first_mp.to_check_with_shm_mdata = self.ca.cases.accumulated_products_shm_mdata
         # scale
         self.ca.primary_oxidant.scale = self.ca.cases.accumulated_products
-        self.ca.primary_active.scale = self.ca.primary_product
+        self.ca.primary_active.scale = self.ca.cases.accumulated_products
         # c3d
         self.ca.cases.first_mp.product_c3d_shm_mdata = self.ca.primary_product.c3d_shm_mdata
         # full_c3d
@@ -666,6 +667,7 @@ class SimulationConfigurator:
         self.db.insert_particle_data("secondary_product", self.ca.iteration, self.ca.secondary_product.transform_c3d())
         self.db.insert_particle_data("ternary_product", self.ca.iteration, self.ca.ternary_product.transform_c3d())
         self.db.insert_particle_data("quaternary_product", self.ca.iteration, self.ca.quaternary_product.transform_c3d())
+        self.db.insert_particle_data("quint_product", self.ca.iteration, self.ca.quint_product.transform_c3d())
 
         if Config.STRIDE > Config.N_ITERATIONS:
             self.ca.primary_active.transform_to_3d(self.ca.curr_max_furthest)

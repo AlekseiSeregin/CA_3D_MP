@@ -87,10 +87,10 @@ class ActiveElem:
         # ____________________________________________
         # if self.elem_name == "Al":
         # ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < int(self.cells_per_axis / 2))
-        ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < 5)[0]
-        to_move = np.delete(self.cells[:, :self.last_in_diff_arr], ind_to_del, axis=1)
-        self.cells[:, :to_move.shape[1]] = to_move
-        self.last_in_diff_arr = to_move.shape[1]
+        # ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < 5)[0]
+        # to_move = np.delete(self.cells[:, :self.last_in_diff_arr], ind_to_del, axis=1)
+        # self.cells[:, :to_move.shape[1]] = to_move
+        # self.last_in_diff_arr = to_move.shape[1]
         # ____________________________________________
 
         dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(self.cells[0]))

@@ -735,6 +735,13 @@ ELAPSED TIME: {message}
                         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='steelblue',
                                        s=self.cell_size * (72. / fig.dpi) ** 2)
 
+                    self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    if np.any(items):
+                        items *= rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkviolet',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+
                 # if self.Config.ACTIVES.SECONDARY_EXISTENCE and not self.Config.OXIDANTS.SECONDARY_EXISTENCE:
                 #     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
                 #     items = np.array(self.c.fetchall())
@@ -986,6 +993,13 @@ ELAPSED TIME: {message}
                         items = items * rescale_factor
                         ind = np.where(items[:, 0] == slice_pos)
                         ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='steelblue',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                    self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    if np.any(items):
+                        items = items * rescale_factor
+                        ind = np.where(items[:, 0] == slice_pos)
+                        ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='darkviolet',
                                        s=self.cell_size * (72. / fig.dpi) ** 2)
 
                 # elif self.Config.ACTIVES.SECONDARY_EXISTENCE and not self.Config.OXIDANTS.SECONDARY_EXISTENCE:
@@ -1492,6 +1506,12 @@ ELAPSED TIME: {message}
         quaternary_product_mass = np.zeros(self.axlim, dtype=int)
         quaternary_product_eq_mat_moles = np.zeros(self.axlim, dtype=int)
 
+        quint_product = np.zeros(self.axlim, dtype=int)
+        quint_product_moles = np.zeros(self.axlim, dtype=int)
+        quint_product_moles_tc = np.zeros(self.axlim, dtype=int)
+        quint_product_mass = np.zeros(self.axlim, dtype=int)
+        quint_product_eq_mat_moles = np.zeros(self.axlim, dtype=int)
+
         if self.Config.INWARD_DIFFUSION:
             self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
             items = np.array(self.c.fetchall())
@@ -1561,6 +1581,15 @@ ELAPSED TIME: {message}
                     quaternary_product_mass = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MASS_PER_CELL
                     quaternary_product_eq_mat_moles = quaternary_product * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
 
+                self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                if np.any(items):
+                    quint_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
+                    # quint_product_moles_tc = quint_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL
+                    quint_product_moles = quint_product * self.Config.PRODUCTS.QUINT.MOLES_PER_CELL
+                    quint_product_mass = quint_product * self.Config.PRODUCTS.QUINT.MASS_PER_CELL
+                    quint_product_eq_mat_moles = quint_product * self.Config.PRODUCTS.QUINT.MOLES_PER_CELL
+
             # elif self.Config.ACTIVES.SECONDARY_EXISTENCE and not self.Config.OXIDANTS.SECONDARY_EXISTENCE:
             #     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
             #     items = np.array(self.c.fetchall())
@@ -1578,7 +1607,7 @@ ELAPSED TIME: {message}
 
         matrix_moles = matrix * self.Config.MATRIX.MOLES_PER_CELL - outward_eq_mat_moles\
                        - soutward_eq_mat_moles - primary_product_eq_mat_moles - secondary_product_eq_mat_moles\
-                       - ternary_product_eq_mat_moles - quaternary_product_eq_mat_moles
+                       - ternary_product_eq_mat_moles - quaternary_product_eq_mat_moles - quint_product_eq_mat_moles
 
         less_than_zero = np.where(matrix_moles < 0)[0]
         matrix_moles[less_than_zero] = 0
@@ -1602,7 +1631,7 @@ ELAPSED TIME: {message}
                           inward_moles + sinward_moles +\
                           outward_moles + soutward_moles +\
                           primary_product_moles + secondary_product_moles +\
-                          ternary_product_moles + quaternary_product_moles
+                          ternary_product_moles + quaternary_product_moles + quint_product_moles
 
             inward = inward_moles * 100 / whole_moles
             sinward = sinward_moles * 100 / whole_moles
@@ -1613,6 +1642,7 @@ ELAPSED TIME: {message}
             secondary_product = secondary_product_moles * 100 / whole_moles
             ternary_product = ternary_product_moles * 100 / whole_moles
             quaternary_product = quaternary_product_moles * 100 / whole_moles
+            quint_product = quint_product_moles * 100 / whole_moles
 
         elif conc_type.lower() == "atomic_tc":
             conc_type_caption = "Concentration [at%]"
@@ -1620,7 +1650,7 @@ ELAPSED TIME: {message}
                           inward_moles + sinward_moles +\
                           outward_moles + soutward_moles +\
                           primary_product_moles_tc + secondary_product_moles_tc +\
-                          ternary_product_moles_tc + quaternary_product_moles_tc
+                          ternary_product_moles_tc + quaternary_product_moles_tc + quint_product_moles_tc
 
             inward = inward_moles * 100 / whole_moles
             sinward = sinward_moles * 100 / whole_moles
@@ -1631,6 +1661,7 @@ ELAPSED TIME: {message}
             secondary_product = secondary_product_moles_tc * 100 / whole_moles
             ternary_product = ternary_product_moles_tc * 100 / whole_moles
             quaternary_product = quaternary_product_moles_tc * 100 / whole_moles
+            quint_product = quint_product_moles_tc * 100 / whole_moles
 
         elif conc_type.lower() == "cells":
             conc_type_caption = "cells concentration [%]"
@@ -1648,6 +1679,7 @@ ELAPSED TIME: {message}
             secondary_product = secondary_product * 100 / n_cells_page
             ternary_product = ternary_product * 100 / n_cells_page
             quaternary_product = quaternary_product * 100 / n_cells_page
+            quint_product = quint_product * 100 / n_cells_page
 
         elif conc_type.lower() == "mass":
             conc_type_caption = "Concentration [wt%]"
@@ -1655,7 +1687,7 @@ ELAPSED TIME: {message}
                          inward_mass + sinward_mass +\
                          outward_mass + soutward_mass +\
                          secondary_product_mass + primary_product_mass +\
-                         ternary_product_mass + quaternary_product_mass
+                         ternary_product_mass + quaternary_product_mass + quint_product_mass
 
             inward = inward_mass * 100 / whole_mass
             sinward = sinward_mass * 100 / whole_mass
@@ -1666,6 +1698,7 @@ ELAPSED TIME: {message}
             secondary_product = secondary_product_mass * 100 / whole_mass
             ternary_product = ternary_product_mass * 100 / whole_mass
             quaternary_product = quaternary_product_mass * 100 / whole_mass
+            quint_product = quint_product_mass * 100 / whole_mass
 
         else:
             conc_type_caption = "None"
@@ -1727,6 +1760,7 @@ ELAPSED TIME: {message}
             ax.plot(x, secondary_product, color='cyan')
             ax.plot(x, ternary_product, color='darkgreen')
             ax.plot(x, quaternary_product, color='steelblue')
+            ax.plot(x, quint_product, color='darkviolet')
 
             ax.set_xlabel("Depth [µm]", **csfont)
             ax.set_ylabel(conc_type_caption, **csfont)

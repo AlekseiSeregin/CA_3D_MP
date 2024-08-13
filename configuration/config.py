@@ -71,7 +71,7 @@ class Config:
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
     SIM_TIME = 72000  # [sek]
-    SIZE = 300 * (10 ** -6)  # [m]
+    SIZE = 100 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 0.07
@@ -101,7 +101,7 @@ class Config:
     NUMBER_OF_PROCESSES = 12
     NUMBER_OF_DIVS_PER_PAGE = 2
     DEPTH_PER_DIV = 1
-    MAX_TASK_PER_CHILD = 50000
+    MAX_TASK_PER_CHILD = 10000
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
@@ -110,6 +110,7 @@ class Config:
     PROBABILITIES.TERNARY = ConfigProbabilities()
     PROBABILITIES.QUATERNARY = ConfigProbabilities()
     PROBABILITIES.QUINT = ConfigProbabilities()
+
     # nucleation primary___________________________
     PROBABILITIES.PRIMARY.p0 = 0.9
     PROBABILITIES.PRIMARY.p0_f = 1
@@ -120,10 +121,10 @@ class Config:
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1
     PROBABILITIES.PRIMARY.global_A = 1
-    PROBABILITIES.PRIMARY.global_B = 1.4
+    PROBABILITIES.PRIMARY.global_B = 0.02
     PROBABILITIES.PRIMARY.global_B_f = -20
     PROBABILITIES.PRIMARY.max_neigh_numb = None
-    PROBABILITIES.PRIMARY.nucl_adapt_function = 3
+    PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # dissolution primary_________________________
     PROBABILITIES.PRIMARY.p0_d = 1*10**-3
     PROBABILITIES.PRIMARY.p0_d_f = 1
@@ -134,7 +135,7 @@ class Config:
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 1
     PROBABILITIES.PRIMARY.p6_d = 1e-7
-    PROBABILITIES.PRIMARY.p6_d_f = 0.95
+    PROBABILITIES.PRIMARY.p6_d_f = 0.99
     PROBABILITIES.PRIMARY.p6_d_A_const = 1
     PROBABILITIES.PRIMARY.p6_d_B_const = 1
     PROBABILITIES.PRIMARY.global_d_A = 1
@@ -155,10 +156,10 @@ class Config:
     PROBABILITIES.SECONDARY.p1_A_const = 1
     PROBABILITIES.SECONDARY.p1_B_const = 1
     PROBABILITIES.SECONDARY.global_A = 1
-    PROBABILITIES.SECONDARY.global_B = 0.9
+    PROBABILITIES.SECONDARY.global_B = 0.02
     PROBABILITIES.SECONDARY.global_B_f = -20
     PROBABILITIES.SECONDARY.max_neigh_numb = None
-    PROBABILITIES.SECONDARY.nucl_adapt_function = 3
+    PROBABILITIES.SECONDARY.nucl_adapt_function = 5
     # dissolution SECONDARY
     PROBABILITIES.SECONDARY.p0_d = 1*10**-3
     PROBABILITIES.SECONDARY.p0_d_f = 1
