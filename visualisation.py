@@ -1550,7 +1550,8 @@ ELAPSED TIME: {message}
                 primary_product_moles = primary_product * self.Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
                 primary_product_moles_tc = primary_product * self.Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
                 primary_product_mass = primary_product * self.Config.PRODUCTS.PRIMARY.MASS_PER_CELL
-                primary_product_eq_mat_moles = primary_product * self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
+                primary_product_eq_mat_moles = primary_product * self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *\
+                                               self.Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
 
             # if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
             if True:
@@ -1561,7 +1562,8 @@ ELAPSED TIME: {message}
                     secondary_product_moles = secondary_product * self.Config.PRODUCTS.SECONDARY.MOLES_PER_CELL
                     secondary_product_moles_tc = secondary_product * self.Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC
                     secondary_product_mass = secondary_product * self.Config.PRODUCTS.SECONDARY.MASS_PER_CELL
-                    secondary_product_eq_mat_moles = secondary_product * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
+                    secondary_product_eq_mat_moles = secondary_product * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *\
+                                                     self.Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD
 
                 self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
@@ -1570,23 +1572,27 @@ ELAPSED TIME: {message}
                     ternary_product_moles = ternary_product * self.Config.PRODUCTS.TERNARY.MOLES_PER_CELL
                     ternary_product_moles_tc = ternary_product * self.Config.PRODUCTS.TERNARY.MOLES_PER_CELL_TC
                     ternary_product_mass = ternary_product * self.Config.PRODUCTS.TERNARY.MASS_PER_CELL
-                    ternary_product_eq_mat_moles = ternary_product * self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
+                    ternary_product_eq_mat_moles = (ternary_product * ((self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *
+                                        self.Config.PRODUCTS.TERNARY.THRESHOLD_OUTWARD) +
+                                                                       self.Config.PRODUCTS.TERNARY.MOLES_PER_CELL))
 
                 self.c.execute("SELECT * from quaternary_product_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
                 if np.any(items):
                     quaternary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
-                    quaternary_product_moles_tc = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL
                     quaternary_product_moles = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL
+                    quaternary_product_moles_tc = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC
                     quaternary_product_mass = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MASS_PER_CELL
-                    quaternary_product_eq_mat_moles = quaternary_product * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
+                    quaternary_product_eq_mat_moles = (quaternary_product * ((self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *
+                                           self.Config.PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD) +
+                                                                             self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL))
 
                 self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
                 if np.any(items):
                     quint_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
-                    quint_product_moles_tc = quint_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL
                     quint_product_moles = quint_product * self.Config.PRODUCTS.QUINT.MOLES_PER_CELL
+                    quint_product_moles_tc = quint_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC
                     quint_product_mass = quint_product * self.Config.PRODUCTS.QUINT.MASS_PER_CELL
                     quint_product_eq_mat_moles = quint_product * self.Config.PRODUCTS.QUINT.MOLES_PER_CELL
 
@@ -1603,14 +1609,15 @@ ELAPSED TIME: {message}
 
         # n_matrix_page = (self.axlim ** 2) * self.param["product"]["primary"]["oxidation_number"]
         n_matrix_page = (self.axlim ** 2)
-        matrix = np.full(self.axlim, n_matrix_page)
+        # matrix = np.full(self.axlim, n_matrix_page)
+        matrix_moles_per_page = n_matrix_page * self.Config.MATRIX.MOLES_PER_CELL
 
-        matrix_moles = matrix * self.Config.MATRIX.MOLES_PER_CELL - outward_eq_mat_moles\
+        matrix_moles = matrix_moles_per_page - outward_eq_mat_moles\
                        - soutward_eq_mat_moles - primary_product_eq_mat_moles - secondary_product_eq_mat_moles\
                        - ternary_product_eq_mat_moles - quaternary_product_eq_mat_moles - quint_product_eq_mat_moles
 
-        less_than_zero = np.where(matrix_moles < 0)[0]
-        matrix_moles[less_than_zero] = 0
+        # less_than_zero = np.where(matrix_moles < 0)[0]
+        # matrix_moles[less_than_zero] = 0
 
         matrix_mass = matrix_moles * self.Config.MATRIX.MOLAR_MASS
 

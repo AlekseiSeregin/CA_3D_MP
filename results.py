@@ -20,7 +20,7 @@ visualise.plot_2d(plot_separate=False)
 # visualise.plot_2d(plot_separate=False, iteration=2080)
 # visualise.animate_concentration(conc_type="atomic", analytic_sol=False)
 
-visualise.plot_concentration(plot_separate=False, conc_type="atomic", analytic_sol=False)
+visualise.plot_concentration(plot_separate=False, conc_type="atomic_tc", analytic_sol=False)
 # visualise.plot_concentration(plot_separate=False, conc_type="cells", analytic_sol=False,
 # iteration=29)
 
