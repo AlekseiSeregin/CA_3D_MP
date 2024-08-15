@@ -173,7 +173,7 @@ class SimulationConfigurator:
                                                                                            Config.PRODUCTS.SECONDARY)
 
     def configurate_functions_td_all(self):
-        self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_with_scale
+        self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_with_scale_adj
         self.ca.primary_active.diffuse = elements.diffuse_bulk_mp
         self.ca.secondary_active.diffuse = elements.diffuse_bulk_mp
 
@@ -213,25 +213,23 @@ class SimulationConfigurator:
 
         self.ca.cases.second_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.SECONDARY,
                                                                                          Config.PRODUCTS.SECONDARY)
-        self.ca.cases.second_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.SECONDARY,
-                                                                                           Config.PRODUCTS.SECONDARY)
+        self.ca.cases.second_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
+                                                                                           Config.PRODUCTS.PRIMARY)
 
         self.ca.cases.third_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.TERNARY,
                                                                                          Config.PRODUCTS.TERNARY)
-        self.ca.cases.third_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.TERNARY,
-                                                                                          Config.PRODUCTS.TERNARY)
+        self.ca.cases.third_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
+                                                                                          Config.PRODUCTS.PRIMARY)
 
         self.ca.cases.fourth_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.QUATERNARY,
                                                                                          Config.PRODUCTS.QUATERNARY)
-        self.ca.cases.fourth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.QUATERNARY,
-                                                                                           Config.PRODUCTS.QUATERNARY)
+        self.ca.cases.fourth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
+                                                                                           Config.PRODUCTS.PRIMARY)
 
-        self.ca.cases.fifth_mp.nucleation_probabilities = utils.NucleationProbabilities(
-            Config.PROBABILITIES.QUINT,
-            Config.PRODUCTS.QUINT)
-        self.ca.cases.fifth_mp.dissolution_probabilities = utils.DissolutionProbabilities(
-            Config.PROBABILITIES.QUINT,
-            Config.PRODUCTS.QUINT)
+        self.ca.cases.fifth_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.QUINT,
+                                                                                        Config.PRODUCTS.QUINT)
+        self.ca.cases.fifth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.QUINT,
+                                                                                          Config.PRODUCTS.QUINT)
 
     def run_simulation(self):
         self.begin = time.time()

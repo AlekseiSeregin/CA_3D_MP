@@ -19,6 +19,7 @@ class ActiveElem:
         self.n_per_page = settings.N_PER_PAGE
 
         self.p_ranges = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
+        self.p_ranges_scale = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
 
         # self.precip_transform_depth = int(self.cells_per_axis)  # min self.neigh_range !!!
         self.precip_transform_depth = int(Config.PRECIP_TRANSFORM_DEPTH)  # min self.neigh_range !!!
@@ -86,11 +87,11 @@ class ActiveElem:
         # half space fill
         # ____________________________________________
         # if self.elem_name == "Al":
-        # ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < int(self.cells_per_axis / 2))
-        # ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < 5)[0]
-        # to_move = np.delete(self.cells[:, :self.last_in_diff_arr], ind_to_del, axis=1)
-        # self.cells[:, :to_move.shape[1]] = to_move
-        # self.last_in_diff_arr = to_move.shape[1]
+        #     # ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < int(self.cells_per_axis / 2))
+        #     ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < 5)[0]
+        #     to_move = np.delete(self.cells[:, :self.last_in_diff_arr], ind_to_del, axis=1)
+        #     self.cells[:, :to_move.shape[1]] = to_move
+        #     self.last_in_diff_arr = to_move.shape[1]
         # ____________________________________________
 
         dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(self.cells[0]))
@@ -345,6 +346,8 @@ class OxidantElem:
         self.furthest_index = None
         self.i_descards = None
         self.i_ind = None
+
+        self.p_ranges_scale = self.generate_prob_ranges(settings.PROBABILITIES_SCALE)
 
         self.extended_axis = self.cells_per_axis + self.neigh_range
         self.extended_shape = (self.cells_per_axis, self.cells_per_axis, self.extended_axis)
@@ -623,6 +626,120 @@ class OxidantElem:
         self.fill_first_page()
         # ___________________________________
 
+    def diffuse_with_scale_adj(self):
+        """
+        Inward diffusion through bulk + scale with P.
+        """
+        # Diffusion at the interface between matrix the scale. If the current particle is on the product particle
+        # it will be boosted along ballistic direction
+        # self.diffuse_interface()
+
+        # Diffusion through the scale. If the current particle is inside the product particle
+        # it will be reflected
+        out_scale, in_scale = check_in_scale_adj(self.scale, self.cells)
+
+        # Diffusion along grain boundaries
+        # ______________________________________________________________________________________________________________
+        # exists = self.microstructure.grain_boundaries[self.cells[0], self.cells[1], self.cells[2]]
+        # # # print(exists)
+        # temp_ind = np.array(np.where(exists)[0], dtype=np.uint32)
+        # # print(temp_ind)
+
+        # exists = self.microstructure.grain_boundaries[self.cells[0], self.cells[1], self.cells[2]]
+        # # # print(exists)
+        # temp_ind = np.array(np.where(exists)[0], dtype=np.uint32)
+        # # print(temp_ind)
+        # #
+        # in_gb = np.array(self.cells[:, temp_ind], dtype=np.short)
+        # # print(in_gb)
+        # #
+        # shift_vector = np.array(self.microstructure.jump_directions[in_gb[0], in_gb[1], in_gb[2]],
+        #                         dtype=np.short).transpose()
+        # # print(shift_vector)
+        #
+        # # print(self.cells)
+        # cross_shifts = np.array(np.random.choice([0, 1, 2, 3], len(shift_vector[0])), dtype=np.ubyte)
+        # cross_shifts = np.array(self.cross_shifts[cross_shifts], dtype=np.byte).transpose()
+        #
+        # shift_vector += cross_shifts
+        #
+        # self.cells[:, temp_ind] += shift_vector
+        # # print(self.cells)
+        # ______________________________________________________________________________________________________________
+
+        # mixing particles according to Chopard and Droz
+        randomise = np.array(np.random.random_sample(out_scale.size), dtype=np.single)
+        temp_ind = np.array(np.where(randomise <= self.p1_range)[0], dtype=np.uint32)
+        self.dirs[:, out_scale[temp_ind]] = np.roll(self.dirs[:, out_scale[temp_ind]], 1, axis=0)
+        temp_ind = np.array(np.where((randomise > self.p1_range) & (randomise <= self.p2_range))[0], dtype=np.uint32)
+        self.dirs[:, out_scale[temp_ind]] = np.roll(self.dirs[:, out_scale[temp_ind]], 1, axis=0)
+        self.dirs[:, out_scale[temp_ind]] *= -1
+        temp_ind = np.array(np.where((randomise > self.p2_range) & (randomise <= self.p3_range))[0], dtype=np.uint32)
+        self.dirs[:, out_scale[temp_ind]] = np.roll(self.dirs[:, out_scale[temp_ind]], 2, axis=0)
+        temp_ind = np.array(np.where((randomise > self.p3_range) & (randomise <= self.p4_range))[0], dtype=np.uint32)
+        self.dirs[:, out_scale[temp_ind]] = np.roll(self.dirs[:, out_scale[temp_ind]], 2, axis=0)
+        self.dirs[:, out_scale[temp_ind]] *= -1
+        temp_ind = np.array(np.where((randomise > self.p4_range) & (randomise <= self.p_r_range))[0], dtype=np.uint32)
+        self.dirs[:, out_scale[temp_ind]] *= -1
+
+        # IN Scale Diffusion
+        randomise = np.array(np.random.random_sample(in_scale.size), dtype=np.single)
+        temp_ind = np.array(np.where(randomise <= self.p_ranges_scale.p1_range)[0], dtype=np.uint32)
+        self.dirs[:, in_scale[temp_ind]] = np.roll(self.dirs[:, in_scale[temp_ind]], 1, axis=0)
+        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p1_range) &
+                                     (randomise <= self.p_ranges_scale.p2_range))[0], dtype=np.uint32)
+        self.dirs[:, in_scale[temp_ind]] = np.roll(self.dirs[:, in_scale[temp_ind]], 1, axis=0)
+        self.dirs[:, in_scale[temp_ind]] *= -1
+        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p2_range) &
+                                     (randomise <= self.p_ranges_scale.p3_range))[0], dtype=np.uint32)
+        self.dirs[:, in_scale[temp_ind]] = np.roll(self.dirs[:, in_scale[temp_ind]], 2, axis=0)
+        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p3_range) &
+                                     (randomise <= self.p_ranges_scale.p4_range))[0], dtype=np.uint32)
+        self.dirs[:, in_scale[temp_ind]] = np.roll(self.dirs[:, in_scale[temp_ind]], 2, axis=0)
+        self.dirs[:, in_scale[temp_ind]] *= -1
+        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p4_range) &
+                                     (randomise <= self.p_ranges_scale.p_r_range))[0], dtype=np.uint32)
+        self.dirs[:, in_scale[temp_ind]] *= -1
+
+        self.cells = np.add(self.cells, self.dirs, casting="unsafe")
+        # adjusting a coordinates of side points for correct shifting
+        ind = np.where(self.cells[2] < 0)[0]
+        # closed left bound (reflection)_______________________
+        # self.cells[2, ind] = 0
+        # self.dirs[2, ind] = 1
+        # _____________________________________________________
+        # open left bound___________________________
+        self.cells = np.delete(self.cells, ind, 1)
+        self.dirs = np.delete(self.dirs, ind, 1)
+        # __________________________________________
+        # periodic left bound____________________________________
+        # self.cells[2, ind] = self.cells_per_axis - 1
+        # _______________________________________________________
+
+        self.cells[0, np.where(self.cells[0] <= -1)] = self.cells_per_axis - 1
+        self.cells[0, np.where(self.cells[0] >= self.cells_per_axis)] = 0
+        self.cells[1, np.where(self.cells[1] <= -1)] = self.cells_per_axis - 1
+        self.cells[1, np.where(self.cells[1] >= self.cells_per_axis)] = 0
+
+        ind = np.where(self.cells[2] >= self.cells_per_axis)[0]
+
+        # closed right bound (reflection)____________
+        # self.cells[2, ind] = self.cells_per_axis - 2
+        # self.dirs[2, ind] = -1
+        # ___________________________________________
+        # open right bound___________________________
+        self.cells = np.delete(self.cells, ind, 1)
+        self.dirs = np.delete(self.dirs, ind, 1)
+        # ___________________________________________
+        # periodic right bound____________________________________
+        # self.cells[2, ind] = 0
+        # ________________________________________________________
+
+        # ___________________________________
+        self.current_count = len(np.where(self.cells[2] == 0)[0])
+        self.fill_first_page()
+        # ___________________________________
+
     def diffuse_interface(self):
         """
         Inward diffusion along the phase interfaces (between matrix and primary product).
@@ -689,6 +806,15 @@ class OxidantElem:
 
     def calc_furthest_index(self):
         return np.amax(self.cells[2], initial=-1)
+
+    @staticmethod
+    def generate_prob_ranges(probabilities):
+        p1_range = probabilities[0]
+        p2_range = 2 * p1_range
+        p3_range = 3 * p1_range
+        p4_range = 4 * p1_range
+        p_r_range = p4_range + probabilities[1]
+        return PRanges(p1_range, p2_range, p3_range, p4_range, p_r_range)
 
 
 class Product:

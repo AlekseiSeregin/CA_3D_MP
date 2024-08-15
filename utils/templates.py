@@ -6,7 +6,6 @@ class CaseSetUp:
         self.oxidant = None
         self.active = None
         self.product = None
-        # self.to_check_with = None
         self.prod_indexes = None
         self.product_ind_not_stab = None
         self.fix_init_precip_func_ref = None

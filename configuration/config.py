@@ -40,7 +40,7 @@ class Config:
     # primary oxidants
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.5
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 5
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
@@ -48,25 +48,27 @@ class Config:
     # primary actives
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Cr in Ni Krupp"
-    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.25
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.4
+    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.08
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 2
     # secondary actives
     ACTIVES.SECONDARY.ELEMENT = "Al"
     ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
     ACTIVES.SECONDARY.MASS_CONCENTRATION = 0.025
-    ACTIVES.SECONDARY.CELLS_CONCENTRATION = 0.0770370370370371000000
+    ACTIVES.SECONDARY.CELLS_CONCENTRATION = 1.203703704
     # 0.0308148148148148000000
     # 0.0770370370370371000000
     # 0.0038518518518518500000
     # 0.0154074074074074000000
     # 0.3851851851851850000000
+    # 0.361111111
+    # 1.203703704
 
     # matrix
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 5000000  # must be >= n_cells_per_axis
+    N_ITERATIONS = 300000  # must be >= n_cells_per_axis
     STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
@@ -129,21 +131,21 @@ class Config:
     PROBABILITIES.PRIMARY.p0_d = 1*10**-3
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
-    PROBABILITIES.PRIMARY.p0_d_B_const = 1
+    PROBABILITIES.PRIMARY.p0_d_B_const = 5
     PROBABILITIES.PRIMARY.p1_d = 1*10**-4
     PROBABILITIES.PRIMARY.p1_d_f = 1
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
-    PROBABILITIES.PRIMARY.p1_d_B_const = 1
+    PROBABILITIES.PRIMARY.p1_d_B_const = 10
     PROBABILITIES.PRIMARY.p6_d = 1e-7
     PROBABILITIES.PRIMARY.p6_d_f = 0.99
     PROBABILITIES.PRIMARY.p6_d_A_const = 1
-    PROBABILITIES.PRIMARY.p6_d_B_const = 1
+    PROBABILITIES.PRIMARY.p6_d_B_const = 20
     PROBABILITIES.PRIMARY.global_d_A = 1
     PROBABILITIES.PRIMARY.global_d_B = -1.7
     PROBABILITIES.PRIMARY.global_d_B_f = -0.33
     PROBABILITIES.PRIMARY.n = 2
     PROBABILITIES.PRIMARY.bsf = 10
-    PROBABILITIES.PRIMARY.dissol_adapt_function = 5
+    PROBABILITIES.PRIMARY.dissol_adapt_function = 3
     # ________________________
 
     # nucleation SECONDARY
@@ -178,7 +180,7 @@ class Config:
     PROBABILITIES.SECONDARY.global_d_B_f = -0.001
     PROBABILITIES.SECONDARY.n = 2
     PROBABILITIES.SECONDARY.bsf = 10
-    PROBABILITIES.SECONDARY.dissol_adapt_function = 5
+    PROBABILITIES.SECONDARY.dissol_adapt_function = 3
     # ________________________
 
     # nucleation TERNARY
@@ -213,7 +215,7 @@ class Config:
     PROBABILITIES.TERNARY.global_d_B_f = -0.001
     PROBABILITIES.TERNARY.n = 2
     PROBABILITIES.TERNARY.bsf = 10
-    PROBABILITIES.TERNARY.dissol_adapt_function = 5
+    PROBABILITIES.TERNARY.dissol_adapt_function = 3
     # ________________________
 
     # nucleation QUATERNARY
@@ -248,7 +250,7 @@ class Config:
     PROBABILITIES.QUATERNARY.global_d_B_f = -0.001
     PROBABILITIES.QUATERNARY.n = 2
     PROBABILITIES.QUATERNARY.bsf = 10
-    PROBABILITIES.QUATERNARY.dissol_adapt_function = 5
+    PROBABILITIES.QUATERNARY.dissol_adapt_function = 3
     # ________________________
 
     # nucleation QUINT
@@ -283,7 +285,7 @@ class Config:
     PROBABILITIES.QUINT.global_d_B_f = -0.001
     PROBABILITIES.QUINT.n = 2
     PROBABILITIES.QUINT.bsf = 10
-    PROBABILITIES.QUINT.dissol_adapt_function = 5
+    PROBABILITIES.QUINT.dissol_adapt_function = 3
     # ________________________
 
     GENERATED_VALUES = GeneratedValues()

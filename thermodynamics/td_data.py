@@ -99,7 +99,8 @@ class TdDATA:
         objects = [self.TD_lookup[tuple(key)] for key in nearest_keys]
 
         # Extract primary and secondary attributes from objects
-        return np.array([[obj.corundum_cr, obj.corundum_al, obj.spinel_cr, obj.spinel_al, obj.halite] for obj in objects]).T
+        return np.array([[obj.corundum_cr, obj.corundum_al, obj.spinel_cr, obj.spinel_al, obj.halite]
+                         for obj in objects]).T
 
 
 if __name__ == '__main__':

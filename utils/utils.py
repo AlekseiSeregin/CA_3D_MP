@@ -222,9 +222,9 @@ class Utils:
         t_1 = Config.ACTIVES.PRIMARY.MOLAR_MASS * Config.MATRIX.DENSITY / (Config.ACTIVES.PRIMARY.DENSITY * Config.MATRIX.MOLAR_MASS)
         t_2 = Config.ACTIVES.SECONDARY.MOLAR_MASS * Config.MATRIX.DENSITY / (Config.ACTIVES.SECONDARY.DENSITY * Config.MATRIX.MOLAR_MASS)
 
-        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)
-        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = \
-            int(math.ceil(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)) / Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD)
+        # Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)
+        # Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = \
+        #     int(math.ceil(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)) / Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD)
 
         # QUINT
         matrix_moles_needed = Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
@@ -245,7 +245,7 @@ class Utils:
         Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = Config.MATRIX.MOLES_PER_CELL / (
                     Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)
         Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = \
-            int(math.ceil(Config.MATRIX.MOLES_PER_CELL / (
+            math.floor((Config.MATRIX.MOLES_PER_CELL / (
                         Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)) / Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD)
 
         if Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER == 1:
@@ -255,50 +255,53 @@ class Utils:
 
         Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2)
         Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = \
-            int(math.ceil(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2)) / Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD)
+            math.floor((Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2))
+                       / Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD)
 
         if Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER == 1:
             Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 6
         else:
             Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 7
 
-        # Config.PRODUCTS.TERNARY.OXIDATION_NUMBER = \
-        #     round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
-        Config.PRODUCTS.TERNARY.OXIDATION_NUMBER = 1
+        Config.PRODUCTS.TERNARY.OXIDATION_NUMBER = math.floor((Config.MATRIX.MOLES_PER_CELL /
+        ((Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1) + Config.PRODUCTS.TERNARY.MOLES_PER_CELL)) /\
+                                                   Config.PRODUCTS.TERNARY.THRESHOLD_OUTWARD)
 
         if Config.PRODUCTS.TERNARY.OXIDATION_NUMBER == 1:
             Config.PRODUCTS.TERNARY.LIND_FLAT_ARRAY = 6
         else:
             Config.PRODUCTS.TERNARY.LIND_FLAT_ARRAY = 7
 
-        # Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER = \
-        #     round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2))
-        Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER = 1
+        Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER = math.floor((Config.MATRIX.MOLES_PER_CELL /
+                                                                  ((Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2) +
+                                                                Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL)) / \
+                                                              Config.PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD)
 
         if Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER == 1:
             Config.PRODUCTS.QUATERNARY.LIND_FLAT_ARRAY = 6
         else:
             Config.PRODUCTS.QUATERNARY.LIND_FLAT_ARRAY = 7
 
-        Config.PRODUCTS.QUINT.OXIDATION_NUMBER = int(math.ceil(Config.MATRIX.MOLES_PER_CELL /
-                                                               Config.PRODUCTS.QUINT.MOLES_PER_CELL))
+        Config.PRODUCTS.QUINT.OXIDATION_NUMBER = math.floor(Config.MATRIX.MOLES_PER_CELL /
+                                                               Config.PRODUCTS.QUINT.MOLES_PER_CELL)
 
         if Config.PRODUCTS.QUINT.OXIDATION_NUMBER == 1:
             Config.PRODUCTS.QUINT.LIND_FLAT_ARRAY = 6
         else:
             Config.PRODUCTS.QUINT.LIND_FLAT_ARRAY = 7
 
-
     def calc_oxidant_data(self):
         diff_coeff = Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
         probabilities = self.calc_prob(diff_coeff)
         Config.OXIDANTS.PRIMARY.PROBABILITIES = probabilities
         Config.OXIDANTS.PRIMARY.PROBABILITIES_2D = self.calc_p0_2d(diff_coeff * 10**1)
+        Config.OXIDANTS.PRIMARY.PROBABILITIES_SCALE = self.calc_prob(diff_coeff * 10 ** -3)
 
         diff_coeff = Config.OXIDANTS.SECONDARY.DIFFUSION_COEFFICIENT
         probabilities = self.calc_prob(diff_coeff)
         Config.OXIDANTS.SECONDARY.PROBABILITIES = probabilities
         Config.OXIDANTS.SECONDARY.PROBABILITIES_2D = self.calc_p0_2d(diff_coeff)
+        Config.OXIDANTS.SECONDARY.PROBABILITIES_SCALE = self.calc_prob(diff_coeff * 10 ** 1)
 
         Config.OXIDANTS.PRIMARY.N_PER_PAGE = round(Config.OXIDANTS.PRIMARY.CELLS_CONCENTRATION * Config.N_CELLS_PER_AXIS ** 2)
         Config.OXIDANTS.SECONDARY.N_PER_PAGE = round(Config.OXIDANTS.SECONDARY.CELLS_CONCENTRATION * Config.N_CELLS_PER_AXIS ** 2)
