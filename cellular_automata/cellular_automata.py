@@ -1652,7 +1652,8 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                # self.decomposition_intrinsic()
+                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
+                self.decomposition_intrinsic()
 
         if len(secondary_neg_ind) > 0:
             self.comb_indexes = secondary_neg_ind

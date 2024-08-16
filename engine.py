@@ -213,8 +213,8 @@ class SimulationConfigurator:
 
         self.ca.cases.second_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.SECONDARY,
                                                                                          Config.PRODUCTS.SECONDARY)
-        self.ca.cases.second_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
-                                                                                           Config.PRODUCTS.PRIMARY)
+        self.ca.cases.second_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.SECONDARY,
+                                                                                           Config.PRODUCTS.SECONDARY)
 
         self.ca.cases.third_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.TERNARY,
                                                                                          Config.PRODUCTS.TERNARY)
