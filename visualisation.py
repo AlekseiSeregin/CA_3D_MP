@@ -374,61 +374,60 @@ ELAPSED TIME: {message}
             #         if np.any(items):
             #             ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkorange',
             #                            s=self.cell_size * (72. / fig.dpi) ** 2)
-            # if self.Config.COMPUTE_PRECIPITATION:
-            #     self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     if np.any(items):
-            #         # items = items.transpose()
-            #         # data = np.zeros(self.shape, dtype=bool)
-            #         # data[items[0], items[1], items[2]] = True
-            #         # ax_all.voxels(data, facecolors="r")
-            #         # plt.savefig(f'W:/SIMCA/test_runs_data/{iteration}.jpeg')
-            #         # ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='r',
-            #         #                s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
-            #         #
-            #         counts = np.unique(np.ravel_multi_index(items.transpose(), self.shape), return_counts=True)
-            #         dec = np.array(np.unravel_index(counts[0], self.shape), dtype=np.short).transpose()
-            #         counts = np.array(counts[1], dtype=np.ubyte)
-            #         full_ind = np.where(counts == self.oxid_numb)[0]
-            #
-            #         fulls = dec[full_ind]
-            #         not_fulls = np.delete(dec, full_ind, axis=0)
-            #
-            #         ax_all.scatter(fulls[:, 2], fulls[:, 1], fulls[:, 0], marker=',', color="darkred",
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black',
-            #                        linewidth=self.linewidth,
-            #                        alpha=self.alpha)
-            #
-            #         ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='r',
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black',
-            #                        linewidth=self.linewidth,
-            #                        alpha=self.alpha)
+            if self.Config.COMPUTE_PRECIPITATION:
+                self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                if np.any(items):
+                    # items = items.transpose()
+                    # data = np.zeros(self.shape, dtype=bool)
+                    # data[items[0], items[1], items[2]] = True
+                    # ax_all.voxels(data, facecolors="r")
+                    # plt.savefig(f'W:/SIMCA/test_runs_data/{iteration}.jpeg')
+                    # ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='r',
+                    #                s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
+                    #
+                    counts = np.unique(np.ravel_multi_index(items.transpose(), self.shape), return_counts=True)
+                    dec = np.array(np.unravel_index(counts[0], self.shape), dtype=np.short).transpose()
+                    counts = np.array(counts[1], dtype=np.ubyte)
+                    full_ind = np.where(counts == self.oxid_numb)[0]
+
+                    fulls = dec[full_ind]
+                    not_fulls = np.delete(dec, full_ind, axis=0)
+
+                    ax_all.scatter(fulls[:, 2], fulls[:, 1], fulls[:, 0], marker=',', color="darkred",
+                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black',
+                                   linewidth=self.linewidth,
+                                   alpha=self.alpha)
+
+                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='r',
+                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black',
+                                   linewidth=self.linewidth,
+                                   alpha=self.alpha)
 
                 # if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                # if True:
-            self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
-            items = np.array(self.c.fetchall())
-            if np.any(items):
-                ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='cyan',
-                               s=self.cell_size * (72. / fig.dpi) ** 2)
+                if True:
+                    self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    if np.any(items):
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='cyan',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                    self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    if np.any(items):
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkorange',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2)
 
-                    # self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
-                    # items = np.array(self.c.fetchall())
-                    # if np.any(items):
-                    #     ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkorange',
-                    #                    s=self.cell_size * (72. / fig.dpi) ** 2)
-                    #
-                    # self.c.execute("SELECT * from quaternary_product_iter_{}".format(iteration))
-                    # items = np.array(self.c.fetchall())
-                    # if np.any(items):
-                    #     ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='steelblue',
-                    #                    s=self.cell_size * (72. / fig.dpi) ** 2)
-                    #
-                    # self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
-                    # items = np.array(self.c.fetchall())
-                    # if np.any(items):
-                    #     ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkviolet',
-                    #                    s=self.cell_size * (72. / fig.dpi) ** 2)
+                    self.c.execute("SELECT * from quaternary_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    if np.any(items):
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='steelblue',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+
+                    self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    if np.any(items):
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkviolet',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2)
 
                 # elif self.Config.ACTIVES.SECONDARY_EXISTENCE and not self.Config.OXIDANTS.SECONDARY_EXISTENCE:
                 #     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))

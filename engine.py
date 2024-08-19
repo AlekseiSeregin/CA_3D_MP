@@ -242,7 +242,7 @@ class SimulationConfigurator:
             self.ca.diffusion_outward()
             # self.calc_precipitation_front_only_cells()
             # self.diffusion_outward_with_mult_srtide()
-            # self.save_results_only_prod_secondary()
+            self.save_results_only_prod()
 
         end = time.time()
         self.elapsed_time = (end - self.begin)
@@ -728,6 +728,14 @@ class SimulationConfigurator:
     def save_results_only_prod(self):
         self.db.insert_particle_data("primary_product", self.ca.iteration,
                                            self.ca.primary_product.transform_c3d())
+        self.db.insert_particle_data("secondary_product", self.ca.iteration,
+                                     self.ca.secondary_product.transform_c3d())
+        self.db.insert_particle_data("ternary_product", self.ca.iteration,
+                                     self.ca.ternary_product.transform_c3d())
+        self.db.insert_particle_data("quaternary_product", self.ca.iteration,
+                                     self.ca.quaternary_product.transform_c3d())
+        self.db.insert_particle_data("quint_product", self.ca.iteration,
+                                     self.ca.quint_product.transform_c3d())
 
     def save_results_only_prod_secondary(self):
         self.db.insert_particle_data("secondary_product", self.ca.iteration,
