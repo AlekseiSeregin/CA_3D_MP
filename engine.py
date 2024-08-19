@@ -218,13 +218,13 @@ class SimulationConfigurator:
 
         self.ca.cases.third_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.TERNARY,
                                                                                          Config.PRODUCTS.TERNARY)
-        self.ca.cases.third_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
-                                                                                          Config.PRODUCTS.PRIMARY)
+        self.ca.cases.third_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.TERNARY,
+                                                                                          Config.PRODUCTS.TERNARY)
 
         self.ca.cases.fourth_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.QUATERNARY,
                                                                                          Config.PRODUCTS.QUATERNARY)
-        self.ca.cases.fourth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
-                                                                                           Config.PRODUCTS.PRIMARY)
+        self.ca.cases.fourth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.QUATERNARY,
+                                                                                           Config.PRODUCTS.QUATERNARY)
 
         self.ca.cases.fifth_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.QUINT,
                                                                                         Config.PRODUCTS.QUINT)
@@ -242,6 +242,7 @@ class SimulationConfigurator:
             self.ca.diffusion_outward()
             # self.calc_precipitation_front_only_cells()
             # self.diffusion_outward_with_mult_srtide()
+            # self.save_results_only_prod_secondary()
 
         end = time.time()
         self.elapsed_time = (end - self.begin)
@@ -727,6 +728,10 @@ class SimulationConfigurator:
     def save_results_only_prod(self):
         self.db.insert_particle_data("primary_product", self.ca.iteration,
                                            self.ca.primary_product.transform_c3d())
+
+    def save_results_only_prod_secondary(self):
+        self.db.insert_particle_data("secondary_product", self.ca.iteration,
+                                     self.ca.secondary_product.transform_c3d())
 
     def save_results_prod_and_inw(self):
         self.db.insert_particle_data("primary_product", self.ca.iteration,

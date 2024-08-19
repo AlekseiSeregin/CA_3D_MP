@@ -86,7 +86,7 @@ class DissolutionProbabilities:
         self.oxidation_number = corresponding_product.OXIDATION_NUMBER
         # self.n_neigh_init = self.oxidation_number * 5
         self.n_neigh_init = 5
-        self.p3 = self.oxidation_number * 3
+        # self.p3 = self.oxidation_number * 3
         self.bsf = param.bsf
         self.const_a_pp = np.full(Config.N_CELLS_PER_AXIS, param.global_d_A, dtype=float)
         self.b0 = param.global_d_B

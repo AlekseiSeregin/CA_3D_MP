@@ -44,7 +44,8 @@ if __name__ == '__main__':
         growth_rate_transposed = growth_rate.T
 
         # Interleave the columns
-        interleaved_array = np.empty((new_system.ca.cumul_prod.last_in_buffer, 2 * new_system.ca.cells_per_axis), dtype=float)
+        interleaved_array = np.empty((new_system.ca.cumul_prod.last_in_buffer, 2 * new_system.ca.cells_per_axis),
+                                     dtype=float)
         interleaved_array[:, 0::2] = cumul_prod_transposed
         interleaved_array[:, 1::2] = growth_rate_transposed
 
@@ -78,5 +79,3 @@ if __name__ == '__main__':
         print("Simulation was closed at Iteration: ", new_system.ca.iteration)
         print("____________________________________________________________")
         print()
-
-

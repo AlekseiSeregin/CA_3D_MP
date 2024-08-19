@@ -10,7 +10,7 @@ database_name = filedialog.askopenfilename()
 iter = 4546
 visualise = Visualisation(database_name)
 
-# visualise.animate_3d(animate_separate=False, const_cam_pos=False)
+visualise.animate_3d(animate_separate=False, const_cam_pos=False)
 
 visualise.plot_3d(plot_separate=False, const_cam_pos=True)
 # visualise.plot_3d(plot_separate=False, const_cam_pos=True, iteration=iter)
