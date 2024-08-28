@@ -70,9 +70,9 @@ class ProdGroups:
 
 class ProdInput:
     def __init__(self):
-        self.PHASE_FRACTION_LIMIT = None
-        self.THRESHOLD_INWARD = None
-        self.THRESHOLD_OUTWARD = None
+        self.PHASE_FRACTION_LIMIT = 0
+        self.THRESHOLD_INWARD = 0
+        self.THRESHOLD_OUTWARD = 0
 
 
 class GeneratedValues:
@@ -100,6 +100,31 @@ def update_class_from_dict(cls, data):
             setattr(cls, key, type(key, (), value))
         else:
             setattr(cls, key, value)
+
+# def update_class_from_dict2(instance, data):
+#     for key, value in data.items():
+#         if hasattr(instance, key):
+#             current_attr = getattr(instance, key)
+#
+#             # If the current attribute is an instance of one of the custom classes
+#             if isinstance(current_attr,
+#                           (ElementGroups, ProdGroups, ElemInput, ProdInput, ConfigProbabilities, GeneratedValues)):
+#                 if isinstance(value, dict):
+#                     # Recursively update the attributes of the nested object
+#                     print(f"Recursively updating '{key}' inside '{instance.__class__.__name__}'")
+#                     update_class_from_dict2(current_attr, value)
+#                 else:
+#                     # Set the value directly on the current_attr object
+#                     print(f"Setting '{key}' directly on '{current_attr.__class__.__name__}' with value '{value}'")
+#                     setattr(current_attr, key, value)
+#             else:
+#                 # If the current_attr is not one of the custom classes, just update it normally
+#                 print(f"Updating '{key}' in '{instance.__class__.__name__}' with value '{value}'")
+#                 setattr(instance, key, value)
+#         else:
+#             # If the attribute does not exist, add it to the instance
+#             print(f"Adding new attribute '{key}' with value '{value}' in '{instance.__class__.__name__}'")
+#             setattr(instance, key, value)
 
 
 def save_script_contents_as_string(path, cls):

@@ -14,22 +14,21 @@ if __name__ == '__main__':
 
     Config.COMMENT = """
 
-    Nucleation and dissolution throughout the whole simulation (both schemes applied). Also with kinetic coefficient!!!
-    Go along the kinetic growth line! Check the kinetic file as well!!!
 """
 
     new_system = SimulationConfigurator()
-    new_system.configurate_functions_td_all()
+    new_system.configurate_functions()
 
     try:
         new_system.run_simulation()
     finally:
         try:
             if not Config.SAVE_WHOLE:
-                new_system.save_results_custom()
+                new_system.save_results()
 
         except (Exception,):
             # new_system.save_results()
+            new_system.save_results()
             print("Not SAVED!")
 
         # new_system.save_results()

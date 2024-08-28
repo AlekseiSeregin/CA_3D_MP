@@ -21,14 +21,13 @@ class ActiveElem:
         self.p_ranges = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
         self.p_ranges_scale = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
 
-        # self.precip_transform_depth = int(self.cells_per_axis)  # min self.neigh_range !!!
-        self.precip_transform_depth = int(Config.PRECIP_TRANSFORM_DEPTH)  # min self.neigh_range !!!
+        self.precip_transform_depth = int(Config.PRECIP_TRANSFORM_DEPTH)
 
         extended_axis = self.cells_per_axis + self.neigh_range
         self.extended_shape = (self.cells_per_axis, self.cells_per_axis, extended_axis)
 
         self.diffuse = None  # must be defined elsewhere
-        self.scale = None
+        self.scale = None  # must be defined elsewhere
 
         self.i_descards = None
         self.i_ind = None
@@ -537,7 +536,7 @@ class OxidantElem:
         """
         # Diffusion at the interface between matrix the scale. If the current particle is on the product particle
         # it will be boosted along ballistic direction
-        # self.diffuse_interface()
+        self.diffuse_interface()
 
         # Diffusion through the scale. If the current particle is inside the product particle
         # it will be reflected
@@ -747,7 +746,7 @@ class OxidantElem:
         (in its ballistic direction) it will be boosted forwardly in 1 step.
         """
         all_arounds = self.utils.calc_sur_ind_interface(self.cells, self.dirs, self.extended_axis - 1)
-        neighbours = go_around_bool(self.scale.full_c3d, all_arounds)
+        neighbours = go_around_bool(self.scale, all_arounds)
         to_boost = np.array([sum(n_arr[:-1]) * (not n_arr[-1]) for n_arr in neighbours])
         to_boost = np.array(np.where(to_boost)[0])
 

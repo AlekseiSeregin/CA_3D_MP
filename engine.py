@@ -28,86 +28,50 @@ class SimulationConfigurator:
 
         if Config.COMPUTE_PRECIPITATION:
             self.init_product()
-            # self.ca.primary_product = elements.Product(Config.PRODUCTS.PRIMARY)
-            # self.ca.cases.first.product = self.ca.primary_product
-            #
-            # if Config.ACTIVES.SECONDARY_EXISTENCE and Config.OXIDANTS.SECONDARY_EXISTENCE:
-            #     print("NO IMPLEMENTATION YET")
-            #
-            # elif Config.ACTIVES.SECONDARY_EXISTENCE and not Config.OXIDANTS.SECONDARY_EXISTENCE:
-            #
-            #
-            #     self.ca.secondary_product = elements.Product(Config.PRODUCTS.SECONDARY)
-            #     self.ca.cases.second.product = self.ca.secondary_product
-            #     self.ca.cases.first.to_check_with = self.ca.secondary_product
-            #     self.ca.cases.second.to_check_with = self.ca.primary_product
-            #
-            #     self.ca.cases.first.prod_indexes = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
-            #     self.ca.cases.second.prod_indexes = np.full(Config.N_CELLS_PER_AXIS, False, dtype=bool)
-            #
-            #     if self.ca.cases.first.product.oxidation_number == 1:
-            #         self.ca.cases.first.go_around_func_ref = self.ca.go_around_single_oxid_n
-            #         self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
-            #         my_type = bool
-            #     else:
-            #         self.ca.cases.first.go_around_func_ref = self.ca.go_around_mult_oxid_n
-            #         self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_int
-            #         my_type = np.ubyte
-            #     self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
-            #                                                   Config.N_CELLS_PER_AXIS + 1), 0, dtype=my_type)
-            #
-            #     if self.ca.cases.second.product.oxidation_number == 1:
-            #         self.ca.cases.second.go_around_func_ref = self.ca.go_around_single_oxid_n
-            #         self.ca.cases.second.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
-            #         my_type = bool
-            #     else:
-            #         self.ca.cases.second.go_around_func_ref = self.ca.go_around_mult_oxid_n
-            #         self.ca.cases.second.fix_init_precip_func_ref = self.ca.fix_init_precip_int
-            #         my_type = np.ubyte
-            #     self.ca.cases.second.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
-            #                                                   Config.N_CELLS_PER_AXIS + 1), 0, dtype=my_type)
-            # else:
-            #     self.ca.primary_oxidant.scale = self.ca.primary_product
-            #     self.ca.primary_active.scale = self.ca.primary_product
-            #
-            #     if self.ca.cases.first.product.oxidation_number == 1:
-            #         self.ca.cases.first.go_around_func_ref = self.ca.go_around_single_oxid_n
-            #         self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
-            #         self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
-            #                                                       Config.N_CELLS_PER_AXIS + 1), False, dtype=bool)
-            #     else:
-            #         # self.cases.first.go_around_func_ref = self.go_around_mult_oxid_n
-            #         self.ca.cases.first.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
-            #         # self.cases.first.go_around_func_ref = self.go_around_mult_oxid_n_also_partial_neigh  # CHANGE!!!!
-            #         # self.cases.first.fix_init_precip_func_ref = self.fix_init_precip_int
-            #         self.ca.cases.first.precip_3d_init = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS,
-            #                                                       Config.N_CELLS_PER_AXIS + 1), 0, dtype=np.ubyte)
 
     def configurate_functions(self):
         self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_bulk
         self.ca.primary_active.diffuse = elements.diffuse_bulk_mp
 
-        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_furthest_inward
+        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_from_kinetics
+        # self.ca.get_cur_dissol_ioz_bound = self.ca.ioz_dissolution_where_prod
 
         self.ca.precip_func = self.ca.precipitation_first_case
-        self.ca.get_combi_ind = self.ca.get_combi_ind_standard
+        self.ca.get_combi_ind = self.ca.get_combi_ind_atomic
 
         self.ca.cases.first_mp.precip_step = precip_step_standard
         self.ca.cases.first_mp.check_intersection = ci_single
 
         self.ca.decomposition = self.ca.dissolution_atomic_stop_if_stable
         self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
-        self.ca.cases.first_mp.decomposition = dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL
+        self.ca.cases.first_mp.decomposition = dissolution_zhou_wei_no_bsf
 
         self.ca.cur_case = self.ca.cases.first
         self.ca.cur_case_mp = self.ca.cases.first_mp
-        # self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_dummy
-        # self.ca.cases.first.go_around_func_ref = self.ca.go_around_mult_oxid_n_also_partial_neigh_aip_MP
 
         self.ca.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
                                                                                   Config.PRODUCTS.PRIMARY)
-        self.ca.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
-                                                                                    Config.PRODUCTS.PRIMARY)
+        self.ca.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
+
+    def configurate_functions_cube_dissol(self):
+        self.ca.get_cur_dissol_ioz_bound = self.ca.ioz_dissolution_where_prod
+
+        middle = int(self.ca.cells_per_axis / 2)
+        side = 20
+
+        self.ca.cases.first.product.c3d[middle - side:middle + side, middle - side:middle + side, middle - side:middle + side] = 1
+        self.ca.cases.first.product.full_c3d[middle - side:middle + side, middle - side:middle + side, middle - side:middle + side] = True
+        self.ca.cases.first.prod_indexes[middle - side:middle + side] = True
+
+
+        self.ca.decomposition = self.ca.dissolution_test
+        self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
+        self.ca.cases.first_mp.decomposition = dissolution_zhou_wei_original
+
+        self.ca.cur_case = self.ca.cases.first
+        self.ca.cur_case_mp = self.ca.cases.first_mp
+
+        self.ca.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
 
     def functions_sec_case(self):
         self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_bulk
@@ -133,13 +97,11 @@ class SimulationConfigurator:
 
         self.ca.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
                                                                                         Config.PRODUCTS.PRIMARY)
-        self.ca.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY,
-                                                                                          Config.PRODUCTS.PRIMARY)
+        self.ca.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
 
         self.ca.cases.second_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.SECONDARY,
                                                                                   Config.PRODUCTS.SECONDARY)
-        self.ca.cases.second_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.SECONDARY,
-                                                                                    Config.PRODUCTS.SECONDARY)
+        self.ca.cases.second_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.SECONDARY)
 
     def configurate_functions_td(self):
         self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_bulk
@@ -237,12 +199,12 @@ class SimulationConfigurator:
             if keyboard.is_pressed('ctrl+g+m'):
                 break
             self.ca.precip_func()
-            # self.ca.decomposition()
+            self.ca.decomposition()
             self.ca.diffusion_inward()
             self.ca.diffusion_outward()
             # self.calc_precipitation_front_only_cells()
             # self.diffusion_outward_with_mult_srtide()
-            self.save_results_only_prod()
+            # self.save_results_only_prod_prime()
 
         end = time.time()
         self.elapsed_time = (end - self.begin)
@@ -283,7 +245,7 @@ class SimulationConfigurator:
         self.ca.cases.first_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata
         self.ca.cases.third_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata
 
-        self.ca.cases.fifth_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata # JUST FOR SHAPE!!!
+        self.ca.cases.fifth_mp.active_c3d_shm_mdata = self.ca.primary_active.c3d_shm_mdata  # JUST FOR SHAPE!!!
 
         # cells
         self.ca.cases.first_mp.active_cells_shm_mdata = self.ca.primary_active.cells_shm_mdata
@@ -356,7 +318,8 @@ class SimulationConfigurator:
         # to check with
         self.ca.cases.first_mp.to_check_with_shm_mdata = self.ca.cases.accumulated_products_shm_mdata
         # scale
-        self.ca.primary_oxidant.scale = self.ca.cases.accumulated_products
+        # self.ca.primary_oxidant.scale = self.ca.cases.accumulated_products
+        self.ca.primary_oxidant.scale = self.ca.primary_product.c3d
         self.ca.primary_active.scale = self.ca.cases.accumulated_products
         # c3d
         self.ca.cases.first_mp.product_c3d_shm_mdata = self.ca.primary_product.c3d_shm_mdata
@@ -379,11 +342,11 @@ class SimulationConfigurator:
                                                                                 tmp.shape, tmp.dtype)
         # functions
         if self.ca.cases.first.product.oxidation_number == 1:
-            self.ca.cases.first_mp.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
+            self.ca.cases.first_mp.go_around_func_ref = go_around_mult_oxid_n_BOOl
             self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_bool
             my_type = bool
         else:
-            self.ca.cases.first_mp.go_around_func_ref = go_around_mult_oxid_n_also_partial_neigh_aip_MP
+            self.ca.cases.first_mp.go_around_func_ref = go_around_mult_oxid_n_BOOl
             self.ca.cases.first.fix_init_precip_func_ref = self.ca.fix_init_precip_int
             my_type = np.ubyte
         # c3d_init
@@ -724,6 +687,10 @@ class SimulationConfigurator:
         self.ca.cases.close_shms()
 
         print("UNLINKED PROPERLY!")
+
+    def save_results_only_prod_prime(self):
+        self.db.insert_particle_data("primary_product", self.ca.iteration,
+                                           self.ca.primary_product.transform_c3d())
 
     def save_results_only_prod(self):
         self.db.insert_particle_data("primary_product", self.ca.iteration,

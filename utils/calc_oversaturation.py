@@ -10,16 +10,13 @@ def calculate_right_side(gamma, phi):
 def calc_saturation(c_b):
     d_o = 2.8231080610996937 * 10 ** -12
     d_b = 2.2164389765037816 * 10 ** -14
-
     c_o = 0.0012
-    # c_b = 0.08
-
     nu = 1
 
     curr_phi = d_o / d_b
     left_side = c_o / (nu * c_b)
 
-    gammas = np.linspace(0, 1, 10000001)
+    gammas = np.linspace(0, 1, 100001)
 
     res_right_side = []
 
@@ -40,8 +37,8 @@ def calc_saturation(c_b):
 
     print(c_b, " ", desired_gamma[0], " ", saturation[0])
 
+
 conz_list = [0.2]
-# conz_list = [0.3]
 print()
 
 for active_conz in conz_list:

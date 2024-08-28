@@ -20,7 +20,7 @@ class CompPool:
 
 class TdDATA:
     def __init__(self):
-        self.TD_file = "C:/Users/adam-wrmjvo101twvweh/PycharmProjects/CA_3D_MP/thermodynamics/TD_look_up.pkl"
+        self.TD_file = "C:/CA_3D_MP/thermodynamics/TD_look_up.pkl"
 
         self.TD_lookup = None
         self.keys = None

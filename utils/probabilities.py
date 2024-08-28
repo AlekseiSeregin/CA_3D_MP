@@ -6,10 +6,10 @@ from configuration import Config
 class NucleationProbabilities:
     def __init__(self, param, corresponding_product):
         self.oxidation_number = corresponding_product.OXIDATION_NUMBER
+
         if not param.max_neigh_numb:
             if self.oxidation_number > 1:
-                # self.n_neigh_init = 7 * self.oxidation_number - 1
-                self.n_neigh_init = 6 * self.oxidation_number
+                self.n_neigh_init = 7
             else:
                 self.n_neigh_init = 6
         else:
@@ -19,19 +19,27 @@ class NucleationProbabilities:
         self.p1 = ExpFunct(Config.N_CELLS_PER_AXIS, param.p1, param.p1_f, param.p1_A_const, param.p1_B_const)
 
         self.const_a_pp = np.full(Config.N_CELLS_PER_AXIS, param.global_A, dtype=float)
-        self.b0 = param.global_B
-        self.b1 = param.global_B_f
-        self.delt_b = self.b1 - self.b0
-        self.const_b_pp = np.full(Config.N_CELLS_PER_AXIS, self.b0, dtype=float)
-
-        # self.left_point = self.oxidation_number
         self.left_point = 1
+        self.b1 = param.global_B_f
 
-        self.const_c_pp = np.log((1 - self.p1.values_pp) / (self.const_a_pp *
-                                                            (np.e ** (self.const_b_pp * self.n_neigh_init) -
-                                                             np.e ** (self.const_b_pp * self.left_point))))
-        self.const_d_pp = self.p1.values_pp - self.const_a_pp * np.e ** (self.const_b_pp * self.left_point +
-                                                                         self.const_c_pp)
+        if not param.global_B:
+            self.b0 = (np.log(1) - np.log(param.p1))/(self.n_neigh_init - self.left_point)
+            self.delt_b = self.b1 - self.b0
+            self.const_b_pp = np.full(Config.N_CELLS_PER_AXIS, self.b0, dtype=float)
+            self.const_c_pp = np.log((1 - self.p1.values_pp) / (self.const_a_pp *
+                                                                (np.e ** (self.const_b_pp * self.n_neigh_init) -
+                                                                 np.e ** (self.const_b_pp * self.left_point))))
+            self.const_d_pp = np.zeros(Config.N_CELLS_PER_AXIS, dtype=float)
+        else:
+            self.b0 = param.global_B
+            self.delt_b = self.b1 - self.b0
+            self.const_b_pp = np.full(Config.N_CELLS_PER_AXIS, self.b0, dtype=float)
+
+            self.const_c_pp = np.log((1 - self.p1.values_pp) / (self.const_a_pp *
+                                                                (np.e ** (self.const_b_pp * self.n_neigh_init) -
+                                                                 np.e ** (self.const_b_pp * self.left_point))))
+            self.const_d_pp = self.p1.values_pp - self.const_a_pp * np.e ** (self.const_b_pp * self.left_point +
+                                                                             self.const_c_pp)
         self.adapt_probabilities = None
         if param.nucl_adapt_function == 0:
             self.adapt_probabilities = self.adapt_nucl_prob
@@ -76,32 +84,38 @@ class NucleationProbabilities:
 
 
 class DissolutionProbabilities:
-    def __init__(self, param, corresponding_product):
+    def __init__(self, param):
         self.dissol_prob = ExpFunct(Config.N_CELLS_PER_AXIS, param.p0_d, param.p0_d_f,
                                     param.p0_d_A_const, param.p0_d_B_const)
         self.p1 = ExpFunct(Config.N_CELLS_PER_AXIS, param.p1_d, param.p1_d_f,
                            param.p1_d_A_const, param.p1_d_B_const)
         self.min_dissol_prob = ExpFunct(Config.N_CELLS_PER_AXIS, param.p6_d, param.p6_d_f,
                                         param.p6_d_A_const, param.p6_d_B_const)
-        self.oxidation_number = corresponding_product.OXIDATION_NUMBER
-        # self.n_neigh_init = self.oxidation_number * 5
+
         self.n_neigh_init = 5
-        # self.p3 = self.oxidation_number * 3
         self.bsf = param.bsf
         self.const_a_pp = np.full(Config.N_CELLS_PER_AXIS, param.global_d_A, dtype=float)
-        self.b0 = param.global_d_B
-        self.b1 = param.global_d_B_f
-        self.delt_b = self.b1 - self.b0
-        self.const_b_pp = np.full(Config.N_CELLS_PER_AXIS, self.b0, dtype=float)
 
-        # self.left_point = self.oxidation_number
         self.left_point = 1
+        self.b1 = param.global_d_B_f
 
-        self.const_c_pp = np.log((self.min_dissol_prob.values_pp - self.p1.values_pp) / (self.const_a_pp *
-                                                            (np.e ** (self.const_b_pp * self.n_neigh_init) -
-                                                             np.e ** (self.const_b_pp * self.left_point))))
-        self.const_d_pp = self.p1.values_pp - self.const_a_pp * np.e ** (self.const_b_pp * self.left_point +
-                                                                         self.const_c_pp)
+        if not param.global_d_B:
+            self.b0 = (np.log(param.p6_d) - np.log(param.p1_d)) / (self.n_neigh_init - self.left_point)
+            self.delt_b = self.b1 - self.b0
+            self.const_b_pp = np.full(Config.N_CELLS_PER_AXIS, self.b0, dtype=float)
+            self.const_c_pp = np.log((self.min_dissol_prob.values_pp - self.p1.values_pp) /
+                                     (self.const_a_pp * (np.e ** (self.const_b_pp * self.n_neigh_init) -
+                                                         np.e ** (self.const_b_pp * self.left_point))))
+            self.const_d_pp = np.zeros(Config.N_CELLS_PER_AXIS, dtype=float)
+        else:
+            self.b0 = param.global_d_B
+            self.delt_b = self.b1 - self.b0
+            self.const_b_pp = np.full(Config.N_CELLS_PER_AXIS, self.b0, dtype=float)
+            self.const_c_pp = np.log((self.min_dissol_prob.values_pp - self.p1.values_pp) / (self.const_a_pp *
+                                                                (np.e ** (self.const_b_pp * self.n_neigh_init) -
+                                                                 np.e ** (self.const_b_pp * self.left_point))))
+            self.const_d_pp = self.p1.values_pp - self.const_a_pp * np.e ** (self.const_b_pp * self.left_point +
+                                                                             self.const_c_pp)
 
         self.adapt_probabilities = None
         if param.dissol_adapt_function == 0:

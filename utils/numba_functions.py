@@ -29,6 +29,19 @@ def go_around_int(array_3d, arounds):
 
 
 @numba.njit(nopython=True, fastmath=True)
+def go_around_int_and_summ(array_3d, arounds):
+    all_neighbours = []
+    # trick to initialize an empty list with known type
+    single_neighbours = [np.ubyte(x) for x in range(0)]
+    for seed_arounds in arounds:
+        for point in seed_arounds:
+            single_neighbours.append(array_3d[point[0], point[1], point[2]])
+        all_neighbours.append(single_neighbours)
+        single_neighbours = [np.ubyte(x) for x in range(0)]
+    return np.array(all_neighbours, dtype=np.ubyte)
+
+
+@numba.njit(nopython=True, fastmath=True)
 def go_around_bool_dissol(array_3d, arounds):
     all_neigh = []
     # trick to initialize an empty list with known type
