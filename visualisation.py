@@ -28,8 +28,8 @@ class Visualisation:
         self.oxid_numb = None
         self.utils = utils.Utils()
         self.generate_param_from_db()
-        self.cell_size_full = 10
-        self.cell_size = 10
+        self.cell_size_full = 30
+        self.cell_size = 30
         self.linewidth_f = 0.1
         self.linewidth = 0.05
         self.alpha = 1
@@ -717,7 +717,7 @@ ELAPSED TIME: {message}
                                    s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth_f,
                                    alpha=self.alpha)
 
-                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='darkred',
+                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='r',
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
                                    alpha=self.alpha)
 
@@ -974,7 +974,7 @@ ELAPSED TIME: {message}
                     ax_all.scatter(fulls[:, 2], fulls[:, 1], marker=',', color='darkred',
                                    s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
 
-                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], marker=',', color='darkred',
+                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], marker=',', color='r',
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
 
                     # ax_all.scatter(fulls[:, 1], fulls[:, 0], marker=',', color='r',
@@ -1033,7 +1033,8 @@ ELAPSED TIME: {message}
 
             csfont = {'fontname': 'Times New Roman'}
             # # # Rescale the axis values
-            ticks = np.arange(0, new_axlim + 1, 20)
+            step = int(new_axlim/5)
+            ticks = np.arange(0, new_axlim + 1, step)
             ax_all.set_xticks(ticks)
             ax_all.set_yticks(ticks)
             # ax_all.set_zticks(ticks)

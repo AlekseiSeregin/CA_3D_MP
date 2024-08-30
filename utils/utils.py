@@ -289,7 +289,7 @@ class Utils:
         diff_coeff = Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
         probabilities = self.calc_prob(diff_coeff)
         Config.OXIDANTS.PRIMARY.PROBABILITIES = probabilities
-        Config.OXIDANTS.PRIMARY.PROBABILITIES_2D = self.calc_p0_2d(diff_coeff * 10**1)
+        Config.OXIDANTS.PRIMARY.PROBABILITIES_2D = self.calc_p0_2d(diff_coeff * 10**2)
         Config.OXIDANTS.PRIMARY.PROBABILITIES_SCALE = self.calc_prob(diff_coeff * 10 ** -2)
 
         diff_coeff = Config.OXIDANTS.SECONDARY.DIFFUSION_COEFFICIENT

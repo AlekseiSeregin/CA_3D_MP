@@ -20,15 +20,15 @@ class Config:
     # PRODUCTS.SECONDARY.PHASE_FRACTION_LIMIT = 0.07
     # PRODUCTS.SECONDARY.THRESHOLD_INWARD = 3
     # PRODUCTS.SECONDARY.THRESHOLD_OUTWARD = 2
-    #
+
     PRODUCTS.TERNARY = ProdInput()
     # PRODUCTS.TERNARY.THRESHOLD_INWARD = 4
     # PRODUCTS.TERNARY.THRESHOLD_OUTWARD = 2
-    #
+
     PRODUCTS.QUATERNARY = ProdInput()
     # PRODUCTS.QUATERNARY.THRESHOLD_INWARD = 4
     # PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD = 2
-    #
+
     PRODUCTS.QUINT = ProdInput()
     # PRODUCTS.QUINT.THRESHOLD_INWARD = 1
     # PRODUCTS.QUINT.THRESHOLD_OUTWARD = 0
@@ -40,7 +40,7 @@ class Config:
     # primary oxidants
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.0012
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.1
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
@@ -48,7 +48,7 @@ class Config:
     # primary actives
     ACTIVES.PRIMARY.ELEMENT = "Al"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
-    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.07
+    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.025
     ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.2
     # secondary actives
     # ACTIVES.SECONDARY.ELEMENT = "Al"
@@ -67,13 +67,13 @@ class Config:
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 501  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 500000  # must be >= n_cells_per_axis
-    STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
+    N_CELLS_PER_AXIS = 300  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_ITERATIONS = 300000  # must be >= n_cells_per_axis
+    STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
     SIM_TIME = 72000  # [sek]
-    SIZE = 120 * (10 ** -6)  # [m]
+    SIZE = 5000 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 0.15
@@ -108,17 +108,17 @@ class Config:
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
     PROBABILITIES.PRIMARY = ConfigProbabilities()
-    PROBABILITIES.SECONDARY = ConfigProbabilities()
-    PROBABILITIES.TERNARY = ConfigProbabilities()
-    PROBABILITIES.QUATERNARY = ConfigProbabilities()
-    PROBABILITIES.QUINT = ConfigProbabilities()
+    # PROBABILITIES.SECONDARY = ConfigProbabilities()
+    # PROBABILITIES.TERNARY = ConfigProbabilities()
+    # PROBABILITIES.QUATERNARY = ConfigProbabilities()
+    # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.999
+    PROBABILITIES.PRIMARY.p0 = 0.1
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.9999
+    PROBABILITIES.PRIMARY.p1 = 0.5
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1

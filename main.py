@@ -17,7 +17,7 @@ if __name__ == '__main__':
 """
 
     new_system = SimulationConfigurator()
-    new_system.configurate_functions()
+    new_system.configurate_functions_gb()
 
     try:
         new_system.run_simulation()

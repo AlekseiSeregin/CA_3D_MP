@@ -10,13 +10,13 @@ database_name = filedialog.askopenfilename()
 # iter = 500
 visualise = Visualisation(database_name)
 
-# visualise.animate_3d(animate_separate=False, const_cam_pos=False)
+visualise.animate_3d(animate_separate=False, const_cam_pos=False)
 
-# visualise.plot_3d(plot_separate=False, const_cam_pos=True)
+visualise.plot_3d(plot_separate=False, const_cam_pos=True)
 # visualise.plot_3d(plot_separate=False, const_cam_pos=True, iteration=iter)
 # visualise.animate_2d(plot_separate=False)
 
-# visualise.plot_2d(plot_separate=False)
+visualise.plot_2d(plot_separate=False)
 # visualise.plot_2d(plot_separate=False, iteration=2080)
 # visualise.animate_concentration(conc_type="atomic", analytic_sol=False)
 

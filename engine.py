@@ -29,6 +29,30 @@ class SimulationConfigurator:
         if Config.COMPUTE_PRECIPITATION:
             self.init_product()
 
+    def configurate_functions_gb(self):
+        self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_gb
+        self.ca.primary_active.diffuse = elements.diffuse_bulk_mp
+
+        self.ca.get_cur_ioz_bound = self.ca.ioz_depth_furthest_inward
+
+        self.ca.precip_func = self.ca.precipitation_first_case
+        self.ca.get_combi_ind = self.ca.get_combi_ind_standard
+
+        self.ca.cases.first_mp.precip_step = precip_step_standard
+        self.ca.cases.first_mp.check_intersection = ci_single
+
+        self.ca.get_cur_dissol_ioz_bound = self.ca.ioz_dissolution_where_prod
+        self.ca.decomposition = self.ca.dissolution_test
+        self.ca.decomposition_intrinsic = self.ca.simple_decompose_mp
+        self.ca.cases.first_mp.decomposition = dissolution_zhou_wei_no_bsf
+
+        self.ca.cur_case = self.ca.cases.first
+        self.ca.cur_case_mp = self.ca.cases.first_mp
+
+        self.ca.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY,
+                                                                                  Config.PRODUCTS.PRIMARY)
+        self.ca.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
+
     def configurate_functions(self):
         self.ca.primary_oxidant.diffuse = self.ca.primary_oxidant.diffuse_bulk
         self.ca.primary_active.diffuse = elements.diffuse_bulk_mp

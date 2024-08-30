@@ -31,6 +31,7 @@ class CellularAutomata:
         # outward
         self.primary_active = None
         self.secondary_active = None
+
         # functions
         self.precip_func = None  # must be defined elsewhere
         self.get_combi_ind = None  # must be defined elsewhere
@@ -99,8 +100,8 @@ class CellularAutomata:
         self.save_flag = False
 
         self.product_x_not_stab = np.full(self.cells_per_axis, True, dtype=bool)
-        self.TdDATA = td_data.TdDATA()
-        self.TdDATA.fetch_look_up_from_file()
+        # self.TdDATA = td_data.TdDATA()
+        # self.TdDATA.fetch_look_up_from_file()
         self.curr_look_up = None
 
         self.prev_stab_count = 0
@@ -1627,7 +1628,6 @@ class CellularAutomata:
 
         self.calc_stable_products_all()
         self.primary_oxidant.transform_to_descards()
-
 
     def precipitation_first_case(self):
         # Only one oxidant and one active elements exist. Only one product can be created

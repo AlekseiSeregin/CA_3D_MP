@@ -28,8 +28,8 @@ class VoronoiMicrostructure:
         if seeds is None:
             seeds = np.random.random_sample((number_of_grains, 3))
 
-            for seed in seeds:
-                print(seed)
+            # for seed in seeds:
+            #     print(seed)
 
         # regular arrangement of seeds for some tests
         elif seeds == 'regular8':
