@@ -9,10 +9,9 @@ from thermodynamics import td_data
 
 
 class CellularAutomata:
-    def __init__(self):
-        self.utils = utils.Utils()
-        self.utils.generate_param()
-        self.cases = utils.CaseRef()
+    def __init__(self, cases, utils_inst):
+        self.utils = utils_inst
+        self.cases = cases
         self.cur_case = None
         self.cur_case_mp = None
 
@@ -25,12 +24,6 @@ class CellularAutomata:
         self.curr_max_furthest = 0
         self.furthest_index = 0
         self.ioz_bound = 0
-        # inward
-        self.primary_oxidant = None  # in the future must be hosted in the case ref!
-        self.secondary_oxidant = None
-        # outward
-        self.primary_active = None
-        self.secondary_active = None
 
         # functions
         self.precip_func = None  # must be defined elsewhere
@@ -45,18 +38,12 @@ class CellularAutomata:
         self.coord_buffer = None
         self.to_dissol_pn_buffer = None
 
-        self.primary_product = None
         self.primary_oxid_numb = Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
         self.max_inside_neigh_number = 6 * self.primary_oxid_numb
         self.max_block_neigh_number = 7
 
         self.disol_block_p = Config.PROBABILITIES.PRIMARY.p0_d ** Config.PROBABILITIES.PRIMARY.n
         self.disol_p = Config.PROBABILITIES.PRIMARY.p0_d
-
-        self.secondary_product = None
-        self.ternary_product = None
-        self.quaternary_product = None
-        self.quint_product = None
 
         self.primary_fetch_ind = []
         self.secondary_fetch_ind = []
@@ -96,12 +83,11 @@ class CellularAutomata:
         self.gamma_primes = None
         self.product_indexes = None
         self.nucleation_indexes = None
-
         self.save_flag = False
 
         self.product_x_not_stab = np.full(self.cells_per_axis, True, dtype=bool)
-        # self.TdDATA = td_data.TdDATA()
-        # self.TdDATA.fetch_look_up_from_file()
+        self.TdDATA = td_data.TdDATA()
+        self.TdDATA.fetch_look_up_from_file()
         self.curr_look_up = None
 
         self.prev_stab_count = 0
@@ -841,10 +827,10 @@ class CellularAutomata:
 
     def get_combi_ind_standard(self):
         self.ioz_bound = self.get_cur_ioz_bound()
-        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
+        oxidant = np.array([np.sum(self.cur_case.oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
 
-        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
+        active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind
                            in range(self.ioz_bound + 1)], dtype=np.uint32)
 
         oxidant_indexes = np.where(oxidant > 0)[0]
@@ -946,21 +932,19 @@ class CellularAutomata:
     def get_combi_ind_atomic(self):
         self.ioz_bound = self.get_cur_ioz_bound()
 
-        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
+        oxidant = np.array([np.sum(self.cur_case.oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
         oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
-        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
+        active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind
                            in range(self.ioz_bound + 1)], dtype=np.uint32)
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
-        product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
+        product = np.array([np.sum(self.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
-        # less_than_zero = np.where(matrix_moles < 0)[0]
-        # matrix_moles[less_than_zero] = 0
         whole_moles = matrix_moles + oxidant_moles + active_moles + product_moles
         product_c = product_moles / whole_moles
 
@@ -1004,10 +988,10 @@ class CellularAutomata:
         else:
             self.comb_indexes = [self.furthest_index]
 
-    def get_combi_ind_two_products(self, current_active):
-        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
+    def get_combi_ind_two_products(self):
+        oxidant = np.array([np.sum(self.cur_case.oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
-        active = np.array([np.sum(current_active.c3d[:, :, plane_ind]) for plane_ind
+        active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind
                            in range(self.ioz_bound + 1)], dtype=np.uint32)
         self.comb_indexes = self.get_active_oxidant_mutual_indexes(oxidant, active)
 
@@ -1195,22 +1179,20 @@ class CellularAutomata:
         self.comb_indexes = np.intersect1d(self.comb_indexes, self.product_indexes)
 
     def get_combi_ind_atomic_solub_prod_test(self):
-        """
-        Created only for tests of the solubility product probability function
-        """
-        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
+        oxidant = np.array([np.sum(self.cur_case.oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.furthest_index + 1)], dtype=np.uint32)
         oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
 
-        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
+        active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind
                            in range(self.furthest_index + 1)], dtype=np.uint32)
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
+        product = np.array([np.sum(self.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.furthest_index + 1)], dtype=np.uint32)
-        product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
-        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
+        product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
+        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *\
+                               Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
 
@@ -1219,21 +1201,25 @@ class CellularAutomata:
         oxidant_c = oxidant_moles / whole_moles
         active_c = active_moles / whole_moles
 
-        self.gamma_primes = (((((oxidant_c ** 3) * (active_c ** 2)) / Config.SOL_PROD) - 1) /
-                             Config.GENERATED_VALUES.max_gamma_min_one)
+        # self.gamma_primes = (((((oxidant_c ** 3) * (active_c ** 2)) / Config.SOL_PROD) - 1) /
+        #                      Config.GENERATED_VALUES.max_gamma_min_one)
 
-        where_solub_prod = np.where(self.gamma_primes > 0)[0]
+        k = (oxidant_c ** 3) * (active_c ** 2)
 
-        oxidant_indexes = np.where(oxidant > 0)[0]
-        active_indexes = np.where(active > 0)[0]
-        min_act = active_indexes.min(initial=self.cells_per_axis)
-        if min_act < self.cells_per_axis:
-            indexs = np.where(oxidant_indexes >= min_act - 1)[0]
-            self.comb_indexes = oxidant_indexes[indexs]
-        else:
-            self.comb_indexes = [self.furthest_index]
+        # where_solub_prod = np.where(self.gamma_primes > 0)[0]
 
-        self.comb_indexes = np.intersect1d(self.comb_indexes, where_solub_prod)
+        self.comb_indexes = np.where(k >= Config.SOL_PROD)[0]
+
+        # oxidant_indexes = np.where(oxidant > 0)[0]
+        # active_indexes = np.where(active > 0)[0]
+        # min_act = active_indexes.min(initial=self.cells_per_axis)
+        # if min_act < self.cells_per_axis:
+        #     indexs = np.where(oxidant_indexes >= min_act - 1)[0]
+        #     self.comb_indexes = oxidant_indexes[indexs]
+        # else:
+        #     self.comb_indexes = [self.furthest_index]
+
+        # self.comb_indexes = np.intersect1d(self.comb_indexes, where_solub_prod)
 
     def get_combi_ind_atomic_opt_for_growth(self):
 
@@ -1409,52 +1395,48 @@ class CellularAutomata:
     def calc_stable_products_all(self):
         self.ioz_bound = self.get_cur_ioz_bound()
 
-        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
+        oxidant = np.array([np.sum(self.cases.first.oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
         oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
 
-        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
+        active = np.array([np.sum(self.cases.first.active.c3d[:, :, plane_ind]) for plane_ind
                            in range(self.ioz_bound + 1)], dtype=np.uint32)
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        secondary_active = np.array([np.sum(self.secondary_active.c3d[:, :, plane_ind]) for plane_ind
+        secondary_active = np.array([np.sum(self.cases.second.active.c3d[:, :, plane_ind]) for plane_ind
                                      in range(self.ioz_bound + 1)], dtype=np.uint32)
         secondary_active_moles = secondary_active * Config.ACTIVES.SECONDARY.MOLES_PER_CELL
         secondary_outward_eq_mat_moles = secondary_active * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
+        product = np.array([np.sum(self.cases.first.product.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *\
                                Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
 
-        secondary_product = np.array([np.sum(self.secondary_product.c3d[:, :, plane_ind]) for plane_ind
+        secondary_product = np.array([np.sum(self.cases.second.product.c3d[:, :, plane_ind]) for plane_ind
                                       in range(self.ioz_bound + 1)], dtype=np.uint32)
         secondary_product_moles = secondary_product * Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC
         secondary_product_eq_mat_moles = secondary_product * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *\
                                          Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD
 
-
-        ternary_product = np.array([np.sum(self.ternary_product.c3d[:, :, plane_ind]) for plane_ind
+        ternary_product = np.array([np.sum(self.cases.third.product.c3d[:, :, plane_ind]) for plane_ind
                                       in range(self.ioz_bound + 1)], dtype=np.uint32)
         ternary_product_moles = ternary_product * Config.PRODUCTS.TERNARY.MOLES_PER_CELL_TC
         ternary_product_eq_mat_moles = (ternary_product * ((Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *
                                         Config.PRODUCTS.TERNARY.THRESHOLD_OUTWARD) + Config.PRODUCTS.TERNARY.MOLES_PER_CELL))
 
-
-        quaternary_product = np.array([np.sum(self.quaternary_product.c3d[:, :, plane_ind]) for plane_ind
+        quaternary_product = np.array([np.sum(self.cases.fourth.product.c3d[:, :, plane_ind]) for plane_ind
                                     in range(self.ioz_bound + 1)], dtype=np.uint32)
         quaternary_product_moles = quaternary_product * Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC
         quaternary_product_eq_mat_moles = (quaternary_product * ((Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *
                                            Config.PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD) + Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL))
 
-
-        quint_product = np.array([np.sum(self.quint_product.c3d[:, :, plane_ind]) for plane_ind
+        quint_product = np.array([np.sum(self.cases.fifth.product.c3d[:, :, plane_ind]) for plane_ind
                                        in range(self.ioz_bound + 1)], dtype=np.uint32)
         quint_eq_mat_moles = quint_product * Config.PRODUCTS.QUINT.MOLES_PER_CELL
         quint_product_moles = quint_product * Config.PRODUCTS.QUINT.MOLES_PER_CELL_TC
-
 
         matrix_moles = (self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles -
                         secondary_outward_eq_mat_moles - secondary_product_eq_mat_moles - ternary_product_eq_mat_moles -
@@ -1520,54 +1502,49 @@ class CellularAutomata:
             min_act = active_indexes.min(initial=self.cells_per_axis)
             indexs = np.where(oxidant_indexes >= min_act - 1)[0]
             self.comb_indexes = oxidant_indexes[indexs]
-
             self.comb_indexes = np.intersect1d(primary_pos_ind, self.comb_indexes)
 
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                # self.decomposition_intrinsic()
+                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
+                self.decomposition_intrinsic()
 
         if len(primary_neg_ind) > 0:
             self.comb_indexes = primary_neg_ind
             adj_coeff = (primary_diff[primary_neg_ind] / product_c[primary_neg_ind]) * -1
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
-            # self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
-            #                                                             np.zeros(len(self.comb_indexes)))
 
         self.cur_case = self.cases.second
         self.cur_case_mp = self.cases.second_mp
         if len(secondary_pos_ind) > 0:
-            self.get_combi_ind_two_products(self.secondary_active)
+            self.get_combi_ind_two_products()
             self.comb_indexes = np.intersect1d(secondary_pos_ind, self.comb_indexes)
 
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-
-        self.comb_indexes = np.arange(self.ioz_bound + 1)
-        self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
-        self.decomposition_intrinsic()
+                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
+                self.decomposition_intrinsic()
 
         if len(secondary_neg_ind) > 0:
             self.comb_indexes = secondary_neg_ind
             adj_coeff = (secondary_diff[secondary_neg_ind] / secondary_product_c[secondary_neg_ind]) * -1
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
-            # self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
-            #                                                             np.zeros(len(self.comb_indexes)))
 
         self.cur_case = self.cases.third
         self.cur_case_mp = self.cases.third_mp
         if len(ternary_pos_ind) > 0:
-            self.get_combi_ind_two_products(self.primary_active)
+            self.get_combi_ind_two_products()
             self.comb_indexes = np.intersect1d(ternary_pos_ind, self.comb_indexes)
 
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                # self.decomposition_intrinsic()
+                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
+                self.decomposition_intrinsic()
 
         if len(ternary_neg_ind) > 0:
             self.comb_indexes = ternary_neg_ind
@@ -1580,21 +1557,20 @@ class CellularAutomata:
         self.cur_case = self.cases.fourth
         self.cur_case_mp = self.cases.fourth_mp
         if len(quaternary_pos_ind) > 0:
-            self.get_combi_ind_two_products(self.secondary_active)
+            self.get_combi_ind_two_products()
             self.comb_indexes = np.intersect1d(quaternary_pos_ind, self.comb_indexes)
 
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                # self.decomposition_intrinsic()
+                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
+                self.decomposition_intrinsic()
 
         if len(quaternary_neg_ind) > 0:
             self.comb_indexes = quaternary_neg_ind
             adj_coeff = (quaternary_diff[quaternary_neg_ind] / quaternary_product_c[quaternary_neg_ind]) * -1
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
-            # self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
-            #                                                                np.zeros(len(self.comb_indexes)))
 
         self.cur_case = self.cases.fifth
         self.cur_case_mp = self.cases.fifth_mp
@@ -1604,40 +1580,39 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                # self.decomposition_intrinsic()
+                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
+                self.decomposition_intrinsic()
 
         if len(quint_neg_ind) > 0:
             self.comb_indexes = quint_neg_ind
             adj_coeff = (quint_diff[quint_neg_ind] / quint_product_c[quint_neg_ind]) * -1
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
-            # self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
-            #                                                                np.zeros(len(self.comb_indexes)))
 
     def precipitation_with_td(self):
-        self.furthest_index = self.primary_oxidant.calc_furthest_index()
+        self.furthest_index = self.cases.first.oxidant.calc_furthest_index()
 
         if self.furthest_index >= self.curr_max_furthest:
             self.curr_max_furthest = self.furthest_index
 
-        self.primary_oxidant.transform_to_3d()
+        self.cases.first.oxidant.transform_to_3d()
 
         if self.iteration % Config.STRIDE == 0:
-            self.primary_active.transform_to_3d(self.curr_max_furthest)
-            self.secondary_active.transform_to_3d(self.curr_max_furthest)
+            self.cases.first.active.transform_to_3d(self.curr_max_furthest)
+            self.cases.second.active.transform_to_3d(self.curr_max_furthest)
 
         self.calc_stable_products_all()
-        self.primary_oxidant.transform_to_descards()
+        self.cases.first.oxidant.transform_to_descards()
 
-    def precipitation_first_case(self):
+    def precipitation_current_case(self):
         # Only one oxidant and one active elements exist. Only one product can be created
-        self.furthest_index = self.primary_oxidant.calc_furthest_index()
-        self.primary_oxidant.transform_to_3d()
+        self.furthest_index = self.cur_case.oxidant.calc_furthest_index()
+        self.cur_case.oxidant.transform_to_3d()
 
         if self.iteration % Config.STRIDE == 0:
             if self.furthest_index >= self.curr_max_furthest:
                 self.curr_max_furthest = self.furthest_index
-            self.primary_active.transform_to_3d(self.curr_max_furthest)
+            self.cur_case.active.transform_to_3d(self.curr_max_furthest)
 
         self.get_combi_ind()
 
@@ -1645,13 +1620,12 @@ class CellularAutomata:
             # if len(self.comb_indexes) > self.prev_len:
             #     print("New depth: ", self.comb_indexes)
             #     self.prev_len = len(self.comb_indexes)
-
-            self.cur_case = self.cases.first
-            self.cur_case_mp = self.cases.first_mp
+            # self.cur_case = self.cases.first
+            # self.cur_case_mp = self.cases.first_mp
 
             self.precip_mp()
 
-        self.primary_oxidant.transform_to_descards()
+        self.cur_case.oxidant.transform_to_descards()
 
     def precipitation_second_case(self):
         # Only one oxidant and one active elements exist. Only one product can be created
@@ -1809,18 +1783,18 @@ class CellularAutomata:
             self.prev_stab_count = new_stab_count
             print("stable now at: ", np.nonzero(~self.cur_case.product_ind_not_stab)[0])
 
-        self.primary_oxidant.transform_to_3d()
-        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
+        self.cur_case.oxidant.transform_to_3d()
+        oxidant = np.array([np.sum(self.cur_case.oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in self.product_indexes], dtype=np.uint32)
         oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
-        self.primary_oxidant.transform_to_descards()
+        self.cur_case.oxidant.transform_to_descards()
 
-        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
+        active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind
                            in self.product_indexes], dtype=np.uint32)
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
+        product = np.array([np.sum(self.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
                             in self.product_indexes], dtype=np.uint32)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
@@ -2025,21 +1999,13 @@ class CellularAutomata:
             self.decomposition_intrinsic()
 
     def dissolution_atomic_stop_if_no_active(self):
-        self.ioz_bound = self.ioz_depth_from_kinetics()
+        self.ioz_bound = self.get_cur_ioz_bound()
         self.comb_indexes = np.where(self.cur_case.prod_indexes)[0]
 
         temp = np.where(self.comb_indexes <= self.ioz_bound)[0]
         self.comb_indexes = self.comb_indexes[temp]
 
-        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind in self.comb_indexes], dtype=np.uint32)
-
-        # product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
-        #                     in self.product_indexes], dtype=np.uint32)
-        # temp_ind = np.where(product == 0)[0]
-
-        # self.product_x_nzs[self.product_indexes[temp_ind]] = False
-        # active = np.delete(active, temp_ind)
-        # self.comb_indexes = np.delete(self.product_indexes, temp_ind)
+        active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind in self.comb_indexes], dtype=np.uint32)
 
         temp = np.where(active > 0)[0]
         self.comb_indexes = self.comb_indexes[temp]
@@ -2222,66 +2188,6 @@ class CellularAutomata:
         #     print("PRODUCT FULLY DISSOLVED AFTER ", self.iteration, " ITERATIONS")
         #     sys.exit()
 
-    def precip_step_standard(self):
-        for plane_index in reversed(self.comb_indexes):
-            for fetch_ind in self.fetch_ind:
-                oxidant_cells = self.cur_case.oxidant.c3d[fetch_ind[0], fetch_ind[1], plane_index]
-                oxidant_cells = fetch_ind[:, np.nonzero(oxidant_cells)[0]]
-
-                if len(oxidant_cells[0]) != 0:
-                    oxidant_cells = np.vstack((oxidant_cells, np.full(len(oxidant_cells[0]), plane_index,
-                                                                      dtype=np.short)))
-                    oxidant_cells = oxidant_cells.transpose()
-
-                    exists = check_at_coord(self.cur_case.product.full_c3d, oxidant_cells)  # precip on place of oxidant!
-                    temp_ind = np.where(exists)[0]
-                    oxidant_cells = np.delete(oxidant_cells, temp_ind, 0)
-
-                    if len(oxidant_cells) > 0:
-                        # activate if microstructure ___________________________________________________________
-                        # in_gb = [self.microstructure[point[0], point[1], point[2]] for point in oxidant_cells]
-                        # temp_ind = np.where(in_gb)[0]
-                        # oxidant_cells = oxidant_cells[temp_ind]
-                        # ______________________________________________________________________________________
-                        self.check_intersection(oxidant_cells)
-
-    def precip_step_no_growth(self):
-        for plane_index in reversed(self.comb_indexes):
-            for fetch_ind in self.fetch_ind:
-                oxidant_cells = self.cur_case.oxidant.c3d[fetch_ind[0], fetch_ind[1], plane_index]
-                oxidant_cells = fetch_ind[:, np.nonzero(oxidant_cells)[0]]
-
-                if len(oxidant_cells[0]) != 0:
-                    oxidant_cells = np.vstack((oxidant_cells, np.full(len(oxidant_cells[0]), plane_index, dtype=np.short)))
-                    oxidant_cells = oxidant_cells.transpose()
-
-                    exists = check_at_coord(self.cur_case.product.full_c3d, oxidant_cells)  # precip on place of oxidant!
-                    temp_ind = np.where(exists)[0]
-                    oxidant_cells = np.delete(oxidant_cells, temp_ind, 0)
-
-                    if len(oxidant_cells) > 0:
-                        self.check_intersection(oxidant_cells)
-
-    def precip_step_no_growth_solub_prod_test(self):
-        """
-        Created only for tests of the solubility product probability function
-        """
-        for plane_index in reversed(self.comb_indexes):
-            for fetch_ind in self.fetch_ind:
-                oxidant_cells = self.cur_case.oxidant.c3d[fetch_ind[0], fetch_ind[1], plane_index]
-                oxidant_cells = fetch_ind[:, np.nonzero(oxidant_cells)[0]]
-
-                if len(oxidant_cells[0]) != 0:
-                    oxidant_cells = np.vstack((oxidant_cells, np.full(len(oxidant_cells[0]), plane_index, dtype=np.short)))
-                    oxidant_cells = oxidant_cells.transpose()
-
-                    exists = check_at_coord(self.cur_case.product.full_c3d, oxidant_cells)  # precip on place of oxidant!
-                    temp_ind = np.where(exists)[0]
-                    oxidant_cells = np.delete(oxidant_cells, temp_ind, 0)
-
-                    if len(oxidant_cells) > 0:
-                        self.ci_single_no_growth_solub_prod_test(oxidant_cells)
-
     def ci_single_only_p1(self, seeds):
         all_arounds = self.utils.calc_sur_ind_formation(seeds, self.cur_case.active.c3d.shape[2] - 1)
         neighbours = go_around_bool(self.cur_case.active.c3d, all_arounds)
@@ -2454,10 +2360,10 @@ class CellularAutomata:
             self.cur_case.product.fix_full_cells(seeds)  # precip on place of oxidant!
 
     def diffusion_inward(self):
-        # self.cases.reaccumulate_products_no_exclusion()
-        self.primary_oxidant.diffuse()
+        self.cases.reaccumulate_products_no_exclusion()
+        self.cur_case.oxidant.diffuse()
         if Config.OXIDANTS.SECONDARY_EXISTENCE:
-            self.secondary_oxidant.diffuse()
+            self.cur_case.oxidant.diffuse()
 
     def diffusion_outward(self):
         if (self.iteration + 1) % Config.STRIDE == 0:

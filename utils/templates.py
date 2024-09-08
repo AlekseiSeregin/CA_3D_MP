@@ -6,10 +6,13 @@ class CaseSetUp:
         self.oxidant = None
         self.active = None
         self.product = None
+        self.microstructure = None
         self.prod_indexes = None
         self.product_ind_not_stab = None
+
         self.fix_init_precip_func_ref = None
         self.precip_3d_init = None
+
         self.shm_pool = {"product_indexes": None,
                          "product_ind_not_stab": None,
                          "precip_3d_init": None}
@@ -19,6 +22,15 @@ class CaseSetUp:
             if shm is not None:
                 shm.close()
                 shm.unlink()
+
+        if self.oxidant is not None:
+            self.oxidant.close_and_unlink_shm()
+
+        if self.active is not None:
+            self.active.close_and_unlink_shm()
+
+        if self.product is not None:
+            self.product.close_and_unlink_shm()
 
 
 class CaseSetUpMP:
@@ -71,6 +83,10 @@ class CaseRef:
         self.accumulated_products_shm = None
         self.accumulated_products_shm_mdata = None
 
+        self.precip_3d_init = None
+        self.precip_3d_init_shm = None
+        self.precip_3d_init_shm_mdata = None
+
     def close_shms(self):
         self.first.close_and_unlink_shared_memory()
         self.second.close_and_unlink_shared_memory()
@@ -81,6 +97,10 @@ class CaseRef:
         if self.accumulated_products_shm is not None:
             self.accumulated_products_shm.close()
             self.accumulated_products_shm.unlink()
+
+        if self.precip_3d_init_shm is not None:
+            self.precip_3d_init_shm.close()
+            self.precip_3d_init_shm.unlink()
 
     def reaccumulate_products(self, exclude_case):
         np.add(self.first.product.c3d, self.second.product.c3d, out=self.accumulated_products, dtype=np.ubyte)

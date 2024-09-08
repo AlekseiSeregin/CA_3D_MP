@@ -6,7 +6,6 @@ import numpy as np
 import time
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from .own_seeds import *
-# from own_seeds import *
 
 
 class VoronoiMicrostructure:
@@ -23,13 +22,13 @@ class VoronoiMicrostructure:
         self.ca_edges = None
         self.ca_faces = None
 
-    def generate_voronoi_3d(self, number_of_grains, periodic=False, seeds=None):
+    def enerate_voronoi_3d(self, number_of_grains, periodic=False, seeds=None):
         self.divisor = int(self.n_cells_per_axis / 0.5)
         if seeds is None:
             seeds = np.random.random_sample((number_of_grains, 3))
 
-            # for seed in seeds:
-            #     print(seed)
+            for seed in seeds:
+                print(seed)
 
         # regular arrangement of seeds for some tests
         elif seeds == 'regular8':
@@ -57,7 +56,7 @@ class VoronoiMicrostructure:
                               [0.86900279, 0.63286860, 0.99611049],
                               [0.10538952, 0.91241952, 0.26677793]])
         elif seeds == 'own':
-            seeds = np.array(G_100)
+            seeds = np.array(G_500)
 
         elif seeds == "plane":
             seeds = np.array([[0.1, 0.5, 0.5],

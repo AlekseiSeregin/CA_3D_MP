@@ -17,38 +17,36 @@ if __name__ == '__main__':
 """
 
     new_system = SimulationConfigurator()
-    new_system.configurate_functions_gb()
+    new_system.configurate_functions_td_all()
 
     try:
         new_system.run_simulation()
     finally:
         try:
             if not Config.SAVE_WHOLE:
-                new_system.save_results()
+                new_system.save_results_custom()
 
         except (Exception,):
-            # new_system.save_results()
-            new_system.save_results()
+            new_system.save_results_custom()
             print("Not SAVED!")
 
-        # new_system.save_results()
         new_system.terminate_workers()
         new_system.unlink()
 
-        cumul_prod = new_system.ca.cumul_prod.get_buffer()
-        growth_rate = new_system.ca.growth_rate.get_buffer()
+        cumul_prod = new_system.c_automata.cumul_prod.get_buffer()
+        growth_rate = new_system.c_automata.growth_rate.get_buffer()
 
         # Transpose the arrays to switch rows and columns
         cumul_prod_transposed = cumul_prod.T
         growth_rate_transposed = growth_rate.T
 
         # Interleave the columns
-        interleaved_array = np.empty((new_system.ca.cumul_prod.last_in_buffer, 2 * new_system.ca.cells_per_axis),
+        interleaved_array = np.empty((new_system.c_automata.cumul_prod.last_in_buffer, 2 * new_system.c_automata.cells_per_axis),
                                      dtype=float)
         interleaved_array[:, 0::2] = cumul_prod_transposed
         interleaved_array[:, 1::2] = growth_rate_transposed
 
-        iterations = np.arange(new_system.ca.cumul_prod.last_in_buffer) * Config.STRIDE
+        iterations = np.arange(new_system.c_automata.cumul_prod.last_in_buffer) * Config.STRIDE
 
         data = np.column_stack((iterations.T, interleaved_array))
 
@@ -75,6 +73,6 @@ if __name__ == '__main__':
         new_system.db.conn.commit()
         print()
         print("____________________________________________________________")
-        print("Simulation was closed at Iteration: ", new_system.ca.iteration)
+        print("Simulation was closed at Iteration: ", new_system.c_automata.iteration)
         print("____________________________________________________________")
         print()

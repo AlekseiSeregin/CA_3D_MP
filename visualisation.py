@@ -407,29 +407,29 @@ ELAPSED TIME: {message}
                                    alpha=self.alpha)
 
                 # if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                if False:
+                if True:
                     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
-                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='cyan',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='slategrey',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
                     self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
                         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkorange',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
 
                     self.c.execute("SELECT * from quaternary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
                         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='steelblue',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
 
                     self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
                         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkviolet',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
 
                 # elif self.Config.ACTIVES.SECONDARY_EXISTENCE and not self.Config.OXIDANTS.SECONDARY_EXISTENCE:
                 #     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
@@ -471,9 +471,10 @@ ELAPSED TIME: {message}
         if iteration is None:
             iteration = self.last_i
         fig = plt.figure()
-        new_axlim = 100
+        new_axlim = self.Config.SIZE * 10 **6
         # rescale_factor = int(new_axlim / self.axlim)
         rescale_factor = new_axlim / self.axlim
+        # divisor = 10
         # rescale_factor = 5
         if plot_separate:
             ax_inward = fig.add_subplot(341, projection='3d')
@@ -717,43 +718,47 @@ ELAPSED TIME: {message}
                                    s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth_f,
                                    alpha=self.alpha)
 
-                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='r',
+                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='darkred',
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
                                    alpha=self.alpha)
 
                 # if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                # if True:
-                #     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
-                #     items = np.array(self.c.fetchall())
-                #     if np.any(items):
-                #         items *= rescale_factor
-                #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='cyan',
-                #                        s=self.cell_size * (72. / fig.dpi) ** 2)
-                #
-                #     self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
-                #     items = np.array(self.c.fetchall())
-                #     if np.any(items):
-                #         items *= rescale_factor
-                #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkgreen',
-                #                        s=self.cell_size * (72. / fig.dpi) ** 2)
-                #
-                #     self.c.execute("SELECT * from quaternary_product_iter_{}".format(iteration))
-                #     items = np.array(self.c.fetchall())
-                #     if np.any(items):
-                #         items *= rescale_factor
-                #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='steelblue',
-                #                        s=self.cell_size * (72. / fig.dpi) ** 2)
-                #
-                #     self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
-                #     items = np.array(self.c.fetchall())
-                #     if np.any(items):
-                #         items *= rescale_factor
-                #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkviolet',
-                #                        s=self.cell_size * (72. / fig.dpi) ** 2)
+                if True:
+                    self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall(), dtype=float)
+                    if np.any(items):
+                        items *= rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='cyan',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
+
+                    self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall(), dtype=float)
+                    if np.any(items):
+                        items *= rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkorange',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
+
+                    self.c.execute("SELECT * from quaternary_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall(), dtype=float)
+                    if np.any(items):
+                        items *= rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='steelblue',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
+
+                    self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall(), dtype=float)
+                    if np.any(items):
+                        items *= rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkviolet',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
 
                 # if self.Config.ACTIVES.SECONDARY_EXISTENCE and not self.Config.OXIDANTS.SECONDARY_EXISTENCE:
                 #     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
-                #     items = np.array(self.c.fetchall())
+                #     items = np.array(self.c.fetchall(), dtype=float)
                 #     if np.any(items):
                 #         items = items * rescale_factor
                 #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='tomato',
@@ -776,7 +781,8 @@ ELAPSED TIME: {message}
 
         csfont = {'fontname': 'Times New Roman'}
         # # # Rescale the axis values
-        ticks = np.arange(0, new_axlim + 1, 20)
+        step = new_axlim / 5
+        ticks = np.arange(0, new_axlim + rescale_factor, step)
         ax_all.set_xticks(ticks)
         ax_all.set_yticks(ticks)
         ax_all.set_zticks(ticks)
@@ -914,37 +920,33 @@ ELAPSED TIME: {message}
                 items = np.array(self.c.fetchall())
                 if np.any(items):
                     ind = np.where(items[:, 0] == slice_pos)
-                    items = items[ind]
-                    items = items * rescale_factor
+                    items = items[ind] * rescale_factor
                     ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='b',
-                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
+                                   s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
                 if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
                     self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
                         ind = np.where(items[:, 0] == slice_pos)
-                        items = items[ind]
-                        items = items * rescale_factor
+                        items = items[ind] * rescale_factor
                         ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='deeppink',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                                       s=self.cell_size_full * (72. / fig.dpi) ** 2)
             if self.Config.OUTWARD_DIFFUSION:
                 self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
                 if np.any(items):
                     ind = np.where(items[:, 0] == slice_pos)
-                    items = items[ind]
-                    items = items * rescale_factor
+                    items = items[ind] * rescale_factor
                     ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='g',
-                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
+                                   s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
                 if self.Config.ACTIVES.SECONDARY_EXISTENCE:
                     self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
                         ind = np.where(items[:, 0] == slice_pos)
-                        items = items[ind]
-                        items = items * rescale_factor
-                        ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='darkorange',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                        items = items[ind] * rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='navy',
+                                       s=self.cell_size_full * (72. / fig.dpi) ** 2)
 
             if self.Config.COMPUTE_PRECIPITATION:
                 self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
@@ -952,10 +954,6 @@ ELAPSED TIME: {message}
                 if np.any(items):
                     ind = np.where(items[:, 0] == slice_pos)
                     items = items[ind]
-
-                    # items = np.array(items * rescale_factor, dtype=float)
-
-                    # ind = np.where(items[:, 2] == slice_pos)
 
                     items = np.array(items).transpose()
                     self.shape = (self.shape[0], self.shape[0], self.shape[0])
@@ -965,16 +963,14 @@ ELAPSED TIME: {message}
 
                     full_ind = np.where(counts == self.oxid_numb)[0]
 
-                    fulls = dec[full_ind]
-                    fulls *= rescale_factor
+                    fulls = dec[full_ind] * rescale_factor
 
-                    not_fulls = np.delete(dec, full_ind, axis=0)
-                    not_fulls *= rescale_factor
+                    not_fulls = np.delete(dec, full_ind, axis=0) * rescale_factor
 
                     ax_all.scatter(fulls[:, 2], fulls[:, 1], marker=',', color='darkred',
                                    s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
 
-                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], marker=',', color='r',
+                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], marker=',', color='darkred',
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
 
                     # ax_all.scatter(fulls[:, 1], fulls[:, 0], marker=',', color='r',
@@ -987,35 +983,35 @@ ELAPSED TIME: {message}
                     #                s=self.cell_size * (72. / fig.dpi) ** 2)
 
                 # if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                if False:
+                if True:
                     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
-                        items = items * rescale_factor
                         ind = np.where(items[:, 0] == slice_pos)
-                        ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='cyan',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                        items = items[ind] * rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='cyan',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
                     self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
-                        items = items * rescale_factor
                         ind = np.where(items[:, 0] == slice_pos)
-                        ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='darkgreen',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                        items = items[ind] * rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='darkorange',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
                     self.c.execute("SELECT * from quaternary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
-                        items = items * rescale_factor
                         ind = np.where(items[:, 0] == slice_pos)
-                        ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='steelblue',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                        items = items[ind] * rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='steelblue',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
                     self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
-                        items = items * rescale_factor
                         ind = np.where(items[:, 0] == slice_pos)
-                        ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='darkviolet',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+                        items = items[ind] * rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='darkviolet',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
 
                 # elif self.Config.ACTIVES.SECONDARY_EXISTENCE and not self.Config.OXIDANTS.SECONDARY_EXISTENCE:
                 #     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
@@ -1026,14 +1022,11 @@ ELAPSED TIME: {message}
                 #                        s=self.cell_size * (72. / fig.dpi) ** 2)
 
             cm = 1 / 2.54  # centimeters in inches
-
-            fig.set_size_inches((15*cm, 15*cm))
-            # plt.savefig(f'C:/test_runs_data/{iteration}.jpeg')
-            # plt.savefig(f"//juno/homes/user/aseregin/Desktop/simuls/{iteration}.jpeg")
+            fig.set_size_inches((20*cm, 20*cm))
 
             csfont = {'fontname': 'Times New Roman'}
             # # # Rescale the axis values
-            step = int(new_axlim/5)
+            step = new_axlim/5
             ticks = np.arange(0, new_axlim + 1, step)
             ax_all.set_xticks(ticks)
             ax_all.set_yticks(ticks)
@@ -1053,11 +1046,12 @@ ELAPSED TIME: {message}
             ax_all.set_xlabel("X [µm]", **csfont, fontsize=f_size*cm, labelpad=1)
             ax_all.set_ylabel("Y [µm]", **csfont, fontsize=f_size*cm, labelpad=1)
 
-            ax_all.set_xlim(0, self.axlim * rescale_factor)
-            ax_all.set_ylim(0, self.axlim * rescale_factor)
+            ax_all.set_xlim(-rescale_factor, (self.axlim * rescale_factor)+rescale_factor)
+            ax_all.set_ylim(-rescale_factor, (self.axlim * rescale_factor)+rescale_factor)
         self.conn.commit()
         # plt.savefig(f'W:/SIMCA/test_runs_data/{slice_pos}.jpeg')
         # plt.savefig(f"//juno/homes/user/aseregin/Desktop/Neuer Ordner/{slice_pos}.jpeg")
+        # plt.savefig(f'C:/test_runs_data/{slice_pos}.jpeg')
         plt.show()
 
     def animate_2d(self, plot_separate=False, slice_pos=None):
@@ -1109,7 +1103,7 @@ ELAPSED TIME: {message}
                     items = np.array(self.c.fetchall())
                     if np.any(items):
                         ind = np.where(items[:, 0] == slice_pos)
-                        ax_sprecip.scatter(items[ind, 2], items[ind, 1], marker=',', color='cyan',
+                        ax_sprecip.scatter(items[ind, 2], items[ind, 1], marker=',', color='slategrey',
                                            s=self.cell_size * (72. / fig.dpi) ** 2)
                     self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
@@ -1570,7 +1564,7 @@ ELAPSED TIME: {message}
                                                self.Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
 
             # if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-            if False:
+            if True:
                 self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
                 if np.any(items):
@@ -1778,12 +1772,12 @@ ELAPSED TIME: {message}
             ax.plot(x, inward, color='b', linewidth=lokal_linewidth)
             # ax.plot(x, sinward, color='deeppink')
             ax.plot(x, outward, color='g', linewidth=lokal_linewidth)
-            # ax.plot(x, soutward, color='darkorange')
+            ax.plot(x, soutward, color='darkorange')
             ax.plot(x, primary_product, color='r', linewidth=lokal_linewidth)
-            # ax.plot(x, secondary_product, color='cyan')
-            # ax.plot(x, ternary_product, color='darkgreen')
-            # ax.plot(x, quaternary_product, color='steelblue')
-            # ax.plot(x, quint_product, color='darkviolet')
+            ax.plot(x, secondary_product, color='cyan')
+            ax.plot(x, ternary_product, color='darkgreen')
+            ax.plot(x, quaternary_product, color='steelblue')
+            ax.plot(x, quint_product, color='darkviolet')
 
             ax.set_xlabel("Depth [µm]", **csfont)
             ax.set_ylabel(conc_type_caption, **csfont)
@@ -1843,8 +1837,8 @@ ELAPSED TIME: {message}
 
         # plt.savefig(f'W:/SIMCA/test_runs_data/{iteration}.jpeg', dpi=500)
         #
-        for x_pos, inw, out, an in zip(x, inward, outward, primary_product):
-            print(x_pos * 1000000, inw, out, an, sep=" ")
+        for inw in inward:
+            print(inw)
             # print(x_pos * 1000000, " ", inw)
 
         # for inw in inward:

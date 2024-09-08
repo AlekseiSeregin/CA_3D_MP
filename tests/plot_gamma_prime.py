@@ -42,11 +42,9 @@ class ExpFunct:
 
 # to_check = np.random.randint(10, 100, dtype=np.short)
 
-
-
 # _________________________________________________ Gamma Primes
 c_a = -1
-c_b = -100000
+c_b = -100
 
 conc_o_m = 0.00263
 conc_al_m = 0.0527
@@ -54,9 +52,9 @@ conc_al_m = 0.0527
 k_sp = 6.25 * 10**-31
 gamma_m = ((conc_o_m ** 3) * (conc_al_m ** 2)) / k_sp
 
-my_func = ExpFunct(0, 0.3, c_a, c_b)
+my_func = ExpFunct(0, 1, c_a, c_b)
 
-numb_of_points = 1000
+numb_of_points = 100
 
 conc_o = np.linspace(0, conc_o_m, numb_of_points)
 conc_al = np.linspace(0, conc_al_m, numb_of_points)

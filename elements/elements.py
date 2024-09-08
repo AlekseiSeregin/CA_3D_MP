@@ -1,4 +1,3 @@
-from microstructure import voronoi
 from utils.numba_functions import *
 from configuration import Config
 from multiprocessing import shared_memory
@@ -103,6 +102,7 @@ class ActiveElem:
         np.copyto(self.dirs, dirs)
 
         self.current_count = None
+        self.shms_unlinked = False
 
     def diffuse_bulk(self):
         # mixing particles according to Chopard and Droz
@@ -328,6 +328,16 @@ class ActiveElem:
     def count_cells_at_index(self, index):
         return len(np.where(self.cells[2, :self.last_in_diff_arr] == index)[0])
 
+    def close_and_unlink_shm(self):
+        if not self.shms_unlinked:
+            self.c3d_shared.close()
+            self.c3d_shared.unlink()
+            self.cells_shm.close()
+            self.cells_shm.unlink()
+            self.dirs_shm.close()
+            self.dirs_shm.unlink()
+            self.shms_unlinked = True
+
 
 class OxidantElem:
     def __init__(self, settings, utils):
@@ -356,6 +366,7 @@ class OxidantElem:
         self.c3d = np.ndarray(self.extended_shape, dtype=np.ubyte, buffer=self.c3d_shared.buf)
 
         self.c3d_shm_mdata = SharedMetaData(self.c3d_shared.name, self.extended_shape, np.ubyte)
+        self.shms_unlinked = False
 
         self.scale = None
         self.diffuse = None
@@ -369,9 +380,11 @@ class OxidantElem:
         self.current_count = 0
         self.fill_first_page()
 
-        self.microstructure = voronoi.VoronoiMicrostructure(self.cells_per_axis)
-        self.microstructure.generate_voronoi_3d(50)
-        self.microstructure.show_microstructure(self.cells_per_axis)
+        self.microstructure = None
+
+        # self.microstructure = voronoi.VoronoiMicrostructure(self.cells_per_axis)
+        # self.microstructure.generate_voronoi_3d(50, seeds="own")
+        # self.microstructure.show_microstructure(self.cells_per_axis)
         # self.cross_shifts = np.array([[1, 0, 0], [0, 1, 0],
         #                               [-1, 0, 0], [0, -1, 0],
         #                               [0, 0, -1]], dtype=np.byte)
@@ -743,7 +756,7 @@ class OxidantElem:
         """
         Inward diffusion along the phase interfaces (between matrix and primary product).
         If the current particle has at least one product particle in its flat neighbourhood and no product ahead
-        (in its ballistic direction) it will be boosted forwardly in 1 step.
+        (in its ballistic direction) it will be boosted forwardly in n_boost_steps.
         """
         all_arounds = self.utils.calc_sur_ind_interface(self.cells, self.dirs, self.extended_axis - 1)
         neighbours = go_around_bool(self.scale, all_arounds)
@@ -815,6 +828,12 @@ class OxidantElem:
         p_r_range = p4_range + probabilities[1]
         return PRanges(p1_range, p2_range, p3_range, p4_range, p_r_range)
 
+    def close_and_unlink_shm(self):
+        if not self.shms_unlinked:
+            self.c3d_shared.close()
+            self.c3d_shared.unlink()
+            self.shms_unlinked = True
+
 
 class Product:
     def __init__(self, settings):
@@ -844,6 +863,8 @@ class Product:
         full_c3d_shared_shape = (self.shape[0], self.shape[1], self.shape[2] - 1)
         self.full_shm_mdata = SharedMetaData(self.full_c3d_shared.name, full_c3d_shared_shape, bool)
 
+        self.shms_unlinked = False
+
     def fix_full_cells_ox_numb_single(self, new_precip):
         self.full_c3d[new_precip[0], new_precip[1], new_precip[2]] = True
 
@@ -861,5 +882,10 @@ class Product:
         counts = self.c3d[precipitations[0], precipitations[1], precipitations[2]]
         return np.array(np.repeat(precipitations, counts, axis=1), dtype=np.short)
 
-
-
+    def close_and_unlink_shm(self):
+        if not self.shms_unlinked:
+            self.c3d_shared.close()
+            self.c3d_shared.unlink()
+            self.full_c3d_shared.close()
+            self.full_c3d_shared.unlink()
+            self.shms_unlinked = True

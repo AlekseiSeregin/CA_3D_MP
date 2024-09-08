@@ -12,11 +12,13 @@ def calc_saturation(c_b):
     d_b = 2.2164389765037816 * 10 ** -14
     c_o = 0.0012
     nu = 1
+    time = 72000
+
 
     curr_phi = d_o / d_b
     left_side = c_o / (nu * c_b)
 
-    gammas = np.linspace(0, 1, 100001)
+    gammas = np.linspace(0, 1, 1000001)
 
     res_right_side = []
 
@@ -35,7 +37,9 @@ def calc_saturation(c_b):
 
     saturation = 1/((np.pi ** 0.5) * desired_gamma * (curr_phi ** 0.5) * np.e**(curr_phi * desired_gamma**2) * special.erfc(desired_gamma * curr_phi**0.5))
 
-    print(c_b, " ", desired_gamma[0], " ", saturation[0])
+    depth = 2 * desired_gamma[0] * ((d_o * time) ** 0.5)
+
+    print(c_b, " ", desired_gamma[0], " ", saturation[0], " ", depth * 10**6)
 
 
 conz_list = [0.2]
