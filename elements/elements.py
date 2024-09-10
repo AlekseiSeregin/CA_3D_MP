@@ -638,7 +638,7 @@ class OxidantElem:
         self.fill_first_page()
         # ___________________________________
 
-    def diffuse_with_scale_adj(self):
+    def diffuse_with_scale_adj(self, time=0):
         """
         Inward diffusion through bulk + scale with P.
         """
@@ -749,7 +749,7 @@ class OxidantElem:
 
         # ___________________________________
         self.current_count = len(np.where(self.cells[2] == 0)[0])
-        self.fill_first_page()
+        self.fill_first_page(time=time)
         # ___________________________________
 
     def diffuse_interface(self):
@@ -792,9 +792,14 @@ class OxidantElem:
             self.dirs = np.delete(self.dirs, ind, 1)
             # ___________________________________________
 
-    def fill_first_page(self):
+    def fill_first_page(self, time=0):
+        if time > 0:
+            delt = self.n_per_page * (0.01 * (time**0.5))
+            new_n_per_page = int(self.n_per_page - delt)
+        else:
+            new_n_per_page = self.n_per_page
         # generating new particles on the diffusion surface (X = 0)
-        adj_cells_pro_page = self.n_per_page - self.current_count
+        adj_cells_pro_page = new_n_per_page - self.current_count
         if adj_cells_pro_page > 0:
             new_in_page = np.random.randint(self.cells_per_axis, size=(2, adj_cells_pro_page), dtype=np.short)
             new_in_page = np.concatenate((new_in_page, np.zeros((1, adj_cells_pro_page), dtype=np.short)))

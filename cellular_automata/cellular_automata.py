@@ -1442,9 +1442,6 @@ class CellularAutomata:
                         secondary_outward_eq_mat_moles - secondary_product_eq_mat_moles - ternary_product_eq_mat_moles -
                         quaternary_product_eq_mat_moles - quint_eq_mat_moles)
 
-        # neg_ind = np.where(matrix_moles < 0)[0]
-        # matrix_moles[neg_ind] = 0
-
         whole_moles = (matrix_moles + oxidant_moles + active_moles + product_moles + secondary_active_moles +
                        secondary_product_moles + ternary_product_moles + quaternary_product_moles + quint_product_moles)
 
@@ -1464,8 +1461,6 @@ class CellularAutomata:
         secondary_active_pure_eq_mat_moles = secondary_active_pure_moles * Config.ACTIVES.SECONDARY.T
 
         matrix_moles_pure = self.matrix_moles_per_page - active_pure_eq_mat_moles - secondary_active_pure_eq_mat_moles
-        # neg_ind = np.where(matrix_moles_pure < 0)[0]
-        # matrix_moles_pure[neg_ind] = 0
         whole_moles_pure = matrix_moles_pure + oxidant_pure_moles + active_pure_moles + secondary_active_pure_moles
 
         oxidant_pure_c = oxidant_pure_moles * 100 / whole_moles_pure
@@ -1475,23 +1470,23 @@ class CellularAutomata:
         curr_look_up = self.TdDATA.get_look_up_data(active_pure_c, secondary_active_pure_c, oxidant_pure_c)
 
         primary_diff = curr_look_up[0] - product_c
-        primary_pos_ind = np.where(primary_diff > 0)[0]
+        primary_pos_ind = np.where(primary_diff > 0.01)[0]
         primary_neg_ind = np.where(primary_diff < 0)[0]
 
         secondary_diff = curr_look_up[1] - secondary_product_c
-        secondary_pos_ind = np.where(secondary_diff > 0)[0]
+        secondary_pos_ind = np.where(secondary_diff > 0.01)[0]
         secondary_neg_ind = np.where(secondary_diff < 0)[0]
 
         ternary_diff = curr_look_up[2] - ternary_product_c
-        ternary_pos_ind = np.where(ternary_diff > 0)[0]
+        ternary_pos_ind = np.where(ternary_diff > 0.01)[0]
         ternary_neg_ind = np.where(ternary_diff < 0)[0]
 
         quaternary_diff = curr_look_up[3] - quaternary_product_c
-        quaternary_pos_ind = np.where(quaternary_diff > 0)[0]
+        quaternary_pos_ind = np.where(quaternary_diff > 0.01)[0]
         quaternary_neg_ind = np.where(quaternary_diff < 0)[0]
 
         quint_diff = curr_look_up[4] - quint_product_c
-        quint_pos_ind = np.where(quint_diff > 0)[0]
+        quint_pos_ind = np.where(quint_diff > 0.01)[0]
         quint_neg_ind = np.where(quint_diff < 0)[0]
 
         self.cur_case = self.cases.first
@@ -1551,8 +1546,6 @@ class CellularAutomata:
             adj_coeff = (ternary_diff[ternary_neg_ind] / ternary_product_c[ternary_neg_ind]) * -1
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
-            # self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes,
-            #                                                                np.zeros(len(self.comb_indexes)))
 
         self.cur_case = self.cases.fourth
         self.cur_case_mp = self.cases.fourth_mp
@@ -2361,7 +2354,7 @@ class CellularAutomata:
 
     def diffusion_inward(self):
         self.cases.reaccumulate_products_no_exclusion()
-        self.cur_case.oxidant.diffuse()
+        self.cur_case.oxidant.diffuse(time=self.iteration*Config.GENERATED_VALUES.TAU)
         if Config.OXIDANTS.SECONDARY_EXISTENCE:
             self.cur_case.oxidant.diffuse()
 
