@@ -794,7 +794,7 @@ class OxidantElem:
 
     def fill_first_page(self, time=0):
         if time > 0:
-            delt = self.n_per_page * (0.01 * (time**0.5))
+            delt = self.n_per_page * (0.00186339 * (time**0.5))
             new_n_per_page = int(self.n_per_page - delt)
         else:
             new_n_per_page = self.n_per_page
