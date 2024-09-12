@@ -1837,8 +1837,8 @@ ELAPSED TIME: {message}
 
         # plt.savefig(f'W:/SIMCA/test_runs_data/{iteration}.jpeg', dpi=500)
         #
-        for inw in inward:
-            print(inw)
+        # for inw in inward:
+        #     print(inw)
             # print(x_pos * 1000000, " ", inw)
 
         # for inw in inward:

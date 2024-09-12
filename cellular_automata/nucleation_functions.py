@@ -203,37 +203,20 @@ def ci_multi(cur_case, seeds, oxidant, full_3d):
                 self_neighbours = self_neighbours[temp_ind]
                 all_arounds = all_arounds[temp_ind]
 
-                # out_to_del = np.array(np.nonzero(neighbours))
-                # start_seed_index = np.unique(out_to_del[0], return_index=True)[1]
-                # to_del = np.array([out_to_del[1, indx:indx + cur_case.threshold_outward] for indx in start_seed_index],
-                #                   dtype=int)
-                # coord = np.array([all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(to_del)],
-                #                  dtype=np.short)
-
                 out_to_del = [np.array(np.nonzero(item)[0]) for item in neighbours]
                 n_rep = [neighbours[ind][pos] for ind, pos in enumerate(out_to_del)]
                 corr_arounds = [all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(out_to_del)]
-                # repeated_coords = np.array([np.repeat(arounds, n_r, axis=0) for arounds, n_r in zip(corr_arounds, n_rep)], dtype=object)
                 repeated_coords = [np.repeat(arounds, n_r, axis=0) for arounds, n_r in zip(corr_arounds, n_rep)]
                 ind_to_choose = [np.random.choice(len(coord), cur_case.threshold_outward, replace=False) for coord in repeated_coords]
                 out_coord = np.array([repeated_coords[ind][pos] for ind, pos in enumerate(ind_to_choose)], dtype=np.short)
-                # out_to_del = [np.array(np.nonzero(item)[0]) for item in neighbours]
-                # to_del = [np.random.choice(item, cur_case.threshold_outward, replace=False) for item in out_to_del]
-                # out_coord = np.array([all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(to_del)],
-                #                  dtype=np.short)
 
                 in_to_del = [np.array(np.nonzero(item)[0]) for item in self_neighbours]
                 n_rep = [self_neighbours[ind][pos] for ind, pos in enumerate(in_to_del)]
                 corr_arounds = [all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(in_to_del)]
-                # repeated_coords = np.array([np.repeat(arounds, n_r, axis=0) for arounds, n_r in zip(corr_arounds, n_rep)], dtype=object)
                 repeated_coords = [np.repeat(arounds, n_r, axis=0) for arounds, n_r in zip(corr_arounds, n_rep)]
                 ind_to_choose = [np.random.choice(len(coord), cur_case.threshold_inward - 1, replace=False) for coord in
                                  repeated_coords]
                 in_coord = np.array([repeated_coords[ind][pos] for ind, pos in enumerate(ind_to_choose)], dtype=np.short)
-                # in_to_del = [np.array(np.nonzero(item)[0]) for item in self_neighbours]
-                # to_del = [np.random.choice(item, cur_case.threshold_inward - 1, replace=False) for item in in_to_del]
-                # in_coord = np.array([all_arounds[seed_ind][point_ind] for seed_ind, point_ind in enumerate(to_del)],
-                #                  dtype=np.short)
 
                 out_coord = np.reshape(out_coord, (len(out_coord) * cur_case.threshold_outward, 3))
                 in_coord = np.reshape(in_coord, (len(in_coord) * (cur_case.threshold_inward - 1), 3))
@@ -388,6 +371,7 @@ def ci_single_no_growth(cur_case, seeds, oxidant, full_3d):
         # dissolution function
         product_x_nzs[seeds[2][0]] = True
 
+
 def ci_multi_no_growth(cur_case, seeds, oxidant, full_3d):
 
     shm_p = shared_memory.SharedMemory(name=cur_case.product_c3d_shm_mdata.name)
@@ -396,9 +380,6 @@ def ci_multi_no_growth(cur_case, seeds, oxidant, full_3d):
     shm_a = shared_memory.SharedMemory(name=cur_case.active_c3d_shm_mdata.name)
     active = np.ndarray(cur_case.active_c3d_shm_mdata.shape, dtype=cur_case.active_c3d_shm_mdata.dtype,
                         buffer=shm_a.buf)
-    # shm_product_init = shared_memory.SharedMemory(name=cur_case.precip_3d_init_shm_mdata.name)
-    # product_init = np.ndarray(cur_case.precip_3d_init_shm_mdata.shape, dtype=cur_case.precip_3d_init_shm_mdata.dtype,
-    #                           buffer=shm_product_init.buf)
     shm_product_x_nzs = shared_memory.SharedMemory(name=cur_case.prod_indexes_shm_mdata.name)
     product_x_nzs = np.ndarray(cur_case.prod_indexes_shm_mdata.shape, dtype=cur_case.prod_indexes_shm_mdata.dtype,
                                buffer=shm_product_x_nzs.buf)
@@ -417,22 +398,6 @@ def ci_multi_no_growth(cur_case, seeds, oxidant, full_3d):
         neighbours = go_around_int(active, all_arounds[:, :-2])
         arr_len_out = np.array([np.sum(item) for item in neighbours], dtype=np.short)
         temp_ind = np.where(arr_len_out >= cur_case.threshold_outward)[0]
-
-        # if len(temp_ind) > 0:
-        #     seeds = seeds[temp_ind]
-        #     neighbours = neighbours[temp_ind]
-        #     self_neighbours = self_neighbours[temp_ind]
-        #     all_arounds = all_arounds[temp_ind]
-        #
-        #     flat_arounds = np.concatenate((all_arounds[:, 0:5], all_arounds[:, -2:]), axis=1)
-        #     arr_len_in_flat = cur_case.go_around_func_ref(product_init, flat_arounds)
-        #
-        #     homogeneous_ind = np.where(arr_len_in_flat == 0)[0]
-        #     needed_prob = cur_case.nucleation_probabilities.get_probabilities(arr_len_in_flat, seeds[:, 2])
-        #     needed_prob[homogeneous_ind] = cur_case.nucleation_probabilities.nucl_prob.values_pp[
-        #         seeds[homogeneous_ind, 2]]
-        #     randomise = np.array(np.random.random_sample(arr_len_in_flat.size), dtype=np.float64)
-        #     temp_ind = np.where(randomise < needed_prob)[0]
 
         if len(temp_ind) > 0:
             seeds = seeds[temp_ind]
@@ -473,7 +438,6 @@ def ci_multi_no_growth(cur_case, seeds, oxidant, full_3d):
             product_x_nzs[seeds[2][0]] = True
     shm_p.close()
     shm_a.close()
-    # shm_product_init.close()
     shm_product_x_nzs.close()
 
 def go_around_mult_oxid_n_also_partial_neigh_aip_MP(array_3d, around_coords):

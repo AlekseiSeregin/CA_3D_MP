@@ -4,6 +4,7 @@ import progressbar
 import time
 import keyboard
 from microstructure import voronoi
+import elements
 
 
 class SimulationConfigurator:

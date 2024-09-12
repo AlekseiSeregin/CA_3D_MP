@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
 from scipy.spatial import KDTree
+import os
 
 
 class Component:
@@ -20,14 +21,13 @@ class CompPool:
 
 class TdDATA:
     def __init__(self):
-        self.TD_file = "C:/Users/adam-wrmjvo101twvweh/PycharmProjects/CA_3D_MP/thermodynamics/TD_look_up.pkl"
-        # "C:/CA_3D_MP/thermodynamics/TD_look_up.pkl"
-
+        # Get the absolute path of the current script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Specify the file name (e.g., 'data.txt') in the same directory
+        self.TD_file = os.path.join(script_dir, 'TD_look_up.pkl')
         self.TD_lookup = None
         self.keys = None
         self.tree = None
-
-        # self.fetch_look_up_from_file()
 
     def gen_table_nested_dict(self):
         # Define the composition ranges for Cr, Al, and O
@@ -80,12 +80,6 @@ class TdDATA:
         self.keys = np.array(self.keys)
 
     def get_look_up_data(self, primary, secondary, oxidant):
-        # targets = [(prim, sec, ox) for prim, sec, ox in zip(primary, secondary, oxidant)]
-        # distances, indexes = self.tree.query(targets)
-        # nearest_keys = [self.keys[ind] for ind in indexes]
-        # objects = [self.TD_lookup[key] for key in nearest_keys]
-        # return [[obj.primary, obj.secondary] for obj in objects]
-
         # Convert input lists to numpy arrays
         targets = np.array((primary, secondary, oxidant)).T
 
@@ -94,7 +88,6 @@ class TdDATA:
 
         # Retrieve nearest keys directly from indexes
         nearest_keys = self.keys[indexes]
-        # nearest_keys = [self.keys[ind] for ind in indexes]
 
         # Retrieve objects directly from TD_lookup using nearest_keys
         objects = [self.TD_lookup[tuple(key)] for key in nearest_keys]

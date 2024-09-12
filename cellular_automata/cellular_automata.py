@@ -1,11 +1,9 @@
 import sys
 import utils
-import elements
 import multiprocessing
 from .nes_for_mp import *
-from .nucleation_functions import *
 from .dissolution_functions import *
-from thermodynamics import td_data
+from thermodynamics import *
 
 
 class CellularAutomata:
@@ -1469,24 +1467,30 @@ class CellularAutomata:
 
         curr_look_up = self.TdDATA.get_look_up_data(active_pure_c, secondary_active_pure_c, oxidant_pure_c)
 
-        primary_diff = curr_look_up[0] - product_c
-        primary_pos_ind = np.where(primary_diff > 0.01)[0]
-        primary_neg_ind = np.where(primary_diff < 0)[0]
+        err = 0.05
+
+        t_ind = np.where(curr_look_up[0] != 0)[0]
+
+        primary_diff = curr_look_up[0][t_ind] - product_c[t_ind]
+        curr_error = primary_diff / curr_look_up[0][t_ind]
+
+        primary_pos_ind = np.where(curr_error > err)[0]
+        primary_neg_ind = np.where(curr_error < err)[0]
 
         secondary_diff = curr_look_up[1] - secondary_product_c
-        secondary_pos_ind = np.where(secondary_diff > 0.01)[0]
+        secondary_pos_ind = np.where(secondary_diff > err)[0]
         secondary_neg_ind = np.where(secondary_diff < 0)[0]
 
         ternary_diff = curr_look_up[2] - ternary_product_c
-        ternary_pos_ind = np.where(ternary_diff > 0.01)[0]
+        ternary_pos_ind = np.where(ternary_diff > err)[0]
         ternary_neg_ind = np.where(ternary_diff < 0)[0]
 
         quaternary_diff = curr_look_up[3] - quaternary_product_c
-        quaternary_pos_ind = np.where(quaternary_diff > 0.01)[0]
+        quaternary_pos_ind = np.where(quaternary_diff > err)[0]
         quaternary_neg_ind = np.where(quaternary_diff < 0)[0]
 
         quint_diff = curr_look_up[4] - quint_product_c
-        quint_pos_ind = np.where(quint_diff > 0.01)[0]
+        quint_pos_ind = np.where(quint_diff > err)[0]
         quint_neg_ind = np.where(quint_diff < 0)[0]
 
         self.cur_case = self.cases.first
@@ -1610,12 +1614,6 @@ class CellularAutomata:
         self.get_combi_ind()
 
         if len(self.comb_indexes) > 0:
-            # if len(self.comb_indexes) > self.prev_len:
-            #     print("New depth: ", self.comb_indexes)
-            #     self.prev_len = len(self.comb_indexes)
-            # self.cur_case = self.cases.first
-            # self.cur_case_mp = self.cases.first_mp
-
             self.precip_mp()
 
         self.cur_case.oxidant.transform_to_descards()

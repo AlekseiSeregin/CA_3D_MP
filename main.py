@@ -3,18 +3,7 @@ from engine import *
 
 if __name__ == '__main__':
 
-    class CompPool:
-        def __init__(self):
-            self.corundum_cr = 0.0
-            self.corundum_al = 0.0
-            self.spinel_cr = 0.0
-            self.spinel_al = 0.0
-            self.halite = 0.0
-
-
-    Config.COMMENT = """
-
-"""
+    Config.COMMENT = """ """
 
     new_system = SimulationConfigurator()
     new_system.configurate_functions_td_all()
@@ -54,20 +43,6 @@ if __name__ == '__main__':
         with open(output_file_path, "w", encoding='utf-8') as f:
             for row in data:
                 f.write(" ".join(map(str, row)) + "\n")
-
-        # data = np.column_stack(
-        #     (iterations, new_system.ca.cumul_prod.get_buffer(), new_system.ca.growth_rate.get_buffer()))
-        # output_file_path = Config.SAVE_PATH + Config.GENERATED_VALUES.DB_ID + "_kinetics.txt"
-        # with open(output_file_path, "w") as f:
-        #     for row in data:
-        #         f.write(" ".join(map(str, row)) + "\n")
-
-        #       data = np.column_stack(
-        #     (iterations, new_system.ca.cumul_prod1.get_buffer(), new_system.ca.growth_rate1.get_buffer()))
-        # output_file_path = Config.SAVE_PATH + Config.GENERATED_VALUES.DB_ID + "1" + "_kinetics2.txt"
-        # with open(output_file_path, "w") as f:
-        #     for row in data:
-        #         f.write(" ".join(map(str, row)) + "\n")
 
         new_system.insert_last_it()
         new_system.db.conn.commit()
