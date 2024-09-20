@@ -250,6 +250,76 @@ class SimulationConfigurator:
         self.cases.fourth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
         self.cases.fifth_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY, Config.PRODUCTS.QUINT)
         self.cases.fifth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
+    def configurate_functions_td_all_with_brake_away(self):
+        self.cases.first.oxidant.diffuse = self.cases.first.oxidant.diffuse_with_scale_adj
+
+        # scale
+        self.cases.first.oxidant.scale = self.cases.accumulated_products
+        self.cases.first.active.scale = self.cases.accumulated_products
+
+        self.cases.first.active.diffuse = elements.diffuse_bulk_mp
+        self.cases.second.active.diffuse = elements.diffuse_bulk_mp
+
+        self.c_automata.precip_func = self.c_automata.precipitation_with_td
+        self.c_automata.get_combi_ind = None
+
+        self.c_automata.get_cur_ioz_bound = self.c_automata.ioz_depth_furthest_inward
+
+        self.cases.first_mp.precip_step = precip_step_multi_products
+        self.cases.first_mp.check_intersection = ci_multi
+
+        self.cases.second_mp.precip_step = precip_step_multi_products
+        self.cases.second_mp.check_intersection = ci_multi
+
+        self.cases.third_mp.precip_step = precip_step_multi_products
+        self.cases.third_mp.check_intersection = ci_multi
+
+        self.cases.fourth_mp.precip_step = precip_step_multi_products
+        self.cases.fourth_mp.check_intersection = ci_multi
+
+        self.cases.fifth_mp.precip_step = precip_step_multi_products
+        self.cases.fifth_mp.check_intersection = ci_multi_no_active
+
+        self.c_automata.decomposition = None
+        self.c_automata.decomposition_intrinsic = self.c_automata.simple_decompose_mp
+
+        self.cases.first_mp.decomposition = dissolution_zhou_wei_no_bsf
+        self.cases.second_mp.decomposition = dissolution_zhou_wei_no_bsf
+        self.cases.third_mp.decomposition = dissolution_zhou_wei_no_bsf
+        self.cases.fourth_mp.decomposition = dissolution_zhou_wei_no_bsf
+        self.cases.fifth_mp.decomposition = dissolution_zhou_wei_no_bsf
+
+        self.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY, Config.PRODUCTS.PRIMARY)
+        self.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
+        self.cases.second_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.SECONDARY, Config.PRODUCTS.SECONDARY)
+        self.cases.second_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.SECONDARY)
+        self.cases.third_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY, Config.PRODUCTS.TERNARY)
+        self.cases.third_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
+        self.cases.fourth_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY, Config.PRODUCTS.QUATERNARY)
+        self.cases.fourth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
+        self.cases.fifth_mp.nucleation_probabilities = utils.NucleationProbabilities(Config.PROBABILITIES.PRIMARY, Config.PRODUCTS.QUINT)
+        self.cases.fifth_mp.dissolution_probabilities = utils.DissolutionProbabilities(Config.PROBABILITIES.PRIMARY)
+
+
+        # Define the semisphere parameters
+        R = 20  # Radius of the semisphere
+        Y0, Z0 = 50, 50  # YZ center of the semisphere
+
+        self.cases.first.active.transform_to_3d(R + 1)
+        self.cases.second.active.transform_to_3d(R + 1)
+
+        for x in range(Config.N_CELLS_PER_AXIS):
+            for y in range(Config.N_CELLS_PER_AXIS):
+                for z in range(Config.N_CELLS_PER_AXIS):
+                    # Check if the point is inside the semisphere
+                    if x >= 0 and (x ** 2 + (y - Y0) ** 2 + (z - Z0) ** 2) <= R ** 2:
+                        self.cases.first.active.c3d[z, y, x] = 0
+                        self.cases.second.active.c3d[z, y, x] = 0
+
+        self.cases.first.active.transform_to_descards()
+        self.cases.second.active.transform_to_descards()
+
+        print()
 
     def run_simulation(self):
         self.begin = time.time()

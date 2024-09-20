@@ -31,7 +31,7 @@ class Visualisation:
         self.cell_size_full = 30
         self.cell_size = 30
         self.linewidth_f = 0.1
-        self.linewidth = 0.05
+        self.linewidth = 0.5
         self.alpha = 1
         self.cm = {1: np.array([255, 200, 200])/255.0,
                    2: np.array([255, 75, 75])/255.0,
@@ -401,7 +401,7 @@ ELAPSED TIME: {message}
                                    linewidth=self.linewidth,
                                    alpha=self.alpha)
 
-                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='r',
+                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='darkred',
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black',
                                    linewidth=self.linewidth,
                                    alpha=self.alpha)
@@ -411,8 +411,9 @@ ELAPSED TIME: {message}
                     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
-                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='slategrey',
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='cyan',
                                        s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
+                        # slategrey
                     self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
@@ -769,8 +770,8 @@ ELAPSED TIME: {message}
             ax_all.set_ylim3d(0, self.axlim * rescale_factor)
             ax_all.set_zlim3d(0, self.axlim * rescale_factor)
             if const_cam_pos:
-                ax_all.azim = -55
-                ax_all.elev = 24
+                ax_all.azim = -43
+                ax_all.elev = 21
                 ax_all.dist = 2
 
         cm = 1 / 2.54  # centimeters in inches
@@ -1059,38 +1060,38 @@ ELAPSED TIME: {message}
             return print("No Data To Animate!")
 
         def animate_sep(iteration):
-            if self.Config.INWARD_DIFFUSION:
-                ax_inward.cla()
-                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
-                if np.any(items):
-                    ind = np.where(items[:, 0] == slice_pos)
-                    ax_inward.scatter(items[ind, 2], items[ind, 1], marker=',', color='b',
-                                      s=self.cell_size * (72. / fig.dpi) ** 2)
-                if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                    ax_sinward.cla()
-                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
-                    if np.any(items):
-                        ind = np.where(items[:, 0] == slice_pos)
-                        ax_sinward.scatter(items[ind, 2], items[ind, 1], marker=',', color='deeppink',
-                                           s=self.cell_size * (72. / fig.dpi) ** 2)
-            if self.Config.OUTWARD_DIFFUSION:
-                ax_outward.cla()
-                self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
-                if np.any(items):
-                    ind = np.where(items[:, 0] == slice_pos)
-                    ax_outward.scatter(items[ind, 2], items[ind, 1], marker=',', color='g',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
-                if self.Config.ACTIVES.SECONDARY_EXISTENCE:
-                    ax_soutward.cla()
-                    self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
-                    if np.any(items):
-                        ind = np.where(items[:, 0] == slice_pos)
-                        ax_soutward.scatter(items[ind, 2], items[ind, 1], marker=',', color='darkorange',
-                                            s=self.cell_size * (72. / fig.dpi) ** 2)
+            # if self.Config.INWARD_DIFFUSION:
+            #     ax_inward.cla()
+            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     if np.any(items):
+            #         ind = np.where(items[:, 0] == slice_pos)
+            #         ax_inward.scatter(items[ind, 2], items[ind, 1], marker=',', color='b',
+            #                           s=self.cell_size * (72. / fig.dpi) ** 2)
+            #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
+            #         ax_sinward.cla()
+            #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         if np.any(items):
+            #             ind = np.where(items[:, 0] == slice_pos)
+            #             ax_sinward.scatter(items[ind, 2], items[ind, 1], marker=',', color='deeppink',
+            #                                s=self.cell_size * (72. / fig.dpi) ** 2)
+            # if self.Config.OUTWARD_DIFFUSION:
+            #     ax_outward.cla()
+            #     self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     if np.any(items):
+            #         ind = np.where(items[:, 0] == slice_pos)
+            #         ax_outward.scatter(items[ind, 2], items[ind, 1], marker=',', color='g',
+            #                            s=self.cell_size * (72. / fig.dpi) ** 2)
+            #     if self.Config.ACTIVES.SECONDARY_EXISTENCE:
+            #         ax_soutward.cla()
+            #         self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         if np.any(items):
+            #             ind = np.where(items[:, 0] == slice_pos)
+            #             ax_soutward.scatter(items[ind, 2], items[ind, 1], marker=',', color='darkorange',
+            #                                 s=self.cell_size * (72. / fig.dpi) ** 2)
             if self.Config.COMPUTE_PRECIPITATION:
                 self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
@@ -1139,34 +1140,34 @@ ELAPSED TIME: {message}
 
         def animate(iteration):
             ax_all.cla()
-            if self.Config.INWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
-                if np.any(items):
-                    ind = np.where(items[:, 0] == slice_pos)
-                    ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='b',
-                                   s=self.cell_size * (72. / fig.dpi) ** 2)
-                if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
-                    if np.any(items):
-                        ind = np.where(items[:, 0] == slice_pos)
-                        ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='deeppink',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
-            if self.Config.OUTWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
-                if np.any(items):
-                    ind = np.where(items[:, 0] == slice_pos)
-                    ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='g',
-                                   s=self.cell_size * (72. / fig.dpi) ** 2)
-                if self.Config.ACTIVES.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
-                    if np.any(items):
-                        ind = np.where(items[:, 0] == slice_pos)
-                        ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='darkorange',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+            # if self.Config.INWARD_DIFFUSION:
+            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     if np.any(items):
+            #         ind = np.where(items[:, 0] == slice_pos)
+            #         ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='b',
+            #                        s=self.cell_size * (72. / fig.dpi) ** 2)
+            #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
+            #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         if np.any(items):
+            #             ind = np.where(items[:, 0] == slice_pos)
+            #             ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='deeppink',
+            #                            s=self.cell_size * (72. / fig.dpi) ** 2)
+            # if self.Config.OUTWARD_DIFFUSION:
+            #     self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     if np.any(items):
+            #         ind = np.where(items[:, 0] == slice_pos)
+            #         ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='g',
+            #                        s=self.cell_size * (72. / fig.dpi) ** 2)
+            #     if self.Config.ACTIVES.SECONDARY_EXISTENCE:
+            #         self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         if np.any(items):
+            #             ind = np.where(items[:, 0] == slice_pos)
+            #             ax_all.scatter(items[ind, 2], items[ind, 1], marker=',', color='darkorange',
+            #                            s=self.cell_size * (72. / fig.dpi) ** 2)
             if self.Config.COMPUTE_PRECIPITATION:
                 self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
@@ -1262,35 +1263,35 @@ ELAPSED TIME: {message}
             quaternary_product_mass = np.zeros(self.axlim, dtype=int)
             quaternary_product_eq_mat_moles = np.zeros(self.axlim, dtype=int)
 
-            if self.Config.INWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
-                inward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
-                inward_moles = inward * self.Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
-                inward_mass = inward * self.Config.OXIDANTS.PRIMARY.MASS_PER_CELL
-
-                if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
-                    sinward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
-                    sinward_moles = sinward * self.Config.OXIDANTS.SECONDARY.MOLES_PER_CELL
-                    sinward_mass = sinward * self.Config.OXIDANTS.SECONDARY.MASS_PER_CELL
-
-            if self.Config.OUTWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
-                outward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
-                outward_moles = outward * self.Config.ACTIVES.PRIMARY.MOLES_PER_CELL
-                outward_mass = outward * self.Config.ACTIVES.PRIMARY.MASS_PER_CELL
-                outward_eq_mat_moles = outward * self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
-
-                if self.Config.ACTIVES.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
-                    soutward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
-                    soutward_moles = soutward * self.Config.ACTIVES.SECONDARY.MOLES_PER_CELL
-                    soutward_mass = soutward * self.Config.ACTIVES.SECONDARY.MASS_PER_CELL
-                    soutward_eq_mat_moles = soutward * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
+            # if self.Config.INWARD_DIFFUSION:
+            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     inward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
+            #     inward_moles = inward * self.Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
+            #     inward_mass = inward * self.Config.OXIDANTS.PRIMARY.MASS_PER_CELL
+            #
+            #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
+            #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         sinward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
+            #         sinward_moles = sinward * self.Config.OXIDANTS.SECONDARY.MOLES_PER_CELL
+            #         sinward_mass = sinward * self.Config.OXIDANTS.SECONDARY.MASS_PER_CELL
+            #
+            # if self.Config.OUTWARD_DIFFUSION:
+            #     self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     outward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
+            #     outward_moles = outward * self.Config.ACTIVES.PRIMARY.MOLES_PER_CELL
+            #     outward_mass = outward * self.Config.ACTIVES.PRIMARY.MASS_PER_CELL
+            #     outward_eq_mat_moles = outward * self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
+            #
+            #     if self.Config.ACTIVES.SECONDARY_EXISTENCE:
+            #         self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         soutward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
+            #         soutward_moles = soutward * self.Config.ACTIVES.SECONDARY.MOLES_PER_CELL
+            #         soutward_mass = soutward * self.Config.ACTIVES.SECONDARY.MASS_PER_CELL
+            #         soutward_eq_mat_moles = soutward * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
 
             if self.Config.COMPUTE_PRECIPITATION:
                 self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
@@ -1682,7 +1683,7 @@ ELAPSED TIME: {message}
 
         elif conc_type.lower() == "cells":
             conc_type_caption = "cells concentration [%]"
-            n_cells_page = (self.axlim ** 2) * self.Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
+            # n_cells_page = (self.axlim ** 2) * self.Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
 
             # DELETE!!!
             n_cells_page = (self.axlim ** 2)
@@ -1837,8 +1838,8 @@ ELAPSED TIME: {message}
 
         # plt.savefig(f'W:/SIMCA/test_runs_data/{iteration}.jpeg', dpi=500)
         #
-        # for inw in inward:
-        #     print(inw)
+        for x_pos, inw, otw, soutw, pp, sp, tp, qp, qip in zip(x, inward, outward, soutward, primary_product, secondary_product, ternary_product, quaternary_product, quint_product):
+            print(x_pos * 1000000, inw, otw, soutw, pp, sp, tp, qp, qip, sep=" ")
             # print(x_pos * 1000000, " ", inw)
 
         # for inw in inward:

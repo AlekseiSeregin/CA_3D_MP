@@ -1,4 +1,7 @@
 import sys
+
+import numpy as np
+
 import utils
 import multiprocessing
 from .nes_for_mp import *
@@ -1410,29 +1413,29 @@ class CellularAutomata:
         product = np.array([np.sum(self.cases.first.product.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
-        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *\
+        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL * \
                                Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
 
         secondary_product = np.array([np.sum(self.cases.second.product.c3d[:, :, plane_ind]) for plane_ind
                                       in range(self.ioz_bound + 1)], dtype=np.uint32)
         secondary_product_moles = secondary_product * Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC
-        secondary_product_eq_mat_moles = secondary_product * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *\
+        secondary_product_eq_mat_moles = secondary_product * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL * \
                                          Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD
 
         ternary_product = np.array([np.sum(self.cases.third.product.c3d[:, :, plane_ind]) for plane_ind
-                                      in range(self.ioz_bound + 1)], dtype=np.uint32)
+                                    in range(self.ioz_bound + 1)], dtype=np.uint32)
         ternary_product_moles = ternary_product * Config.PRODUCTS.TERNARY.MOLES_PER_CELL_TC
         ternary_product_eq_mat_moles = (ternary_product * ((Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *
-                                        Config.PRODUCTS.TERNARY.THRESHOLD_OUTWARD) + Config.PRODUCTS.TERNARY.MOLES_PER_CELL))
+                                                            Config.PRODUCTS.TERNARY.THRESHOLD_OUTWARD) + Config.PRODUCTS.TERNARY.MOLES_PER_CELL))
 
         quaternary_product = np.array([np.sum(self.cases.fourth.product.c3d[:, :, plane_ind]) for plane_ind
-                                    in range(self.ioz_bound + 1)], dtype=np.uint32)
+                                       in range(self.ioz_bound + 1)], dtype=np.uint32)
         quaternary_product_moles = quaternary_product * Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC
         quaternary_product_eq_mat_moles = (quaternary_product * ((Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *
-                                           Config.PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD) + Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL))
+                                                                  Config.PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD) + Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL))
 
         quint_product = np.array([np.sum(self.cases.fifth.product.c3d[:, :, plane_ind]) for plane_ind
-                                       in range(self.ioz_bound + 1)], dtype=np.uint32)
+                                  in range(self.ioz_bound + 1)], dtype=np.uint32)
         quint_eq_mat_moles = quint_product * Config.PRODUCTS.QUINT.MOLES_PER_CELL
         quint_product_moles = quint_product * Config.PRODUCTS.QUINT.MOLES_PER_CELL_TC
 
@@ -1469,29 +1472,16 @@ class CellularAutomata:
 
         err = 0.05
 
-        t_ind = np.where(curr_look_up[0] != 0)[0]
+        t_ind_p = np.where(curr_look_up[0] > 0)[0]
+        t_ind_z = np.where(curr_look_up[0] == 0)[0]
+        primary_error = (curr_look_up[0][t_ind_p] - product_c[t_ind_p]) / curr_look_up[0][t_ind_p]
+        primary_pos_ind = t_ind_p[np.where(primary_error > err)[0]]
 
-        primary_diff = curr_look_up[0][t_ind] - product_c[t_ind]
-        curr_error = primary_diff / curr_look_up[0][t_ind]
+        coef_ind = np.where(primary_error < -err)[0]
+        primary_neg_ind = t_ind_p[coef_ind]
+        adj_coeff_neg = primary_error[coef_ind] * -1
 
-        primary_pos_ind = np.where(curr_error > err)[0]
-        primary_neg_ind = np.where(curr_error < err)[0]
-
-        secondary_diff = curr_look_up[1] - secondary_product_c
-        secondary_pos_ind = np.where(secondary_diff > err)[0]
-        secondary_neg_ind = np.where(secondary_diff < 0)[0]
-
-        ternary_diff = curr_look_up[2] - ternary_product_c
-        ternary_pos_ind = np.where(ternary_diff > err)[0]
-        ternary_neg_ind = np.where(ternary_diff < 0)[0]
-
-        quaternary_diff = curr_look_up[3] - quaternary_product_c
-        quaternary_pos_ind = np.where(quaternary_diff > err)[0]
-        quaternary_neg_ind = np.where(quaternary_diff < 0)[0]
-
-        quint_diff = curr_look_up[4] - quint_product_c
-        quint_pos_ind = np.where(quint_diff > err)[0]
-        quint_neg_ind = np.where(quint_diff < 0)[0]
+        d_ind = t_ind_z[np.where(product_c[t_ind_z] > 0)[0]]
 
         self.cur_case = self.cases.first
         self.cur_case_mp = self.cases.first_mp
@@ -1506,14 +1496,24 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
-                self.decomposition_intrinsic()
 
-        if len(primary_neg_ind) > 0:
-            self.comb_indexes = primary_neg_ind
-            adj_coeff = (primary_diff[primary_neg_ind] / product_c[primary_neg_ind]) * -1
+        if len(primary_neg_ind) > 0 or len(d_ind) > 0 or len(primary_pos_ind) > 0:
+            self.comb_indexes = np.concatenate((primary_neg_ind, d_ind, primary_pos_ind))
+            adj_coeff = np.concatenate((adj_coeff_neg, np.ones(len(d_ind)), np.zeros(len(primary_pos_ind))))
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
+
+
+        t_ind_p = np.where(curr_look_up[1] > 0)[0]
+        t_ind_z = np.where(curr_look_up[1] == 0)[0]
+        secondary_error = (curr_look_up[1][t_ind_p] - secondary_product_c[t_ind_p]) / curr_look_up[1][t_ind_p]
+        secondary_pos_ind = t_ind_p[np.where(secondary_error > err)[0]]
+
+        coef_ind = np.where(secondary_error < -err)[0]
+        secondary_neg_ind = t_ind_p[coef_ind]
+        adj_coeff_neg = secondary_error[coef_ind] * -1
+
+        d_ind = t_ind_z[np.where(secondary_product_c[t_ind_z] > 0)[0]]
 
         self.cur_case = self.cases.second
         self.cur_case_mp = self.cases.second_mp
@@ -1524,14 +1524,24 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
-                self.decomposition_intrinsic()
 
-        if len(secondary_neg_ind) > 0:
-            self.comb_indexes = secondary_neg_ind
-            adj_coeff = (secondary_diff[secondary_neg_ind] / secondary_product_c[secondary_neg_ind]) * -1
+        if len(secondary_neg_ind) > 0 or len(d_ind) > 0 or len(secondary_pos_ind) > 0:
+            self.comb_indexes = np.concatenate((secondary_neg_ind, d_ind, secondary_pos_ind))
+            adj_coeff = np.concatenate((adj_coeff_neg, np.ones(len(d_ind)), np.zeros(len(secondary_pos_ind))))
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
+
+
+        t_ind_p = np.where(curr_look_up[2] > 0)[0]
+        t_ind_z = np.where(curr_look_up[2] == 0)[0]
+        ternary_error = (curr_look_up[2][t_ind_p] - ternary_product_c[t_ind_p]) / curr_look_up[2][t_ind_p]
+        ternary_pos_ind = t_ind_p[np.where(ternary_error > err)[0]]
+
+        coef_ind = np.where(ternary_error < -err)[0]
+        ternary_neg_ind = t_ind_p[coef_ind]
+        adj_coeff_neg = ternary_error[coef_ind] * -1
+
+        d_ind = t_ind_z[np.where(ternary_product_c[t_ind_z] > 0)[0]]
 
         self.cur_case = self.cases.third
         self.cur_case_mp = self.cases.third_mp
@@ -1542,14 +1552,24 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
-                self.decomposition_intrinsic()
 
-        if len(ternary_neg_ind) > 0:
-            self.comb_indexes = ternary_neg_ind
-            adj_coeff = (ternary_diff[ternary_neg_ind] / ternary_product_c[ternary_neg_ind]) * -1
+        if len(ternary_neg_ind) > 0 or len(d_ind) > 0 or len(ternary_pos_ind) > 0:
+            self.comb_indexes = np.concatenate((ternary_neg_ind, d_ind, ternary_pos_ind))
+            adj_coeff = np.concatenate((adj_coeff_neg, np.ones(len(d_ind)), np.zeros(len(ternary_pos_ind))))
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
+
+
+        t_ind_p = np.where(curr_look_up[3] > 0)[0]
+        t_ind_z = np.where(curr_look_up[3] == 0)[0]
+        quaternary_error = (curr_look_up[3][t_ind_p] - quaternary_product_c[t_ind_p]) / curr_look_up[3][t_ind_p]
+        quaternary_pos_ind = t_ind_p[np.where(quaternary_error > err)[0]]
+
+        coef_ind = np.where(quaternary_error < -err)[0]
+        quaternary_neg_ind = t_ind_p[coef_ind]
+        adj_coeff_neg = quaternary_error[coef_ind] * -1
+
+        d_ind = t_ind_z[np.where(quaternary_product_c[t_ind_z] > 0)[0]]
 
         self.cur_case = self.cases.fourth
         self.cur_case_mp = self.cases.fourth_mp
@@ -1560,14 +1580,40 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
-                self.decomposition_intrinsic()
 
-        if len(quaternary_neg_ind) > 0:
-            self.comb_indexes = quaternary_neg_ind
-            adj_coeff = (quaternary_diff[quaternary_neg_ind] / quaternary_product_c[quaternary_neg_ind]) * -1
+        if len(quaternary_neg_ind) > 0 or len(d_ind) > 0 or len(quaternary_pos_ind) > 0:
+            self.comb_indexes = np.concatenate((quaternary_neg_ind, d_ind, quaternary_pos_ind))
+            adj_coeff = np.concatenate((adj_coeff_neg, np.ones(len(d_ind)), np.zeros(len(quaternary_pos_ind))))
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
+
+
+        t_ind_p = np.where(curr_look_up[4] > 0)[0]
+        t_ind_z = np.where(curr_look_up[4] == 0)[0]
+        quint_error = (curr_look_up[4][t_ind_p] - quint_product_c[t_ind_p]) / curr_look_up[4][t_ind_p]
+        quint_pos_ind = t_ind_p[np.where(quint_error > err)[0]]
+
+        coef_ind = np.where(quint_error < -err)[0]
+        quint_neg_ind = t_ind_p[coef_ind]
+        adj_coeff_neg = quint_error[coef_ind] * -1
+
+        d_ind = t_ind_z[np.where(quint_product_c[t_ind_z] > 0)[0]]
+
+        # secondary_diff = curr_look_up[1] - secondary_product_c
+        # secondary_pos_ind = np.where(secondary_diff > err)[0]
+        # secondary_neg_ind = np.where(secondary_diff < 0)[0]
+        #
+        # ternary_diff = curr_look_up[2] - ternary_product_c
+        # ternary_pos_ind = np.where(ternary_diff > err)[0]
+        # ternary_neg_ind = np.where(ternary_diff < 0)[0]
+        #
+        # quaternary_diff = curr_look_up[3] - quaternary_product_c
+        # quaternary_pos_ind = np.where(quaternary_diff > err)[0]
+        # quaternary_neg_ind = np.where(quaternary_diff < 0)[0]
+        #
+        # quint_diff = curr_look_up[4] - quint_product_c
+        # quint_pos_ind = np.where(quint_diff > err)[0]
+        # quint_neg_ind = np.where(quint_diff < 0)[0]
 
         self.cur_case = self.cases.fifth
         self.cur_case_mp = self.cases.fifth_mp
@@ -1577,12 +1623,10 @@ class CellularAutomata:
             if len(self.comb_indexes) > 0:
                 self.cases.reaccumulate_products(self.cur_case)
                 self.precip_mp()
-                self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, np.zeros(len(self.comb_indexes)))
-                self.decomposition_intrinsic()
 
-        if len(quint_neg_ind) > 0:
-            self.comb_indexes = quint_neg_ind
-            adj_coeff = (quint_diff[quint_neg_ind] / quint_product_c[quint_neg_ind]) * -1
+        if len(quint_neg_ind) > 0 or len(d_ind) > 0 or len(quint_pos_ind) > 0:
+            self.comb_indexes = np.concatenate((quint_neg_ind, d_ind, quint_pos_ind))
+            adj_coeff = np.concatenate((adj_coeff_neg, np.ones(len(d_ind)), np.zeros(len(quint_pos_ind))))
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
 

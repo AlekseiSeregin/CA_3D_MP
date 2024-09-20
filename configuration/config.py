@@ -59,11 +59,13 @@ class Config:
     # 0.0154074074074074000000
     # 0.3851851851851850000000
     # 0.361111111
-    # 1.203703704
+    # 1.20370370370370000000
     # 1.54074074074074000000
     # 0.92444444444444400000
     # 0.51923076923077
     # 0.96296296296296300000
+    # 0.77037037037037000000
+    # 10.01481481481480000000
 
     # matrix
     MATRIX.ELEMENT = "Ni"
@@ -74,8 +76,8 @@ class Config:
     STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
-    SIM_TIME = 60  # [sek]
-    SIZE = 1 * (10 ** -6)  # [m]
+    SIM_TIME = 72000  # [sek]
+    SIZE = 100 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 0.06
@@ -88,8 +90,8 @@ class Config:
 
     PROD_INCR_CONST = 1 * 10 ** -5
     PROD_ERROR = 1 * 10 ** -3
-    ZETTA_ZERO = 1 * (10 ** -6)  # [m]
-    ZETTA_FINAL = 40 * (10 ** -6)  # [m]
+    ZETTA_ZERO = 10 * (10 ** -6)  # [m]
+    ZETTA_FINAL = 50 * (10 ** -6)  # [m]
 
     INWARD_DIFFUSION = True
     OUTWARD_DIFFUSION = True
@@ -116,11 +118,11 @@ class Config:
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.001
+    PROBABILITIES.PRIMARY.p0 = 0.005
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.01
+    PROBABILITIES.PRIMARY.p1 = 0.05
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1
@@ -130,11 +132,11 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 0.05
+    PROBABILITIES.PRIMARY.p0_d = 0.9
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 5
-    PROBABILITIES.PRIMARY.p1_d = 0.005
+    PROBABILITIES.PRIMARY.p1_d = 0.1
     PROBABILITIES.PRIMARY.p1_d_f = 1
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 10
@@ -151,7 +153,7 @@ class Config:
     # ________________________
 
     # nucleation SECONDARY
-    PROBABILITIES.SECONDARY.p0 = 0.0001
+    PROBABILITIES.SECONDARY.p0 = 0.001
     PROBABILITIES.SECONDARY.p0_f = 1
     PROBABILITIES.SECONDARY.p0_A_const = 1
     PROBABILITIES.SECONDARY.p0_B_const = 1
@@ -165,15 +167,15 @@ class Config:
     PROBABILITIES.SECONDARY.max_neigh_numb = None
     PROBABILITIES.SECONDARY.nucl_adapt_function = 5
     # dissolution SECONDARY
-    PROBABILITIES.SECONDARY.p0_d = 0.05
+    PROBABILITIES.SECONDARY.p0_d = 0.1
     PROBABILITIES.SECONDARY.p0_d_f = 1
     PROBABILITIES.SECONDARY.p0_d_A_const = 1
     PROBABILITIES.SECONDARY.p0_d_B_const = 1
-    PROBABILITIES.SECONDARY.p1_d = 0.005
+    PROBABILITIES.SECONDARY.p1_d = 0.01
     PROBABILITIES.SECONDARY.p1_d_f = 1
     PROBABILITIES.SECONDARY.p1_d_A_const = 1
     PROBABILITIES.SECONDARY.p1_d_B_const = 1
-    PROBABILITIES.SECONDARY.p6_d = 1 * 10 ** -6
+    PROBABILITIES.SECONDARY.p6_d = 1 * 10 ** -4
     PROBABILITIES.SECONDARY.p6_d_f = 0.99
     PROBABILITIES.SECONDARY.p6_d_A_const = 1
     PROBABILITIES.SECONDARY.p6_d_B_const = 1

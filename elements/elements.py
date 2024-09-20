@@ -793,13 +793,13 @@ class OxidantElem:
             # ___________________________________________
 
     def fill_first_page(self, time=0):
-        if time > 0:
-            delt = self.n_per_page * (0.00186339 * (time**0.5))
-            new_n_per_page = int(self.n_per_page - delt)
-        else:
-            new_n_per_page = self.n_per_page
+        # if time > 0:
+        #     delt = self.n_per_page * (0.00186339 * (time**0.5))
+        #     new_n_per_page = int(self.n_per_page - delt)
+        # else:
+        #     new_n_per_page = self.n_per_page
         # generating new particles on the diffusion surface (X = 0)
-        adj_cells_pro_page = new_n_per_page - self.current_count
+        adj_cells_pro_page = self.n_per_page - self.current_count
         if adj_cells_pro_page > 0:
             new_in_page = np.random.randint(self.cells_per_axis, size=(2, adj_cells_pro_page), dtype=np.short)
             new_in_page = np.concatenate((new_in_page, np.zeros((1, adj_cells_pro_page), dtype=np.short)))
