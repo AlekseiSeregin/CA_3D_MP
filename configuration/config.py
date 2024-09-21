@@ -72,7 +72,7 @@ class Config:
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 300000  # must be >= n_cells_per_axis
+    N_ITERATIONS = 30000000  # must be >= n_cells_per_axis
     STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41

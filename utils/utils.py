@@ -506,6 +506,24 @@ class Utils:
         p = -2 * t
         p3 = (1 / (coeff + 1)) - 2 * p
         p0 = 1 - 4 * p - p3
+
+        # sum0 = 4 * p + p0 + p3
+        # s0diff_coeff = ((Config.GENERATED_VALUES.LAMBDA ** 2) / new_tau) * (
+        #             (1 + p0 - p3) / (6 * (1 - p0 + p3)))
+        #
+        # c = 6 * new_tau * diff_coeff / (6 * new_tau * diff_coeff + (Config.GENERATED_VALUES.LAMBDA ** 2))
+        # if c < 1/2:
+        #     t = -c/4
+        #     print("Range: [", -c/2, " : 0]")
+        # else:
+        #     t = (c-1)/4
+        #     print("Range: [", (c-1) / 2, " : 0]")
+        # np = -t
+        # np3 = 2 * t - c + 1
+        # np0 = 2 * t + c
+        # sum = 4*np + np0 + np3
+        # s1diff_coeff = ((Config.GENERATED_VALUES.LAMBDA ** 2)/new_tau) * ((1 + np0 - np3)/(6 * (1 - np0 + np3)))
+
         return [p, p3, p0]
 
     @staticmethod
