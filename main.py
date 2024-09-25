@@ -6,7 +6,7 @@ if __name__ == '__main__':
     Config.COMMENT = """ """
 
     new_system = SimulationConfigurator()
-    new_system.configurate_functions_td_all_with_brake_away()
+    new_system.configurate_functions_td_all()
 
     try:
         new_system.run_simulation()

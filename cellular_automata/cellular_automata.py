@@ -1470,14 +1470,12 @@ class CellularAutomata:
 
         curr_look_up = self.TdDATA.get_look_up_data(active_pure_c, secondary_active_pure_c, oxidant_pure_c)
 
-        err = 0.05
-
         t_ind_p = np.where(curr_look_up[0] > 0)[0]
         t_ind_z = np.where(curr_look_up[0] == 0)[0]
         primary_error = (curr_look_up[0][t_ind_p] - product_c[t_ind_p]) / curr_look_up[0][t_ind_p]
-        primary_pos_ind = t_ind_p[np.where(primary_error > err)[0]]
+        primary_pos_ind = t_ind_p[np.where(primary_error > Config.PROD_ERROR)[0]]
 
-        coef_ind = np.where(primary_error < -err)[0]
+        coef_ind = np.where(primary_error < -Config.PROD_ERROR)[0]
         primary_neg_ind = t_ind_p[coef_ind]
         adj_coeff_neg = primary_error[coef_ind] * -1
 
@@ -1503,13 +1501,12 @@ class CellularAutomata:
             self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
             self.decomposition_intrinsic()
 
-
         t_ind_p = np.where(curr_look_up[1] > 0)[0]
         t_ind_z = np.where(curr_look_up[1] == 0)[0]
         secondary_error = (curr_look_up[1][t_ind_p] - secondary_product_c[t_ind_p]) / curr_look_up[1][t_ind_p]
-        secondary_pos_ind = t_ind_p[np.where(secondary_error > err)[0]]
+        secondary_pos_ind = t_ind_p[np.where(secondary_error > Config.PROD_ERROR)[0]]
 
-        coef_ind = np.where(secondary_error < -err)[0]
+        coef_ind = np.where(secondary_error < -Config.PROD_ERROR)[0]
         secondary_neg_ind = t_ind_p[coef_ind]
         adj_coeff_neg = secondary_error[coef_ind] * -1
 
@@ -1535,9 +1532,9 @@ class CellularAutomata:
         t_ind_p = np.where(curr_look_up[2] > 0)[0]
         t_ind_z = np.where(curr_look_up[2] == 0)[0]
         ternary_error = (curr_look_up[2][t_ind_p] - ternary_product_c[t_ind_p]) / curr_look_up[2][t_ind_p]
-        ternary_pos_ind = t_ind_p[np.where(ternary_error > err)[0]]
+        ternary_pos_ind = t_ind_p[np.where(ternary_error > Config.PROD_ERROR)[0]]
 
-        coef_ind = np.where(ternary_error < -err)[0]
+        coef_ind = np.where(ternary_error < -Config.PROD_ERROR)[0]
         ternary_neg_ind = t_ind_p[coef_ind]
         adj_coeff_neg = ternary_error[coef_ind] * -1
 
@@ -1563,9 +1560,9 @@ class CellularAutomata:
         t_ind_p = np.where(curr_look_up[3] > 0)[0]
         t_ind_z = np.where(curr_look_up[3] == 0)[0]
         quaternary_error = (curr_look_up[3][t_ind_p] - quaternary_product_c[t_ind_p]) / curr_look_up[3][t_ind_p]
-        quaternary_pos_ind = t_ind_p[np.where(quaternary_error > err)[0]]
+        quaternary_pos_ind = t_ind_p[np.where(quaternary_error > Config.PROD_ERROR)[0]]
 
-        coef_ind = np.where(quaternary_error < -err)[0]
+        coef_ind = np.where(quaternary_error < -Config.PROD_ERROR)[0]
         quaternary_neg_ind = t_ind_p[coef_ind]
         adj_coeff_neg = quaternary_error[coef_ind] * -1
 
@@ -1591,9 +1588,9 @@ class CellularAutomata:
         t_ind_p = np.where(curr_look_up[4] > 0)[0]
         t_ind_z = np.where(curr_look_up[4] == 0)[0]
         quint_error = (curr_look_up[4][t_ind_p] - quint_product_c[t_ind_p]) / curr_look_up[4][t_ind_p]
-        quint_pos_ind = t_ind_p[np.where(quint_error > err)[0]]
+        quint_pos_ind = t_ind_p[np.where(quint_error > Config.PROD_ERROR)[0]]
 
-        coef_ind = np.where(quint_error < -err)[0]
+        coef_ind = np.where(quint_error < -Config.PROD_ERROR)[0]
         quint_neg_ind = t_ind_p[coef_ind]
         adj_coeff_neg = quint_error[coef_ind] * -1
 

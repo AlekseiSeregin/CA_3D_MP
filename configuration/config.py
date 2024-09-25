@@ -46,13 +46,13 @@ class Config:
     # primary actives
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Cr in Ni Krupp"
-    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.25
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 2
+    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.02
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.51923076923077
     # secondary actives
     ACTIVES.SECONDARY.ELEMENT = "Al"
     ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
-    ACTIVES.SECONDARY.MASS_CONCENTRATION = 0.025
-    ACTIVES.SECONDARY.CELLS_CONCENTRATION = 0.3851851851851850000000
+    ACTIVES.SECONDARY.MASS_CONCENTRATION = 0.04
+    ACTIVES.SECONDARY.CELLS_CONCENTRATION = 2
     # 0.0308148148148148000000
     # 0.0770370370370371000000
     # 0.0038518518518518500000
@@ -72,7 +72,7 @@ class Config:
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 30000000  # must be >= n_cells_per_axis
+    N_ITERATIONS = 300000  # must be >= n_cells_per_axis
     STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
@@ -89,7 +89,7 @@ class Config:
     N_BOOST_STEPS = 1
 
     PROD_INCR_CONST = 1 * 10 ** -5
-    PROD_ERROR = 1 * 10 ** -3
+    PROD_ERROR = 0.05
     ZETTA_ZERO = 10 * (10 ** -6)  # [m]
     ZETTA_FINAL = 50 * (10 ** -6)  # [m]
 
@@ -99,15 +99,15 @@ class Config:
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = True
     FULL_CELLS = False
-    SAVE_PATH = 'C:/test_runs_data/'
+    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 23
+    NUMBER_OF_PROCESSES = 12
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
-    MAX_TASK_PER_CHILD = 50000
+    MAX_TASK_PER_CHILD = 10000
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
@@ -118,7 +118,7 @@ class Config:
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.005
+    PROBABILITIES.PRIMARY.p0 = 0.01
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
@@ -132,11 +132,11 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 0.9
+    PROBABILITIES.PRIMARY.p0_d = 0.001
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 5
-    PROBABILITIES.PRIMARY.p1_d = 0.1
+    PROBABILITIES.PRIMARY.p1_d = 0.01
     PROBABILITIES.PRIMARY.p1_d_f = 1
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 10
