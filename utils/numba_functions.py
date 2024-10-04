@@ -1,5 +1,6 @@
 import numba
 import numpy as np
+# from scipy.special import dtype
 
 
 @numba.njit(nopython=True, fastmath=True)
@@ -13,6 +14,26 @@ def go_around_bool(array_3d, arounds):
         all_neighbours.append(single_neighbours)
         single_neighbours = [np.ubyte(x) for x in range(0)]
     return np.array(all_neighbours, dtype=np.bool_)
+
+
+@numba.njit(nopython=True, fastmath=True)
+def separate_in_interface(scale, arounds):
+    out_int = [np.uint32(x) for x in range(0)]
+    in_int = [np.uint32(x) for x in range(0)]
+    blocked = [np.uint32(x) for x in range(0)]
+    single_neighbours = [bool(x) for x in range(0)]
+    for index, seed_arounds in enumerate(arounds):
+        if scale[seed_arounds[-1][0], seed_arounds[-1][1], seed_arounds[-1][2]]:
+            for point in seed_arounds[:-1]:
+                single_neighbours.append(bool(scale[point[0], point[1], point[2]]))
+            if 0 < sum(single_neighbours) < 4:
+                in_int.append(np.uint32(index))
+            else:
+                blocked.append(np.uint32(index))
+        else:
+            out_int.append(np.uint32(index))
+        single_neighbours = [bool(x) for x in range(0)]
+    return np.array(in_int, dtype=np.uint32), np.array(blocked, dtype=np.uint32), np.array(out_int, dtype=np.uint32)
 
 
 @numba.njit(nopython=True, fastmath=True)

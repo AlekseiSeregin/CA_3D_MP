@@ -4,7 +4,7 @@ import os
 
 import numpy as np
 from scipy.spatial import KDTree
-import random
+
 
 
 class CompPool:

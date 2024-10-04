@@ -6,18 +6,22 @@ if __name__ == '__main__':
     Config.COMMENT = """ """
 
     new_system = SimulationConfigurator()
-    new_system.configurate_functions_td_all()
+    new_system.configurate_functions_lut_nicr5()
+    new_system.construct_function_block()
 
     try:
         new_system.run_simulation()
     finally:
-        try:
-            if not Config.SAVE_WHOLE:
-                new_system.save_results_custom()
+        # try:
+        #     print("Try!")
+        #     # if not Config.SAVE_WHOLE:
+        #
+        # except (Exception,):
+        #     new_system.save_results()
+        #     print("Not SAVED Exeption!")
 
-        except (Exception,):
-            new_system.save_results_custom()
-            print("Not SAVED!")
+        new_system.save_results()
+        print("SAVED!")
 
         new_system.terminate_workers()
         new_system.unlink()

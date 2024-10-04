@@ -58,6 +58,13 @@ class Utils:
                                 (1, 0, 0): [[0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [1, 0, 0]],
                                 (-1, 0, 0): [[0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [-1, 0, 0]]}
 
+        self.interface_neigh_adj = {(0, 0, 1): [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 0]],
+                                (0, 0, -1): [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 0]],
+                                (0, 1, 0): [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 0, 0]],
+                                (0, -1, 0): [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 0, 0]],
+                                (1, 0, 0): [[0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0, 0, 0]],
+                                (-1, 0, 0): [[0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0, 0, 0]]}
+
     def generate_param(self):
         Config.GENERATED_VALUES.TAU = Config.SIM_TIME / Config.N_ITERATIONS
         Config.GENERATED_VALUES.LAMBDA = Config.SIZE / Config.N_CELLS_PER_AXIS
@@ -290,6 +297,7 @@ class Utils:
         Config.OXIDANTS.PRIMARY.PROBABILITIES = probabilities
         Config.OXIDANTS.PRIMARY.PROBABILITIES_2D = self.calc_p0_2d(diff_coeff * 10**2)
         Config.OXIDANTS.PRIMARY.PROBABILITIES_SCALE = self.calc_prob(diff_coeff * 10 ** -2)
+        Config.OXIDANTS.PRIMARY.PROBABILITIES_INTERFACE = self.calc_prob(diff_coeff * 10 ** 3)
 
         diff_coeff = Config.OXIDANTS.SECONDARY.DIFFUSION_COEFFICIENT
         probabilities = self.calc_prob(diff_coeff)
@@ -300,8 +308,10 @@ class Utils:
         Config.OXIDANTS.PRIMARY.N_PER_PAGE = round(Config.OXIDANTS.PRIMARY.CELLS_CONCENTRATION * Config.N_CELLS_PER_AXIS ** 2)
         Config.OXIDANTS.SECONDARY.N_PER_PAGE = round(Config.OXIDANTS.SECONDARY.CELLS_CONCENTRATION * Config.N_CELLS_PER_AXIS ** 2)
 
-        # Config.OXIDANTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL * 1.5
-        Config.OXIDANTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL
+        if Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD > 1 or Config.PRODUCTS.PRIMARY.THRESHOLD_INWARD > 1:
+            Config.OXIDANTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL
+        else:
+            Config.OXIDANTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL * 1.5
         Config.OXIDANTS.PRIMARY.MASS_PER_CELL = Config.OXIDANTS.PRIMARY.MOLES_PER_CELL * Config.OXIDANTS.PRIMARY.MOLAR_MASS
 
         Config.OXIDANTS.SECONDARY.MOLES_PER_CELL = Config.ACTIVES.SECONDARY.MOLES_PER_CELL / Config.THRESHOLD_INWARD
@@ -677,6 +687,27 @@ class Utils:
         """
         # generating a neighbouring coordinates for each seed (including the position of the seed itself)
         around_seeds = np.array([[cell + self.interface_neigh[tuple(dir)]]
+                                 for cell, dir in zip(cells.transpose(), dirs.transpose())], dtype=np.short)[:, 0]
+        # applying periodic boundary conditions
+        indexes = np.where(around_seeds[:, :, 2] < 0)
+        around_seeds[indexes[0], indexes[1], 2] = dummy_ind
+
+        indexes = np.where(around_seeds[:, :, 0:2] == self.n_cells_per_axis)
+        around_seeds[indexes[0], indexes[1], indexes[2]] = 0
+        indexes = np.where(around_seeds[:, :, 0:2] == - 1)
+        around_seeds[indexes[0], indexes[1], indexes[2]] = self.n_cells_per_axis - 1
+        return around_seeds
+
+    def calc_sur_ind_interface_adj(self, cells, dirs, dummy_ind):
+        """
+        Calculating the descarts surrounding coordinates for each seed including the position of the seed itself.
+        :param dirs:
+        :param cells:
+        :param dummy_ind:
+        :return: around_seeds: array of the surrounding coordinates for each seed (4 flat coordinates for each seed)
+        """
+        # generating a neighbouring coordinates for each seed (including the position of the seed itself)
+        around_seeds = np.array([[cell + self.interface_neigh_adj[tuple(dir)]]
                                  for cell, dir in zip(cells.transpose(), dirs.transpose())], dtype=np.short)[:, 0]
         # applying periodic boundary conditions
         indexes = np.where(around_seeds[:, :, 2] < 0)
