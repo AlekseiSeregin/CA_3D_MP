@@ -38,7 +38,7 @@ class Config:
     # primary oxidants
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.06
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.0006
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
@@ -47,7 +47,7 @@ class Config:
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Cr in Ni Krupp"
     ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.05
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 10
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.2
     # secondary actives
     # ACTIVES.SECONDARY.ELEMENT = "Al"
     # ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
@@ -72,7 +72,7 @@ class Config:
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 1000000  # must be >= n_cells_per_axis
+    N_ITERATIONS = 50000000  # must be >= n_cells_per_axis
     STRIDE = 300  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
@@ -89,7 +89,7 @@ class Config:
     N_BOOST_STEPS = 1
 
     PROD_INCR_CONST = 1 * 10 ** -5
-    PROD_ERROR = 0.05
+    PROD_ERROR = 0.01
     ZETTA_ZERO = 49 * (10 ** -6)  # [m]
     ZETTA_FINAL = 50 * (10 ** -6)  # [m]
 
@@ -133,11 +133,11 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 0.01
+    PROBABILITIES.PRIMARY.p0_d = 0.1
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 5
-    PROBABILITIES.PRIMARY.p1_d = 0.005
+    PROBABILITIES.PRIMARY.p1_d = 0.05
     PROBABILITIES.PRIMARY.p1_d_f = 1
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 10

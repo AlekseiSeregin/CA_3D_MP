@@ -116,7 +116,7 @@ class SimulationConfigurator:
 
     def configurate_functions_lut_nicr5(self):
         self.cases.first.oxidant.diffuse = self.cases.first.oxidant.diffuse_bulk
-        self.cases.first.oxidant.scale = self.cases.first.product.c3d
+        # self.cases.first.oxidant.scale = self.cases.first.product.c3d
 
         self.cases.first.active.diffuse = elements.diffuse_bulk_mp
 
