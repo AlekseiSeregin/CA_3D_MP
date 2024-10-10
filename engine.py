@@ -338,6 +338,7 @@ class SimulationConfigurator:
         print()
 
     def run_simulation(self):
+        self.construct_function_block()
         self.begin = time.time()
         for self.c_automata.iteration in progressbar.progressbar(range(Config.N_ITERATIONS)):
             if keyboard.is_pressed('ctrl+g+m'):
@@ -590,19 +591,19 @@ class SimulationConfigurator:
 
     def construct_function_block(self):
         """The execution order is: Nucleation -> Dissolution -> Inward Diffusion -> Outward Diffusion -> Save.
-        Depending on the initial conditions some steps can be skipped, the execution sequence will be adjusted accordingly"""
+        Depending on the initial conditions some steps can be skipped, the execution sequence will be adjusted"""
         # Nucleation
-        if Config.COMPUTE_PRECIPITATION and self.c_automata.precip_func != None:
+        if Config.COMPUTE_PRECIPITATION and self.c_automata.precip_func is not None:
             self.function_block.add_func(self.c_automata.precip_func)
         # Dissolution
-        if Config.DECOMPOSE_PRECIPITATIONS and self.c_automata.decomposition != None:
+        if Config.DECOMPOSE_PRECIPITATIONS and self.c_automata.decomposition is not None:
             self.function_block.add_func(self.c_automata.decomposition)
         # Inward Diffusion
-        if Config.INWARD_DIFFUSION and self.c_automata.diffusion_inward != None:
+        if Config.INWARD_DIFFUSION and self.c_automata.diffusion_inward is not None:
             self.function_block.add_func(self.c_automata.diffusion_inward)
         # Outwards Diffusion
-        if Config.OUTWARD_DIFFUSION and self.c_automata.diffusion_outward != None:
+        if Config.OUTWARD_DIFFUSION and self.c_automata.diffusion_outward is not None:
             self.function_block.add_func(self.c_automata.diffusion_outward)
         # Save
-        if Config.SAVE_WHOLE and self.save_function != None:
+        if Config.SAVE_WHOLE and self.save_function is not None:
             self.function_block.add_func(self.save_function)

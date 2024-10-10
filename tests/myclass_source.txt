@@ -1,0 +1,9 @@
+class MyClass:
+    """This is a sample class for demonstration."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def greet(self):
+        """This method prints a greeting."""
+        return f"Hello, {self.name}!"

@@ -351,31 +351,31 @@ ELAPSED TIME: {message}
         def animate(iteration):
             ax_all.cla()
             ax_all.dist = 4
-            # if self.Config.INWARD_DIFFUSION:
-            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     if np.any(items):
-            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2)
-            #
-            #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-            #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-            #         items = np.array(self.c.fetchall())
-            #         if np.any(items):
-            #             ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='deeppink',
-            #                            s=self.cell_size * (72. / fig.dpi) ** 2)
-            if self.Config.OUTWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
+            if self.Config.INWARD_DIFFUSION:
+                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
                 if np.any(items):
-                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='g',
+                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
                                    s=self.cell_size * (72. / fig.dpi) ** 2)
-                if self.Config.ACTIVES.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
+
+                if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
+                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
-                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkorange',
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='deeppink',
                                        s=self.cell_size * (72. / fig.dpi) ** 2)
+            # if self.Config.OUTWARD_DIFFUSION:
+            #     self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     if np.any(items):
+            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='g',
+            #                        s=self.cell_size * (72. / fig.dpi) ** 2)
+            #     if self.Config.ACTIVES.SECONDARY_EXISTENCE:
+            #         self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         if np.any(items):
+            #             ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='darkorange',
+            #                            s=self.cell_size * (72. / fig.dpi) ** 2)
             # if self.Config.COMPUTE_PRECIPITATION:
             #     self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
             #     items = np.array(self.c.fetchall())

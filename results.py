@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 # plot_kinetics(np.arange(100), with_kinetic=True)
-# layers = np.arange(0, 10, 1)
+# layers = np.arange(0, 25, 1)
 # plot_kinetics(layers, with_kinetic=True)
 
 root = tk.Tk()
