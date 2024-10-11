@@ -38,7 +38,6 @@ if __name__ == '__main__':
             # self.save_function = self.save_results_only_prod_prime
             self.save_function = None
 
-
     source_code = inspect.getsource(NewSystem)
     Config.INITIAL_SCRIPT += source_code
 
