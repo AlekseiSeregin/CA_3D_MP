@@ -119,7 +119,7 @@ if __name__ == "__main__":
     #
     #     some = consolidated_data[closest_key]
     #     print()
-    layers = np.arange(0, 102, 1)
+    layers = np.arange(0, 99, 1)
 
     # layers = [0, 1, 2, 3, 4, 5]
     # Specify the layers you want to plot

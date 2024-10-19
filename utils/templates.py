@@ -87,6 +87,7 @@ class CaseRef:
         self.precip_3d_init_shm = None
         self.precip_3d_init_shm_mdata = None
 
+
     def close_shms(self):
         self.first.close_and_unlink_shared_memory()
         self.second.close_and_unlink_shared_memory()
@@ -114,6 +115,8 @@ class CaseRef:
         np.add(self.accumulated_products, self.third.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
         np.add(self.accumulated_products, self.fourth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
         np.add(self.accumulated_products, self.fifth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
+
+
 
 
 DEFAULT_PARAM = {

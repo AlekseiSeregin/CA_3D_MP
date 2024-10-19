@@ -6,3 +6,6 @@ def fix_full_cells(array_3d, full_array_3d, new_precip, oxid_numb):
     indexes = np.where(current_precip == oxid_numb)[0]
     full_precip = new_precip[:, indexes]
     full_array_3d[full_precip[0], full_precip[1], full_precip[2]] = True
+
+def dummy(*args, **kwargs):
+    pass

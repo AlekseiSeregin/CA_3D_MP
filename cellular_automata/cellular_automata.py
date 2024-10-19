@@ -1,7 +1,4 @@
 import sys
-
-import numpy as np
-
 import utils
 import multiprocessing
 from .nes_for_mp import *
@@ -91,9 +88,9 @@ class CellularAutomata:
         # self.TdDATA.fetch_look_up_from_file()
         # self.curr_look_up = None
 
-        self.KinDATA = kin_data.KinDATA("LUT_NiCr5.pkl")
-        self.KinDATA.fetch_look_up_from_file()
-        self.curr_look_up = None
+        # self.KinDATA = kin_data.KinDATA("LUT_NiCr5.pkl")
+        # self.KinDATA.fetch_look_up_from_file()
+        # self.curr_look_up = None
 
 
         self.prev_stab_count = 0
