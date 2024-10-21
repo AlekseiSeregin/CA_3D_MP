@@ -377,8 +377,6 @@ class OxidantElem:
         dirs -= 1
         self.dirs = dirs
 
-
-
         self.current_count = 0
         self.fill_first_page()
 
@@ -433,7 +431,6 @@ class OxidantElem:
         self.dirs[:, temp_ind] = np.roll(self.dirs[:, temp_ind], 1, axis=0)
         temp_ind = np.array(np.where((randomise > self.p1_range) & (randomise <= self.p2_range))[0], dtype=np.uint32)
         self.dirs[:, temp_ind] = np.roll(self.dirs[:, temp_ind], 1, axis=0)
-        self.dirs[:, temp_ind] *= -1
         temp_ind = np.array(np.where((randomise > self.p2_range) & (randomise <= self.p3_range))[0], dtype=np.uint32)
         self.dirs[:, temp_ind] = np.roll(self.dirs[:, temp_ind], 2, axis=0)
         temp_ind = np.array(np.where((randomise > self.p3_range) & (randomise <= self.p4_range))[0], dtype=np.uint32)
@@ -441,7 +438,6 @@ class OxidantElem:
         self.dirs[:, temp_ind] *= -1
         temp_ind = np.array(np.where((randomise > self.p4_range) & (randomise <= self.p_r_range))[0], dtype=np.uint32)
         self.dirs[:, temp_ind] *= -1
-
         self.cells = np.add(self.cells, self.dirs, casting="unsafe")
         # adjusting a coordinates of side points for correct shifting
         ind = np.where(self.cells[2] < 0)[0]
@@ -453,12 +449,10 @@ class OxidantElem:
         self.cells = np.delete(self.cells, ind, 1)
         self.dirs = np.delete(self.dirs, ind, 1)
         # __________________________________________
-
         self.cells[0, np.where(self.cells[0] <= -1)] = self.cells_per_axis - 1
         self.cells[0, np.where(self.cells[0] >= self.cells_per_axis)] = 0
         self.cells[1, np.where(self.cells[1] <= -1)] = self.cells_per_axis - 1
         self.cells[1, np.where(self.cells[1] >= self.cells_per_axis)] = 0
-
         ind = np.where(self.cells[2] >= self.cells_per_axis)
         # closed right bound (reflection)____________
         # self.cells[2, ind] = self.cells_per_axis - 2
@@ -468,7 +462,6 @@ class OxidantElem:
         self.cells = np.delete(self.cells, ind, 1)
         self.dirs = np.delete(self.dirs, ind, 1)
         # ___________________________________________
-
         self.current_count = len(np.where(self.cells[2] == 0)[0])
         self.fill_first_page()
 
@@ -916,12 +909,7 @@ class OxidantElem:
         self.fill_first_page()
         # ___________________________________
 
-    def fill_first_page(self, time=0):
-        # if time > 0:
-        #     delt = self.n_per_page * (0.00186339 * (time**0.5))
-        #     new_n_per_page = int(self.n_per_page - delt)
-        # else:
-        #     new_n_per_page = self.n_per_page
+    def fill_first_page(self):
         # generating new particles on the diffusion surface (X = 0)
         adj_cells_pro_page = self.n_per_page - self.current_count
         if adj_cells_pro_page > 0:
@@ -930,15 +918,11 @@ class OxidantElem:
             # appending new generated particles as a ballistic ones to cells1
             self.cells = np.concatenate((self.cells, new_in_page), axis=1)
             # appending new direction vectors to dirs
-
-            new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], adj_cells_pro_page)
-            new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-            new_dirs -= 1
-
-
-            # new_dirs = np.zeros((3, adj_cells_pro_page), dtype=np.byte)
-            # new_dirs[2, :] = 1
-
+            # new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], adj_cells_pro_page)
+            # new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
+            # new_dirs -= 1
+            new_dirs = np.zeros((3, adj_cells_pro_page), dtype=np.byte)
+            new_dirs[2, :] = 1
             self.dirs = np.concatenate((self.dirs, new_dirs), axis=1)
 
     def transform_to_3d(self):

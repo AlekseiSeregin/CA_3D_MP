@@ -620,14 +620,14 @@ ELAPSED TIME: {message}
             # # Plot the plane
             # ax_all.plot_surface(X, Y, Z, color='r', alpha=0.5, zorder=0)  # Set alpha to a value between 0 and 1 for transparency
 
-            # if self.Config.INWARD_DIFFUSION:
-            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     if np.any(items):
-            #         items = items * rescale_factor
-            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
-            #                        alpha=self.alpha)
+            if self.Config.INWARD_DIFFUSION:
+                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                if np.any(items):
+                    items = items * rescale_factor
+                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
+                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
 
             #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
             #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
@@ -1267,20 +1267,20 @@ ELAPSED TIME: {message}
             quaternary_product_mass = np.zeros(self.axlim, dtype=int)
             quaternary_product_eq_mat_moles = np.zeros(self.axlim, dtype=int)
 
-            # if self.Config.INWARD_DIFFUSION:
-            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     inward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
-            #     inward_moles = inward * self.Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
-            #     inward_mass = inward * self.Config.OXIDANTS.PRIMARY.MASS_PER_CELL
-            #
-            #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-            #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-            #         items = np.array(self.c.fetchall())
-            #         sinward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
-            #         sinward_moles = sinward * self.Config.OXIDANTS.SECONDARY.MOLES_PER_CELL
-            #         sinward_mass = sinward * self.Config.OXIDANTS.SECONDARY.MASS_PER_CELL
-            #
+            if self.Config.INWARD_DIFFUSION:
+                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                inward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
+                inward_moles = inward * self.Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
+                inward_mass = inward * self.Config.OXIDANTS.PRIMARY.MASS_PER_CELL
+
+                if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
+                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    sinward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
+                    sinward_moles = sinward * self.Config.OXIDANTS.SECONDARY.MOLES_PER_CELL
+                    sinward_mass = sinward * self.Config.OXIDANTS.SECONDARY.MASS_PER_CELL
+
             if self.Config.OUTWARD_DIFFUSION:
                 self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
@@ -1758,12 +1758,12 @@ ELAPSED TIME: {message}
                 diff_out = self.Config.ACTIVES.PRIMARY.DIFFUSION_COEFFICIENT
 
                 analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.Config.SIM_TIME)))
-                analytical_concentration_out = (y_max_out / 2) * (1 - special.erf((- x + 0.0005) / (2 * sqrt(
-                    diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
+                # analytical_concentration_out = (y_max_out / 2) * (1 - special.erf((- x + 0.0005) / (2 * sqrt(
+                #     diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
 
                 # ax1.set_ylim(0, y_max + y_max * 0.2)
                 # ax2.set_ylim(0, y_max_out + y_max_out * 0.2)
-                ax2.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
+                # ax2.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
                 ax1.plot(x, analytical_concentration, color='r', linewidth=1.5)
         else:
             csfont = {'fontname': 'Times New Roman'}
@@ -1814,10 +1814,10 @@ ELAPSED TIME: {message}
                 analytical_concentration_out = (y_max_out / 2) * (1 - special.erf((- x + 0.00025) / (2 * sqrt(
                     diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
 
-                # ax.set_ylim(0, y_max + y_max * 0.2)
-                ax.set_ylim(0, y_max_out + y_max_out * 0.1)
-                ax.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
-                # ax.plot(x, analytical_concentration, color='r', linewidth=1.5)
+                ax.set_ylim(0, y_max + y_max * 0.2)
+                # ax.set_ylim(0, y_max_out + y_max_out * 0.1)
+                # ax.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
+                ax.plot(x, analytical_concentration, color='r', linewidth=1.5)
 
 
             # if analytic_sol_sand:

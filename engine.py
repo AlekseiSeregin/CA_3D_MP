@@ -342,15 +342,10 @@ class SimulationConfigurator:
         self.begin = time.time()
         for self.c_automata.iteration in progressbar.progressbar(range(Config.N_ITERATIONS)):
             if keyboard.is_pressed('ctrl+g+m'):
-                # raise Exception("This is a custom error message.")
                 break
             self.function_block.execute()
-            # self.c_automata.precip_func()
-            # self.c_automata.decomposition()
             # self.c_automata.diffusion_inward()
-            # self.c_automata.diffusion_outward()
-            # self.save_results_only_prod_prime()
-            # self.save_function()
+            # self.save_results_only_inw()
 
         end = time.time()
         self.elapsed_time = (end - self.begin)
@@ -358,11 +353,7 @@ class SimulationConfigurator:
         self.db.conn.commit()
 
     def init_inward(self):
-        # self.ca.primary_oxidant = elements.OxidantElem(Config.OXIDANTS.PRIMARY, self.utils)
-        # self.ca.cases.first.oxidant = self.ca.primary_oxidant
         self.cases.first.oxidant = elements.OxidantElem(Config.OXIDANTS.PRIMARY, self.utils)
-
-        # self.ca.cases.second.oxidant = self.ca.primary_oxidant
         self.cases.second.oxidant = self.cases.first.oxidant
 
         self.cases.first_mp.oxidant_c3d_shm_mdata = self.cases.first.oxidant.c3d_shm_mdata
@@ -378,17 +369,12 @@ class SimulationConfigurator:
 
         # ---------------------------------------------------
         if Config.OXIDANTS.SECONDARY_EXISTENCE:
-            # self.ca.secondary_oxidant = elements.OxidantElem(Config.OXIDANTS.SECONDARY, self.utils)
             self.cases.third.oxidant = elements.OxidantElem(Config.OXIDANTS.SECONDARY, self.utils)
-
-            # self.cases.third.oxidant = self.ca.secondary_oxidant
             self.cases.fourth.oxidant = self.cases.third.oxidant
-
             self.cases.third_mp.oxidant_c3d_shm_mdata = self.cases.third.oxidant.c3d_shm_mdata
             self.cases.fourth_mp.oxidant_c3d_shm_mdata = self.cases.third.oxidant.c3d_shm_mdata
 
     def init_outward(self):
-        # self.ca.primary_active = elements.ActiveElem(Config.ACTIVES.PRIMARY)
         self.cases.first.active = elements.ActiveElem(Config.ACTIVES.PRIMARY)
         self.cases.third.active = self.cases.first.active
         # ---------------------------------------------------
@@ -407,7 +393,6 @@ class SimulationConfigurator:
 
         # ---------------------------------------------------
         if Config.ACTIVES.SECONDARY_EXISTENCE:
-            # self.secondary_active = elements.ActiveElem(Config.ACTIVES.SECONDARY)
             self.cases.second.active = elements.ActiveElem(Config.ACTIVES.SECONDARY)
             self.cases.fourth.active = self.cases.second.active
             # ---------------------------------------------------

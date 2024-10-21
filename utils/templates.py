@@ -87,7 +87,6 @@ class CaseRef:
         self.precip_3d_init_shm = None
         self.precip_3d_init_shm_mdata = None
 
-
     def close_shms(self):
         self.first.close_and_unlink_shared_memory()
         self.second.close_and_unlink_shared_memory()
