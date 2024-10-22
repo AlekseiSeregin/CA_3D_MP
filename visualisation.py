@@ -1842,12 +1842,12 @@ ELAPSED TIME: {message}
 
         # plt.savefig(f'W:/SIMCA/test_runs_data/{iteration}.jpeg', dpi=500)
         #
-        for x_pos, inw, otw, soutw, pp, sp, tp, qp, qip in zip(x, inward, outward, soutward, primary_product, secondary_product, ternary_product, quaternary_product, quint_product):
-            print(x_pos * 1000000, inw, otw, soutw, pp, sp, tp, qp, qip, sep=" ")
+        # for x_pos, inw, otw, soutw, pp, sp, tp, qp, qip in zip(x, inward, outward, soutward, primary_product, secondary_product, ternary_product, quaternary_product, quint_product):
+        #     print(x_pos * 1000000, inw, otw, soutw, pp, sp, tp, qp, qip, sep=" ")
             # print(x_pos * 1000000, " ", inw)
 
-        # for inw in inward:
-        #     print(inw)
+        for x_pos, inw, ac in zip(x, inward, analytical_concentration):
+            print(x_pos * 1000000, inw, ac, sep=" ")
 
         plt.show()
 
