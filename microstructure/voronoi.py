@@ -22,7 +22,7 @@ class VoronoiMicrostructure:
         self.ca_edges = None
         self.ca_faces = None
 
-    def enerate_voronoi_3d(self, number_of_grains, periodic=False, seeds=None):
+    def generate_voronoi_3d(self, number_of_grains, periodic=False, seeds=None):
         self.divisor = int(self.n_cells_per_axis / 0.5)
         if seeds is None:
             seeds = np.random.random_sample((number_of_grains, 3))

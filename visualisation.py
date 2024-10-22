@@ -29,7 +29,7 @@ class Visualisation:
         self.utils = utils.Utils()
         self.generate_param_from_db()
         self.cell_size_full = 30
-        self.cell_size = 30
+        self.cell_size = 5
         self.linewidth_f = 0.1
         self.linewidth = 0.5
         self.alpha = 1

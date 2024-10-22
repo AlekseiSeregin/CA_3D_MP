@@ -92,7 +92,6 @@ class CellularAutomata:
         # self.KinDATA.fetch_look_up_from_file()
         # self.curr_look_up = None
 
-
         self.prev_stab_count = 0
 
         self.precipitation_stride = Config.STRIDE * Config.STRIDE_MULTIPLIER

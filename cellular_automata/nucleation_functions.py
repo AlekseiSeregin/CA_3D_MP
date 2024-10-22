@@ -143,15 +143,6 @@ def ci_single(cur_case, seeds, oxidant, full_3d):
 
 
 def ci_multi(cur_case, seeds, oxidant, full_3d):
-    """
-    Check intersections between the seeds neighbourhood and the coordinates of inward particles only.
-    Compute which seed will become a precipitation and which inward particles should be deleted
-    according to threshold_inward conditions. This is a simplified version of the check_intersection() function
-    where threshold_outward is equal to 1, so there is no need to check intersection with OUT arrays!
-
-    :param seeds: array of seeds coordinates
-    """
-
     shm_p = shared_memory.SharedMemory(name=cur_case.product_c3d_shm_mdata.name)
     product = np.ndarray(cur_case.product_c3d_shm_mdata.shape, dtype=cur_case.product_c3d_shm_mdata.dtype,
                          buffer=shm_p.buf)
