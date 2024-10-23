@@ -7,7 +7,8 @@ if __name__ == '__main__':
     class NewSystem(SimulationConfigurator):
         def __init__(self):
             super().__init__()
-            self.c_automata.cases.first.oxidant.diffuse = self.cases.first.oxidant.diffuse_bulk
+            # self.c_automata.cases.first.oxidant.diffuse = self.cases.first.oxidant.diffuse_bulk
+            self.c_automata.cases.first.active.diffuse = elements.diffuse_bulk_mp
 
             self.c_automata.cur_case = self.cases.first
             self.c_automata.cur_case_mp = self.cases.first_mp

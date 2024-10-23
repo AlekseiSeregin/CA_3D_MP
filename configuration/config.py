@@ -46,7 +46,7 @@ class Config:
     # primary actives
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Cr in Ni Krupp"
-    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.025
+    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.15
     ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.2
     # secondary actives
     # ACTIVES.SECONDARY.ELEMENT = "Al"
@@ -71,13 +71,13 @@ class Config:
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 1002  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 100000  # must be >= n_cells_per_axis
-    STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
+    N_CELLS_PER_AXIS = 501  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_ITERATIONS = 1000  # must be >= n_cells_per_axis
+    STRIDE = 1  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
-    SIM_TIME = 3600  # [sek]
-    SIZE = 600 * (10 ** -6)  # [m]
+    SIM_TIME = 720000  # [sek]
+    SIZE = 500 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 1
@@ -93,8 +93,8 @@ class Config:
     ZETTA_ZERO = 1 * (10 ** -6)  # [m]
     ZETTA_FINAL = 50 * (10 ** -6)  # [m]
 
-    INWARD_DIFFUSION = True
-    OUTWARD_DIFFUSION = False
+    INWARD_DIFFUSION = False
+    OUTWARD_DIFFUSION = True
     COMPUTE_PRECIPITATION = False
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = False
@@ -104,10 +104,10 @@ class Config:
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 1
+    NUMBER_OF_PROCESSES = 16
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 4
-    MAX_TASK_PER_CHILD = 50000
+    MAX_TASK_PER_CHILD = 10000
     BUFF_SIZE_CONST_ELEM = 1.5
 
     # PROBABILITIES_______________________________________________________________

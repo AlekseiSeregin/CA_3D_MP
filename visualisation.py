@@ -29,7 +29,7 @@ class Visualisation:
         self.utils = utils.Utils()
         self.generate_param_from_db()
         self.cell_size_full = 30
-        self.cell_size = 5
+        self.cell_size = 30
         self.linewidth_f = 0.1
         self.linewidth = 0.5
         self.alpha = 1
@@ -1810,14 +1810,14 @@ ELAPSED TIME: {message}
                 diff_in = self.Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
                 diff_out = self.Config.ACTIVES.PRIMARY.DIFFUSION_COEFFICIENT
 
-                analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.Config.SIM_TIME)))
+                # analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.Config.SIM_TIME)))
                 analytical_concentration_out = (y_max_out / 2) * (1 - special.erf((- x + 0.00025) / (2 * sqrt(
                     diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
 
-                ax.set_ylim(0, y_max + y_max * 0.2)
+                # ax.set_ylim(0, y_max + y_max * 0.2)
                 # ax.set_ylim(0, y_max_out + y_max_out * 0.1)
-                # ax.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
-                ax.plot(x, analytical_concentration, color='r', linewidth=1.5)
+                ax.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
+                # ax.plot(x, analytical_concentration, color='r', linewidth=1.5)
 
 
             # if analytic_sol_sand:
@@ -1846,8 +1846,8 @@ ELAPSED TIME: {message}
         #     print(x_pos * 1000000, inw, otw, soutw, pp, sp, tp, qp, qip, sep=" ")
             # print(x_pos * 1000000, " ", inw)
 
-        for x_pos, inw, ac in zip(x, inward, analytical_concentration):
-            print(x_pos * 1000000, inw, ac, sep=" ")
+        for x_pos, out, ac in zip(x, outward, analytical_concentration_out):
+            print(x_pos * 1000000, out, ac, sep=" ")
 
         plt.show()
 

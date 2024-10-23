@@ -377,6 +377,12 @@ class SimulationConfigurator:
     def init_outward(self):
         self.cases.first.active = elements.ActiveElem(Config.ACTIVES.PRIMARY)
         self.cases.third.active = self.cases.first.active
+
+        self.cases.first_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
+        self.cases.second_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
+        self.cases.third_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
+        self.cases.fourth_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
+        self.cases.fifth_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
         # ---------------------------------------------------
         # c3d
         self.cases.first_mp.active_c3d_shm_mdata = self.cases.first.active.c3d_shm_mdata

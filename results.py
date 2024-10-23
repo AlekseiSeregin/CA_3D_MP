@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 # plot_kinetics(np.arange(100), with_kinetic=True)
-# layers = np.arange(0, 25, 1)
+layers = np.arange(0, 100, 1)
 # layers = (0, 1, 15)
 # plot_kinetics(layers, with_kinetic=True)
 
