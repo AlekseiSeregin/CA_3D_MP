@@ -28,10 +28,10 @@ class Visualisation:
         self.oxid_numb = None
         self.utils = utils.Utils()
         self.generate_param_from_db()
-        self.cell_size_full = 30
-        self.cell_size = 30
+        self.cell_size_full = 5
+        self.cell_size = 5
         self.linewidth_f = 0.1
-        self.linewidth = 0.5
+        self.linewidth = 0.2
         self.alpha = 1
         self.cm = {1: np.array([255, 200, 200])/255.0,
                    2: np.array([255, 75, 75])/255.0,
@@ -636,14 +636,14 @@ ELAPSED TIME: {message}
             #             ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='deeppink',
             #                            s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
             #                        alpha=self.alpha)
-            # if self.Config.OUTWARD_DIFFUSION:
-            #     self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     if np.any(items):
-            #         items = items * rescale_factor
-            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='g',
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
-            #                        alpha=self.alpha)
+            if self.Config.OUTWARD_DIFFUSION:
+                self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                if np.any(items):
+                    items = items * rescale_factor
+                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='g',
+                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
             #     if self.Config.ACTIVES.SECONDARY_EXISTENCE:
             #         self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
             #         items = np.array(self.c.fetchall())
@@ -770,8 +770,8 @@ ELAPSED TIME: {message}
             ax_all.set_ylim3d(0, self.axlim * rescale_factor)
             ax_all.set_zlim3d(0, self.axlim * rescale_factor)
             if const_cam_pos:
-                ax_all.azim = -43
-                ax_all.elev = 21
+                ax_all.azim = -131
+                ax_all.elev = 17
                 ax_all.dist = 2
 
         cm = 1 / 2.54  # centimeters in inches
@@ -780,7 +780,8 @@ ELAPSED TIME: {message}
         # plt.savefig(f'C:/test_runs_data/{iteration}.jpeg')
         # plt.savefig(f"//juno/homes/user/aseregin/Desktop/simuls/{iteration}.jpeg")
 
-        csfont = {'fontname': 'Times New Roman'}
+        # csfont = {'fontname': 'Times New Roman'}
+        csfont = {'fontname': 'Arial'}
         # # # Rescale the axis values
         step = new_axlim / 5
         ticks = np.arange(0, new_axlim + rescale_factor, step)
@@ -796,11 +797,11 @@ ELAPSED TIME: {message}
 
         # Get the tick labels and set font properties
         for tick in ax_all.get_xticklabels():
-            tick.set_fontname('Times New Roman')
+            tick.set_fontname('Arial')
         for tick in ax_all.get_yticklabels():
-            tick.set_fontname('Times New Roman')
+            tick.set_fontname('Arial')
         for tick in ax_all.get_zticklabels():
-            tick.set_fontname('Times New Roman')
+            tick.set_fontname('Arial')
 
         ax_all.set_xlabel("X [µm]", **csfont, fontsize=f_size*cm, labelpad=20)
         ax_all.set_ylabel("Y [µm]", **csfont, fontsize=f_size*cm, labelpad=20)
@@ -1811,13 +1812,13 @@ ELAPSED TIME: {message}
                 diff_out = self.Config.ACTIVES.PRIMARY.DIFFUSION_COEFFICIENT
 
                 # analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.Config.SIM_TIME)))
-                analytical_concentration_out = (y_max_out / 2) * (1 - special.erf((- x + 0.00025) / (2 * sqrt(
+                analytical_concentration = (y_max_out / 2) * (1 - special.erf((- x + 0.0003) / (2 * sqrt(
                     diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
 
                 # ax.set_ylim(0, y_max + y_max * 0.2)
                 # ax.set_ylim(0, y_max_out + y_max_out * 0.1)
-                ax.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
-                # ax.plot(x, analytical_concentration, color='r', linewidth=1.5)
+                ax.plot(x, analytical_concentration, color='r', linewidth=1.5)
+                # ax.plot(x, analytical_concentration_out, color='r', linewidth=1.5)
 
 
             # if analytic_sol_sand:
@@ -1846,8 +1847,8 @@ ELAPSED TIME: {message}
         #     print(x_pos * 1000000, inw, otw, soutw, pp, sp, tp, qp, qip, sep=" ")
             # print(x_pos * 1000000, " ", inw)
 
-        for x_pos, out, ac in zip(x, outward, analytical_concentration_out):
-            print(x_pos * 1000000, out, ac, sep=" ")
+        # for x_pos, out, ac in zip(x, outward, analytical_concentration):
+        #     print(x_pos * 1000000, out, ac, sep=" ")
 
         plt.show()
 

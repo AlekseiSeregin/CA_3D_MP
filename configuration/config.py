@@ -12,8 +12,8 @@ class Config:
 
     PRODUCTS = ProdGroups()
     PRODUCTS.PRIMARY = ProdInput()
-    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 1
-    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 1
+    # PRODUCTS.PRIMARY.THRESHOLD_INWARD = 1
+    # PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 1
 
     PRODUCTS.SECONDARY = ProdInput()
     # PRODUCTS.SECONDARY.THRESHOLD_INWARD = 3
@@ -71,13 +71,13 @@ class Config:
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 501  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 1000  # must be >= n_cells_per_axis
+    N_CELLS_PER_AXIS = 1002  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_ITERATIONS = 100000  # must be >= n_cells_per_axis
     STRIDE = 1  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 41
-    SIM_TIME = 720000  # [sek]
-    SIZE = 500 * (10 ** -6)  # [m]
+    SIM_TIME = 3600  # [sek]
+    SIZE = 600 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 1
@@ -93,22 +93,23 @@ class Config:
     ZETTA_ZERO = 1 * (10 ** -6)  # [m]
     ZETTA_FINAL = 50 * (10 ** -6)  # [m]
 
-    INWARD_DIFFUSION = False
-    OUTWARD_DIFFUSION = True
+    INWARD_DIFFUSION = True
+    OUTWARD_DIFFUSION = False
     COMPUTE_PRECIPITATION = False
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = False
     FULL_CELLS = False
-    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
+    SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 16
+    NUMBER_OF_PROCESSES = 23
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 4
     MAX_TASK_PER_CHILD = 10000
     BUFF_SIZE_CONST_ELEM = 1.5
+    TERMINATION_COMMAND = 'ctrl+g+m'
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
@@ -119,38 +120,38 @@ class Config:
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.01
-    PROBABILITIES.PRIMARY.p0_f = 1
-    PROBABILITIES.PRIMARY.p0_A_const = 1
-    PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.3
-    PROBABILITIES.PRIMARY.p1_f = 1
-    PROBABILITIES.PRIMARY.p1_A_const = 1
-    PROBABILITIES.PRIMARY.p1_B_const = 1
-    PROBABILITIES.PRIMARY.global_A = 1
-    PROBABILITIES.PRIMARY.global_B = None
-    PROBABILITIES.PRIMARY.global_B_f = -20
-    PROBABILITIES.PRIMARY.max_neigh_numb = None
-    PROBABILITIES.PRIMARY.nucl_adapt_function = 5
-    # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 0.01
-    PROBABILITIES.PRIMARY.p0_d_f = 1
-    PROBABILITIES.PRIMARY.p0_d_A_const = 1
-    PROBABILITIES.PRIMARY.p0_d_B_const = 5
-    PROBABILITIES.PRIMARY.p1_d = 0.005
-    PROBABILITIES.PRIMARY.p1_d_f = 1
-    PROBABILITIES.PRIMARY.p1_d_A_const = 1
-    PROBABILITIES.PRIMARY.p1_d_B_const = 10
-    PROBABILITIES.PRIMARY.p6_d = 1e-5
-    PROBABILITIES.PRIMARY.p6_d_f = 0.99
-    PROBABILITIES.PRIMARY.p6_d_A_const = 1
-    PROBABILITIES.PRIMARY.p6_d_B_const = 20
-    PROBABILITIES.PRIMARY.global_d_A = 1
-    PROBABILITIES.PRIMARY.global_d_B = None
-    PROBABILITIES.PRIMARY.global_d_B_f = -0.33
-    PROBABILITIES.PRIMARY.n = 2
-    PROBABILITIES.PRIMARY.bsf = 1
-    PROBABILITIES.PRIMARY.dissol_adapt_function = 3
+    # PROBABILITIES.PRIMARY.p0 = 0.01
+    # PROBABILITIES.PRIMARY.p0_f = 1
+    # PROBABILITIES.PRIMARY.p0_A_const = 1
+    # PROBABILITIES.PRIMARY.p0_B_const = 1
+    # PROBABILITIES.PRIMARY.p1 = 0.3
+    # PROBABILITIES.PRIMARY.p1_f = 1
+    # PROBABILITIES.PRIMARY.p1_A_const = 1
+    # PROBABILITIES.PRIMARY.p1_B_const = 1
+    # PROBABILITIES.PRIMARY.global_A = 1
+    # PROBABILITIES.PRIMARY.global_B = None
+    # PROBABILITIES.PRIMARY.global_B_f = -20
+    # PROBABILITIES.PRIMARY.max_neigh_numb = None
+    # PROBABILITIES.PRIMARY.nucl_adapt_function = 5
+    # # dissolution primary_________________________
+    # PROBABILITIES.PRIMARY.p0_d = 0.01
+    # PROBABILITIES.PRIMARY.p0_d_f = 1
+    # PROBABILITIES.PRIMARY.p0_d_A_const = 1
+    # PROBABILITIES.PRIMARY.p0_d_B_const = 5
+    # PROBABILITIES.PRIMARY.p1_d = 0.005
+    # PROBABILITIES.PRIMARY.p1_d_f = 1
+    # PROBABILITIES.PRIMARY.p1_d_A_const = 1
+    # PROBABILITIES.PRIMARY.p1_d_B_const = 10
+    # PROBABILITIES.PRIMARY.p6_d = 1e-5
+    # PROBABILITIES.PRIMARY.p6_d_f = 0.99
+    # PROBABILITIES.PRIMARY.p6_d_A_const = 1
+    # PROBABILITIES.PRIMARY.p6_d_B_const = 20
+    # PROBABILITIES.PRIMARY.global_d_A = 1
+    # PROBABILITIES.PRIMARY.global_d_B = None
+    # PROBABILITIES.PRIMARY.global_d_B_f = -0.33
+    # PROBABILITIES.PRIMARY.n = 2
+    # PROBABILITIES.PRIMARY.bsf = 1
+    # PROBABILITIES.PRIMARY.dissol_adapt_function = 3
     # ________________________
 
     # nucleation SECONDARY

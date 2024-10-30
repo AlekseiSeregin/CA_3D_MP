@@ -1,0 +1,251 @@
+OXIDANTS:
+    PRIMARY:
+        ELEMENT: O
+        DIFFUSION_CONDITION: O in Ni Krupp
+        MASS_CONCENTRATION: 0
+        CELLS_CONCENTRATION: 0.0006
+        DENSITY: 1
+        MOLAR_MASS: 0.016
+        DIFFUSION_COEFFICIENT: 2.8231080610996937e-12
+        PROBABILITIES: [0.0925704075298925, 0.185140815059785, 0.4445775548206451]
+        PROBABILITIES_2D: 0.9868854146203994
+        PROBABILITIES_SCALE: [0.004180521757818176, 0.974916869453091, 0.008361043515636268]
+        PROBABILITIES_INTERFACE: [0.00014691648120937484, 0.0002938329624187656, 0.9991185011127437]
+        N_PER_PAGE: 602
+        MOLES_PER_CELL: 3.989710585827984e-14
+        MASS_PER_CELL: 6.383536937324775e-16
+    SECONDARY:
+        ELEMENT: None
+        DIFFUSION_CONDITION: None
+        MASS_CONCENTRATION: 0
+        CELLS_CONCENTRATION: 0
+        DENSITY: 1
+        MOLAR_MASS: 1
+        DIFFUSION_COEFFICIENT: 1e-13
+        PROBABILITIES: [0.014204384470447945, 0.9147736931773125, 0.028408768940895723]
+        PROBABILITIES_2D: 0.01930479629214024
+        PROBABILITIES_SCALE: [0.09398425763715781, 0.4360944541770532, 0.18796851527431552]
+        N_PER_PAGE: 0
+        MOLES_PER_CELL: 0.0
+        MASS_PER_CELL: 0.0
+    SECONDARY_EXISTENCE: False
+ACTIVES:
+    PRIMARY:
+        ELEMENT: Cr
+        DIFFUSION_CONDITION: Cr in Ni Krupp
+        MASS_CONCENTRATION: 0.15
+        CELLS_CONCENTRATION: 0.2
+        DENSITY: 7140
+        MOLAR_MASS: 0.052
+        DIFFUSION_COEFFICIENT: 5.258262368514388e-15
+        ATOMIC_CONCENTRATION: 0.16611640411281955
+        N_PER_PAGE: 200801
+        PROBABILITIES: [0.000789396981772314, 0.995263618109366, 0.0015787939635446557]
+        T: 1.1052161920986452
+        n_ELEM: -0.10521619209864519
+        MOLES_PER_CELL: 2.6598070572186562e-14
+        MASS_PER_CELL: 1.383099669753701e-15
+        EQ_MATRIX_MOLES_PER_CELL: 2.939661827496306e-14
+        EQ_MATRIX_MASS_PER_CELL: 1.7255814927403319e-15
+    SECONDARY:
+        ELEMENT: None
+        DIFFUSION_CONDITION: None
+        MASS_CONCENTRATION: 0
+        CELLS_CONCENTRATION: 0
+        DENSITY: 1
+        MOLAR_MASS: 1
+        DIFFUSION_COEFFICIENT: 1e-13
+        ATOMIC_CONCENTRATION: 0.0
+        N_PER_PAGE: 0
+        PROBABILITIES: [0.014204384470447945, 0.9147736931773125, 0.028408768940895723]
+        T: 151754.68483816014
+        n_ELEM: -151753.68483816014
+        MOLES_PER_CELL: 0
+        MASS_PER_CELL: 0
+        EQ_MATRIX_MOLES_PER_CELL: 0.0
+        EQ_MATRIX_MASS_PER_CELL: 0.0
+    SECONDARY_EXISTENCE: False
+PRODUCTS:
+    PRIMARY:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+        MASS_PER_CELL: 2.0214533634861786e-15
+        MOLES_PER_CELL: 1.3299035286093281e-14
+        MOLES_PER_CELL_TC: 6.64951764304664e-14
+        CONSTITUTION: Cr+O
+        OXIDATION_NUMBER: 1
+        LIND_FLAT_ARRAY: 6
+    SECONDARY:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+        MASS_PER_CELL: 6.383536937324775e-16
+        MOLES_PER_CELL: 0.0
+        MOLES_PER_CELL_TC: 0.0
+        CONSTITUTION: None+O
+    TERNARY:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+        MASS_PER_CELL: 1.383099669753701e-15
+        MOLES_PER_CELL: 2.6598070572186562e-14
+        MOLES_PER_CELL_TC: 5.3196141144373123e-14
+        CONSTITUTION: Cr+None
+    QUATERNARY:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+        MASS_PER_CELL: 0.0
+        MOLES_PER_CELL: 0
+        MOLES_PER_CELL_TC: 0
+        CONSTITUTION: None+None
+    QUINT:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+MAP_PRODUCTS_TO_ELEMENTS: True
+MATRIX:
+    ELEMENT: Ni
+    DIFFUSION_CONDITION: None
+    MASS_CONCENTRATION: 0
+    CELLS_CONCENTRATION: 0
+    DENSITY: 8908
+    MOLAR_MASS: 0.0587
+    MOLES_PER_CELL: 3.2583121935302574e-14
+    MASS_PER_CELL: 1.912629257602261e-15
+TEMPERATURE: 1100
+N_CELLS_PER_AXIS: 1002
+N_ITERATIONS: 100000
+STRIDE: 1
+STRIDE_MULTIPLIER: 50
+PRECIP_TRANSFORM_DEPTH: 41
+SIM_TIME: 3600
+SIZE: 0.0006
+SOL_PROD: 6.2500000000000005e-31
+PHASE_FRACTION_LIMIT: 1
+THRESHOLD_INWARD: 1
+THRESHOLD_OUTWARD: 1
+NEIGH_RANGE: 1
+N_BOOST_STEPS: 1
+PROD_INCR_CONST: 1e-05
+PROD_ERROR: 0.01
+ZETTA_ZERO: 1e-06
+ZETTA_FINAL: 4.9999999999999996e-05
+INWARD_DIFFUSION: True
+OUTWARD_DIFFUSION: False
+COMPUTE_PRECIPITATION: False
+SAVE_WHOLE: False
+DECOMPOSE_PRECIPITATIONS: False
+FULL_CELLS: False
+SAVE_PATH: C:/test_runs_data/
+SAVE_POST_PROCESSED_INPUT: True
+MULTIPROCESSING: True
+NUMBER_OF_PROCESSES: 23
+NUMBER_OF_DIVS_PER_PAGE: 1
+DEPTH_PER_DIV: 4
+MAX_TASK_PER_CHILD: 10000
+BUFF_SIZE_CONST_ELEM: 1.5
+TERMINATION_COMMAND: ctrl+g+m
+PROBABILITIES:
+    PRIMARY:
+        p0: None
+        p0_f: None
+        p0_A_const: None
+        p0_B_const: None
+        p1: None
+        p1_f: None
+        p1_A_const: None
+        p1_B_const: None
+        global_A: None
+        global_B: None
+        global_B_f: None
+        max_neigh_numb: None
+        nucl_adapt_function: None
+        p0_d: None
+        p0_d_f: None
+        p0_d_A_const: None
+        p0_d_B_const: None
+        p1_d: None
+        p1_d_f: None
+        p1_d_A_const: None
+        p1_d_B_const: None
+        p6_d: None
+        p6_d_f: None
+        p6_d_A_const: None
+        p6_d_B_const: None
+        global_d_A: None
+        global_d_B: None
+        global_d_B_f: None
+        bsf: None
+        dissol_adapt_function: None
+    SECONDARY:
+        p0: None
+        p0_f: None
+        p0_A_const: None
+        p0_B_const: None
+        p1: None
+        p1_f: None
+        p1_A_const: None
+        p1_B_const: None
+        global_A: None
+        global_B: None
+        global_B_f: None
+        max_neigh_numb: None
+        nucl_adapt_function: None
+        p0_d: None
+        p0_d_f: None
+        p0_d_A_const: None
+        p0_d_B_const: None
+        p1_d: None
+        p1_d_f: None
+        p1_d_A_const: None
+        p1_d_B_const: None
+        p6_d: None
+        p6_d_f: None
+        p6_d_A_const: None
+        p6_d_B_const: None
+        global_d_A: None
+        global_d_B: None
+        global_d_B_f: None
+        bsf: None
+        dissol_adapt_function: None
+GENERATED_VALUES:
+    TAU: 0.036
+    LAMBDA: 5.988023952095808e-07
+    KINETIC_KONST: 8.166666666666666e-07
+    inward_moles: 2.4018057726684463e-11
+    inward_mass: 3.8428892362695143e-13
+    sinward_moles: 0.0
+    sinward_mass: 0.0
+    outward_moles: 5.340919168965634e-09
+    outward_mass: 2.777277967862129e-10
+    outward_eq_mat_moles: 5.902870346230858e-09
+    soutward_moles: 0
+    soutward_mass: 0
+    soutward_eq_mat_moles: 0.0
+    matrix_moles: 2.681071440930067e-08
+    matrix_mass: 1.5737889358259493e-09
+    whole_moles: 3.217565163599299e-08
+    whole_mass: 1.8519010215357892e-09
+    inward_c_moles: 0.0007464668625333104
+    inward_c_mass: 0.00020751050901643707
+    sinward_c_moles: 0.0
+    sinward_c_mass: 0.0
+    outward_c_moles: 0.16599257194191724
+    outward_c_mass: 0.14996902834250403
+    soutward_c_moles: 0.0
+    soutward_c_mass: 0.0
+    matrix_c_moles: 0.8332609611955494
+    matrix_c_mass: 0.8498234611484795
+    max_gamma_min_one: 1.8337025551418302e+19
+    DB_ID: 1730288700
+    DB_PATH: C:/test_runs_data/1730288700.db
+    DATE_OF_CREATION: 2024-10-30 12:45:00
+COMMENT: This script simulates the inward diffusion of O in Ni
+INITIAL_SCRIPT: 
+    class NewSystem(SimulationConfigurator):
+        def __init__(self):
+            super().__init__()
+            self.c_automata.cases.first.oxidant.diffuse = self.c_automata.cases.first.oxidant.diffuse_bulk
+

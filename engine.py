@@ -19,6 +19,7 @@ class FunctionBlock:
 
 
 class SimulationConfigurator:
+
     """
     TODO: 2. Buffer reserve for cells array to Config!!
           3. DEFAULT_PARAMS in templates, move out or create different script for cases!
@@ -28,18 +29,21 @@ class SimulationConfigurator:
 
     Check list for functions:
     fix_init_precip - can be Dummy!
-
     """
 
     def __init__(self):
-        self.cases = utils.CaseRef()
         self.utils = utils.Utils()
         self.utils.generate_param()
+        self.cases = utils.CaseRef()
         self.c_automata = CellularAutomata(self.cases, self.utils)
 
         self.db = data_base.Database()
         self.begin = None
         self.elapsed_time = None
+
+        # Current case is set as first case by default
+        self.c_automata.cur_case = self.cases.first
+        self.c_automata.cur_case_mp = self.cases.first_mp
 
         # setting objects for inward diffusion
         if Config.INWARD_DIFFUSION:
@@ -47,13 +51,15 @@ class SimulationConfigurator:
         # setting objects for outward diffusion
         if Config.OUTWARD_DIFFUSION:
             self.init_outward()
-
+        # setting objects for precipitation
         if Config.COMPUTE_PRECIPITATION:
             self.init_product()
 
         self.function_block = FunctionBlock()
-        self.current_func = None
+        self.current_func = None #  Must be defined elsewhere
         self.save_function = None #  Must be defined elsewhere
+
+        self.termination_command = Config.TERMINATION_COMMAND
 
     def configurate_functions_gb(self):
         self.cases.first.microstructure = voronoi.VoronoiMicrostructure(Config.N_CELLS_PER_AXIS)
@@ -341,11 +347,9 @@ class SimulationConfigurator:
         self.construct_function_block()
         self.begin = time.time()
         for self.c_automata.iteration in progressbar.progressbar(range(Config.N_ITERATIONS)):
-            if keyboard.is_pressed('ctrl+g+m'):
+            if keyboard.is_pressed(self.termination_command):
                 break
             self.function_block.execute()
-            # self.c_automata.diffusion_inward()
-            # self.save_results_only_inw()
 
         end = time.time()
         self.elapsed_time = (end - self.begin)
@@ -378,11 +382,6 @@ class SimulationConfigurator:
         self.cases.first.active = elements.ActiveElem(Config.ACTIVES.PRIMARY)
         self.cases.third.active = self.cases.first.active
 
-        self.cases.first_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
-        self.cases.second_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
-        self.cases.third_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
-        self.cases.fourth_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
-        self.cases.fifth_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
         # ---------------------------------------------------
         # c3d
         self.cases.first_mp.active_c3d_shm_mdata = self.cases.first.active.c3d_shm_mdata
@@ -442,7 +441,6 @@ class SimulationConfigurator:
             self.init_case(self.cases.first, self.cases.first_mp, Config.PRODUCTS.PRIMARY)
 
     def init_case(self, case, case_mp, product_config):
-        case_mp.cells_per_axis = Config.N_CELLS_PER_AXIS
         # prod init
         case.product = elements.Product(product_config)
         case_mp.oxidation_number = case.product.oxidation_number
@@ -508,6 +506,7 @@ class SimulationConfigurator:
             self.cases.first.active.transform_to_3d(self.c_automata.curr_max_furthest)
             if Config.ACTIVES.SECONDARY_EXISTENCE:
                 self.cases.second.active.transform_to_3d(self.c_automata.curr_max_furthest)
+        print("SAVED!")
 
     def save_results_custom(self):
         if Config.STRIDE > Config.N_ITERATIONS:

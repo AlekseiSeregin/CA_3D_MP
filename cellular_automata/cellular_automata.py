@@ -40,8 +40,8 @@ class CellularAutomata:
         self.max_inside_neigh_number = 6 * self.primary_oxid_numb
         self.max_block_neigh_number = 7
 
-        self.disol_block_p = Config.PROBABILITIES.PRIMARY.p0_d ** Config.PROBABILITIES.PRIMARY.n
-        self.disol_p = Config.PROBABILITIES.PRIMARY.p0_d
+        # self.disol_block_p = Config.PROBABILITIES.PRIMARY.p0_d ** Config.PROBABILITIES.PRIMARY.n
+        # self.disol_p = Config.PROBABILITIES.PRIMARY.p0_d
 
         self.primary_fetch_ind = []
         self.secondary_fetch_ind = []

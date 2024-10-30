@@ -1,5 +1,5 @@
 import numpy as np
-
+from configuration import Config
 
 class CaseSetUp:
     def __init__(self):
@@ -63,7 +63,7 @@ class CaseSetUpMP:
         self.threshold_inward = None
         self.threshold_outward = None
 
-        self.cells_per_axis = None
+        self.cells_per_axis = Config.N_CELLS_PER_AXIS
 
 
 class CaseRef:
