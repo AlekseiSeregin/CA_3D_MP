@@ -10,8 +10,7 @@ if __name__ == '__main__':
 
     source_code = inspect.getsource(NewSystem)
     Config.INITIAL_SCRIPT += source_code
-    Config.COMMENT = "This script simulates the inward diffusion of O in Ni"
-
+    Config.COMMENT = "This script simulates inward diffusion of O in Ni"
     new_system = NewSystem()
 
     try:

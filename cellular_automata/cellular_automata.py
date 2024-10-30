@@ -2482,7 +2482,7 @@ class CellularAutomata:
 
     def diffusion_outward_mp(self):
         if (self.iteration + 1) % Config.STRIDE == 0:
-            # self.cur_case.active.transform_to_descards()  # UNCOMMENT!!!!!!!!!!
+            self.cur_case.active.transform_to_descards()  # UNCOMMENT!!!!!!!!!!
             chunk_size = self.cur_case.active.last_in_diff_arr // self.numb_of_proc
             remainder = self.cur_case.active.last_in_diff_arr % self.numb_of_proc
             indices = []

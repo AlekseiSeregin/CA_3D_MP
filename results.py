@@ -24,7 +24,7 @@ visualise.plot_3d(plot_separate=False, const_cam_pos=True)
 # for i in range(260, 301):
 #     visualise.plot_2d(plot_separate=False, slice_pos=i)
 
-visualise.plot_concentration(plot_separate=False, conc_type="cells", analytic_sol=False)
+visualise.plot_concentration(plot_separate=False, conc_type="cells", analytic_sol=True)
 # visualise.plot_concentration(plot_separate=False, conc_type="cells", analytic_sol=True, iteration=iter)
 # visualise.animate_concentration(conc_type="cells", analytic_sol=True)
 

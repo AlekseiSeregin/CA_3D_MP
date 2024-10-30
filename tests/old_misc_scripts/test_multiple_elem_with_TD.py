@@ -13,7 +13,7 @@ if __name__ == '__main__':
                               },
 
                   "active_element": {"primary": {"elem": "Cr",
-                                                 "diffusion_condition": "Cr in Ni Krupp",
+                                                 "diffusion_condition": "Cr in Ni diff couple Krupp",
                                                  "mass_concentration": 0.25,
                                                  "cells_concentration": 0.4},
                                      "secondary": {"elem": "Al",

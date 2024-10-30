@@ -2,6 +2,8 @@ from utils.numba_functions import *
 from configuration import Config
 from multiprocessing import shared_memory
 from cellular_automata.nes_for_mp import *
+import sys
+import random
 
 
 class ActiveElem:
@@ -38,31 +40,44 @@ class ActiveElem:
         self.c3d_shm_mdata = SharedMetaData(self.c3d_shared.name, self.extended_shape, np.ubyte)
         self.in_3D_flag = False
 
+        self.buffer_reserve = Config.BUFF_SIZE_CONST_ELEM
+        self.last_in_diff_arr = int(self.n_per_page * self.cells_per_axis)
+        self.diff_arr_buf_size = int(self.last_in_diff_arr * self.buffer_reserve)
+        self.diff_arr_shape = (3, self.diff_arr_buf_size)
+
+        # rand/approx concentration space fill
+        # ____________________________________________
+        if settings.CONC_PRECISION.lower() == 'rand':
+            self.last_in_diff_arr = int(self.n_per_page * self.cells_per_axis)
+            self.diff_arr_buf_size = int(self.last_in_diff_arr * self.buffer_reserve)
+            self.diff_arr_shape = (3, self.diff_arr_buf_size)
+            cells = np.random.randint(self.cells_per_axis, size=self.diff_arr_shape, dtype=np.short)
+        # ____________________________________________
+
         # exact concentration space fill
         # ___________________________________________
-        # self.cells = np.array([[], [], []], dtype=np.short)
-        # for plane_xind in range(self.cells_per_axis):
-        #     new_cells = np.array(random.sample(range(self.cells_per_axis**2), int(self.n_per_page)))
-        #     new_cells = np.array(np.unravel_index(new_cells, (self.cells_per_axis, self.cells_per_axis)))
-        #     new_cells = np.vstack((new_cells, np.full(len(new_cells[0]), plane_xind)))
-        #     self.cells = np.concatenate((self.cells, new_cells), 1)
-        # self.cells = np.array(self.cells, dtype=np.short)
-        # ____________________________________________
+        elif settings.CONC_PRECISION.lower() == 'exact':
+            ex_cells = np.array([[], [], []], dtype=np.short)
+            for plane_xind in range(self.cells_per_axis):
+                new_cells = np.array(random.sample(range(self.cells_per_axis**2), int(self.n_per_page)))
+                new_cells = np.array(np.unravel_index(new_cells, (self.cells_per_axis, self.cells_per_axis)))
+                new_cells = np.vstack((new_cells, np.full(len(new_cells[0]), plane_xind)))
+                ex_cells = np.concatenate((ex_cells, new_cells), 1)
 
-        # approx concentration space fill
+            self.last_in_diff_arr = len(ex_cells[0])
+            self.diff_arr_buf_size = int(self.last_in_diff_arr * self.buffer_reserve)
+            cells = np.random.randint(self.cells_per_axis, size=self.diff_arr_shape, dtype=np.short)
+            cells[:, :self.last_in_diff_arr] = ex_cells
         # ____________________________________________
-        buffer_reserve = Config.BUFF_SIZE_CONST_ELEM   # MUST BE PREDEFINED IN CONFIG!!!
-
-        self.last_in_diff_arr = int(self.n_per_page * self.cells_per_axis)
-        self.diff_arr_buf_size = int(self.last_in_diff_arr * buffer_reserve)
-
-        diff_arr_shape = (3, self.diff_arr_buf_size)
-        cells = np.random.randint(self.cells_per_axis, size=diff_arr_shape, dtype=np.short)
-        # ____________________________________________
+        else:
+            print("______________________________________________________________")
+            print("Wrong CONC_PRECISION value for outward element! (possible 'exact' or 'rand')!")
+            print("______________________________________________________________")
+            sys.exit()
 
         self.cells_shm = shared_memory.SharedMemory(create=True, size=cells.nbytes)
-        self.cells = np.ndarray(diff_arr_shape, dtype=np.short, buffer=self.cells_shm.buf)
-        self.cells_shm_mdata = SharedMetaData(self.cells_shm.name, diff_arr_shape, np.short)
+        self.cells = np.ndarray(self.diff_arr_shape, dtype=np.short, buffer=self.cells_shm.buf)
+        self.cells_shm_mdata = SharedMetaData(self.cells_shm.name, self.diff_arr_shape, np.short)
         np.copyto(self.cells, cells)
 
         # delete first and second page
@@ -84,9 +99,8 @@ class ActiveElem:
 
         # half space fill
         # ____________________________________________
-        if self.elem_name == "Cr":
-            ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < int(self.cells_per_axis / 2))
-            # ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < Config.N_CELLS_PER_AXIS / 2)[0]
+        if settings.SPACE_FILL == 'half':
+            ind_to_del = np.where(self.cells[2, :self.last_in_diff_arr] < int(self.cells_per_axis / 2))[0]
             to_move = np.delete(self.cells[:, :self.last_in_diff_arr], ind_to_del, axis=1)
             self.cells[:, :to_move.shape[1]] = to_move
             self.last_in_diff_arr = to_move.shape[1]
@@ -97,8 +111,8 @@ class ActiveElem:
         dirs -= 1
 
         self.dirs_shm = shared_memory.SharedMemory(create=True, size=dirs.nbytes)
-        self.dirs = np.ndarray(diff_arr_shape, dtype=np.byte, buffer=self.dirs_shm.buf)
-        self.dirs_shm_mdata = SharedMetaData(self.dirs_shm.name, diff_arr_shape, np.byte)
+        self.dirs = np.ndarray(self.diff_arr_shape, dtype=np.byte, buffer=self.dirs_shm.buf)
+        self.dirs_shm_mdata = SharedMetaData(self.dirs_shm.name, self.diff_arr_shape, np.byte)
         np.copyto(self.dirs, dirs)
 
         self.current_count = None
