@@ -28,8 +28,8 @@ class Visualisation:
         self.oxid_numb = None
         self.utils = utils.Utils()
         self.generate_param_from_db()
-        self.cell_size_full = 5
-        self.cell_size = 5
+        self.cell_size_full = 20
+        self.cell_size = 20
         self.linewidth_f = 0.1
         self.linewidth = 0.2
         self.alpha = 1
@@ -351,19 +351,19 @@ ELAPSED TIME: {message}
         def animate(iteration):
             ax_all.cla()
             ax_all.dist = 4
-            if self.Config.INWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
-                if np.any(items):
-                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
-                                   s=self.cell_size * (72. / fig.dpi) ** 2)
-
-                if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
-                    if np.any(items):
-                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='deeppink',
-                                       s=self.cell_size * (72. / fig.dpi) ** 2)
+            # if self.Config.INWARD_DIFFUSION:
+            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     if np.any(items):
+            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
+            #                        s=self.cell_size * (72. / fig.dpi) ** 2)
+            #
+            #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
+            #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         if np.any(items):
+            #             ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='deeppink',
+            #                            s=self.cell_size * (72. / fig.dpi) ** 2)
             # if self.Config.OUTWARD_DIFFUSION:
             #     self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
             #     items = np.array(self.c.fetchall())

@@ -79,7 +79,7 @@ class Config:
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 20
     SIM_TIME = 72000  # [sek]
-    SIZE = 100 * (10 ** -6)  # [m]
+    SIZE = 150 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 1
@@ -122,19 +122,19 @@ class Config:
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    # PROBABILITIES.PRIMARY.p0 = 0.01
-    # PROBABILITIES.PRIMARY.p0_f = 1
-    # PROBABILITIES.PRIMARY.p0_A_const = 1
-    # PROBABILITIES.PRIMARY.p0_B_const = 1
-    # PROBABILITIES.PRIMARY.p1 = 0.3
-    # PROBABILITIES.PRIMARY.p1_f = 1
-    # PROBABILITIES.PRIMARY.p1_A_const = 1
-    # PROBABILITIES.PRIMARY.p1_B_const = 1
-    # PROBABILITIES.PRIMARY.global_A = 1
-    # PROBABILITIES.PRIMARY.global_B = None
-    # PROBABILITIES.PRIMARY.global_B_f = -20
-    # PROBABILITIES.PRIMARY.max_neigh_numb = None
-    # PROBABILITIES.PRIMARY.nucl_adapt_function = 5
+    PROBABILITIES.PRIMARY.p0 = 0.001
+    PROBABILITIES.PRIMARY.p0_f = 1
+    PROBABILITIES.PRIMARY.p0_A_const = 1
+    PROBABILITIES.PRIMARY.p0_B_const = 1
+    PROBABILITIES.PRIMARY.p1 = 0.3
+    PROBABILITIES.PRIMARY.p1_f = 1
+    PROBABILITIES.PRIMARY.p1_A_const = 1
+    PROBABILITIES.PRIMARY.p1_B_const = 1
+    PROBABILITIES.PRIMARY.global_A = 1
+    PROBABILITIES.PRIMARY.global_B = None
+    PROBABILITIES.PRIMARY.global_B_f = -20
+    PROBABILITIES.PRIMARY.max_neigh_numb = None
+    PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # # dissolution primary_________________________
     # PROBABILITIES.PRIMARY.p0_d = 0.01
     # PROBABILITIES.PRIMARY.p0_d_f = 1

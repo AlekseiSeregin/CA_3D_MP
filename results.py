@@ -13,12 +13,12 @@ database_name = filedialog.askopenfilename()
 iter = 9999
 visualise = Visualisation(database_name)
 
-# visualise.animate_3d(animate_separate=False, const_cam_pos=False)
+visualise.animate_3d(animate_separate=False, const_cam_pos=False)
 
 visualise.plot_3d(plot_separate=False, const_cam_pos=True)
 # visualise.plot_3d(plot_separate=False, const_cam_pos=True, iteration=iter)
 
-# visualise.plot_2d(plot_separate=False)
+visualise.plot_2d(plot_separate=False)
 # visualise.plot_2d(plot_separate=False, iteration=iter)
 
 # for i in range(260, 301):

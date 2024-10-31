@@ -1,0 +1,275 @@
+OXIDANTS:
+    PRIMARY:
+        ELEMENT: O
+        DIFFUSION_CONDITION: O in Ni Krupp
+        MASS_CONCENTRATION: 0
+        CELLS_CONCENTRATION: 0.001
+        CONC_PRECISION: rand
+        SPACE_FILL: full
+        DENSITY: 1
+        MOLAR_MASS: 0.016
+        DIFFUSION_COEFFICIENT: 2.8231080610996937e-12
+        PROBABILITIES: [0.09014681247594616, 0.459119125144323, 0.18029362495189233]
+        PROBABILITIES_2D: 0.961135535521011
+        PROBABILITIES_SCALE: [0.0014019315974412722, 0.9915884104153524, 0.002803863194882461]
+        PROBABILITIES_INTERFACE: [0.000442528761165184, 0.000885057522330347, 0.9973448274330089]
+        N_PER_PAGE: 10
+        MOLES_PER_CELL: 4.744999667950063e-13
+        MASS_PER_CELL: 7.5919994687201e-15
+    SECONDARY:
+        ELEMENT: None
+        DIFFUSION_CONDITION: None
+        MASS_CONCENTRATION: 0
+        CELLS_CONCENTRATION: 0
+        CONC_PRECISION: rand
+        SPACE_FILL: full
+        DENSITY: 1
+        MOLAR_MASS: 1
+        DIFFUSION_COEFFICIENT: 1e-13
+        PROBABILITIES: [0.004896116738783415, 0.9706232995672995, 0.009792233477566747]
+        PROBABILITIES_2D: 0.0065710525052611385
+        PROBABILITIES_SCALE: [0.04162443588567284, 0.750253384685963, 0.08324887177134566]
+        N_PER_PAGE: 0
+        MOLES_PER_CELL: 0.0
+        MASS_PER_CELL: 0.0
+    SECONDARY_EXISTENCE: False
+ACTIVES:
+    PRIMARY:
+        ELEMENT: Al
+        DIFFUSION_CONDITION: Al in Ni Krupp
+        MASS_CONCENTRATION: 0.07
+        CELLS_CONCENTRATION: 0.2
+        CONC_PRECISION: exact
+        SPACE_FILL: full
+        DENSITY: 2700
+        MOLAR_MASS: 0.027
+        DIFFUSION_COEFFICIENT: 2.2164389765037816e-14
+        ATOMIC_CONCENTRATION: 0.14062767377391427
+        N_PER_PAGE: 2081
+        PROBABILITIES: [0.07671965667769057, 0.5396820599338565, 0.1534393133553812]
+        T: 1.5175468483816013
+        n_ELEM: -0.5175468483816013
+        MOLES_PER_CELL: 3.1633331119667084e-13
+        MASS_PER_CELL: 8.540999402310112e-15
+        EQ_MATRIX_MOLES_PER_CELL: 4.800506194446241e-13
+        EQ_MATRIX_MASS_PER_CELL: 2.8178971361399438e-14
+    SECONDARY:
+        ELEMENT: None
+        DIFFUSION_CONDITION: None
+        MASS_CONCENTRATION: 0
+        CELLS_CONCENTRATION: 0
+        CONC_PRECISION: rand
+        SPACE_FILL: full
+        DENSITY: 1
+        MOLAR_MASS: 1
+        DIFFUSION_COEFFICIENT: 1e-13
+        ATOMIC_CONCENTRATION: 0.0
+        N_PER_PAGE: 0
+        PROBABILITIES: [0.08340094369835813, 0.16680188739671625, 0.49959433780985124]
+        T: 151754.68483816014
+        n_ELEM: -151753.68483816014
+        MOLES_PER_CELL: 0
+        MASS_PER_CELL: 0
+        EQ_MATRIX_MOLES_PER_CELL: 0.0
+        EQ_MATRIX_MASS_PER_CELL: 0.0
+    SECONDARY_EXISTENCE: False
+PRODUCTS:
+    PRIMARY:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 1
+        THRESHOLD_OUTWARD: 1
+        MASS_PER_CELL: 1.6132998871030212e-14
+        MOLES_PER_CELL: 1.5816665559833542e-13
+        MOLES_PER_CELL_TC: 7.908332779916771e-13
+        CONSTITUTION: Al+O
+        OXIDATION_NUMBER: 1
+        LIND_FLAT_ARRAY: 6
+    SECONDARY:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+        MASS_PER_CELL: 7.5919994687201e-15
+        MOLES_PER_CELL: 0.0
+        MOLES_PER_CELL_TC: 0.0
+        CONSTITUTION: None+O
+    TERNARY:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+        MASS_PER_CELL: 8.540999402310112e-15
+        MOLES_PER_CELL: 3.1633331119667084e-13
+        MOLES_PER_CELL_TC: 6.326666223933417e-13
+        CONSTITUTION: Al+None
+    QUATERNARY:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+        MASS_PER_CELL: 0.0
+        MOLES_PER_CELL: 0
+        MOLES_PER_CELL_TC: 0
+        CONSTITUTION: None+None
+    QUINT:
+        PHASE_FRACTION_LIMIT: 0
+        THRESHOLD_INWARD: 0
+        THRESHOLD_OUTWARD: 0
+MAP_PRODUCTS_TO_ELEMENTS: True
+MATRIX:
+    ELEMENT: Ni
+    DIFFUSION_CONDITION: None
+    MASS_CONCENTRATION: 0
+    CELLS_CONCENTRATION: 0
+    CONC_PRECISION: rand
+    SPACE_FILL: full
+    DENSITY: 8908
+    MOLAR_MASS: 0.0587
+    MOLES_PER_CELL: 4.826311725211177e-13
+    MASS_PER_CELL: 2.8330449826989612e-14
+TEMPERATURE: 1100
+N_CELLS_PER_AXIS: 102
+N_ITERATIONS: 1000000
+STRIDE: 100
+STRIDE_MULTIPLIER: 50
+PRECIP_TRANSFORM_DEPTH: 20
+SIM_TIME: 72000
+SIZE: 0.00015
+SOL_PROD: 6.2500000000000005e-31
+PHASE_FRACTION_LIMIT: 1
+THRESHOLD_INWARD: 1
+THRESHOLD_OUTWARD: 1
+NEIGH_RANGE: 1
+N_BOOST_STEPS: 1
+PROD_INCR_CONST: 1e-05
+PROD_ERROR: 0.01
+ZETTA_ZERO: 1e-06
+ZETTA_FINAL: 4.9999999999999996e-05
+INWARD_DIFFUSION: True
+OUTWARD_DIFFUSION: True
+COMPUTE_PRECIPITATION: True
+SAVE_WHOLE: False
+DECOMPOSE_PRECIPITATIONS: False
+FULL_CELLS: False
+SAVE_PATH: C:/test_runs_data/
+SAVE_POST_PROCESSED_INPUT: True
+MULTIPROCESSING: True
+NUMBER_OF_PROCESSES: 24
+NUMBER_OF_DIVS_PER_PAGE: 1
+DEPTH_PER_DIV: 1
+MAX_TASK_PER_CHILD: 50000
+BUFF_SIZE_CONST_ELEM: 1.5
+TERMINATION_COMMAND: ctrl+g+m
+PROBABILITIES:
+    PRIMARY:
+        p0: 0.001
+        p0_f: 1
+        p0_A_const: 1
+        p0_B_const: 1
+        p1: 0.3
+        p1_f: 1
+        p1_A_const: 1
+        p1_B_const: 1
+        global_A: 1
+        global_B: None
+        global_B_f: -20
+        max_neigh_numb: None
+        nucl_adapt_function: 5
+        p0_d: None
+        p0_d_f: None
+        p0_d_A_const: None
+        p0_d_B_const: None
+        p1_d: None
+        p1_d_f: None
+        p1_d_A_const: None
+        p1_d_B_const: None
+        p6_d: None
+        p6_d_f: None
+        p6_d_A_const: None
+        p6_d_B_const: None
+        global_d_A: None
+        global_d_B: None
+        global_d_B_f: None
+        bsf: None
+        dissol_adapt_function: None
+    SECONDARY:
+        p0: None
+        p0_f: None
+        p0_A_const: None
+        p0_B_const: None
+        p1: None
+        p1_f: None
+        p1_A_const: None
+        p1_B_const: None
+        global_A: None
+        global_B: None
+        global_B_f: None
+        max_neigh_numb: None
+        nucl_adapt_function: None
+        p0_d: None
+        p0_d_f: None
+        p0_d_A_const: None
+        p0_d_B_const: None
+        p1_d: None
+        p1_d_f: None
+        p1_d_A_const: None
+        p1_d_B_const: None
+        p6_d: None
+        p6_d_f: None
+        p6_d_A_const: None
+        p6_d_B_const: None
+        global_d_A: None
+        global_d_B: None
+        global_d_B_f: None
+        bsf: None
+        dissol_adapt_function: None
+GENERATED_VALUES:
+    TAU: 0.072
+    LAMBDA: 1.4705882352941175e-06
+    KINETIC_KONST: 1.8261221816248283e-07
+    inward_moles: 4.7449996679500635e-12
+    inward_mass: 7.5919994687201e-14
+    sinward_moles: 0.0
+    sinward_mass: 0.0
+    outward_moles: 6.58289620600272e-10
+    outward_mass: 1.7773819756207344e-11
+    outward_eq_mat_moles: 9.989853390642629e-10
+    soutward_moles: 0
+    soutward_mass: 0
+    soutward_eq_mat_moles: 0.0
+    matrix_moles: 4.022309379845446e-09
+    matrix_mass: 2.3610956059692773e-10
+    whole_moles: 4.6853440001136686e-09
+    whole_mass: 2.5395930034782227e-10
+    inward_c_moles: 0.0010127323986957944
+    inward_c_mass: 0.00029894551836936507
+    sinward_c_moles: 0.0
+    sinward_c_mass: 0.0
+    outward_c_moles: 0.14049974144572983
+    outward_c_mass: 0.06998688266924798
+    soutward_c_moles: 0.0
+    soutward_c_mass: 0.0
+    matrix_c_moles: 0.8584875261555743
+    matrix_c_mass: 0.9297141718123827
+    max_gamma_min_one: 3.280614078856299e+19
+    DB_ID: 1730314791
+    DB_PATH: C:/test_runs_data/1730314791.db
+    DATE_OF_CREATION: 2024-10-30 19:59:51
+COMMENT: This script simulates oxidation with nucleation scheme, no dissolution!
+INITIAL_SCRIPT: 
+    class NewSystem(SimulationConfigurator):
+        def __init__(self):
+            super().__init__()
+            self.c_automata.cases.first.oxidant.diffuse = self.c_automata.cases.first.oxidant.diffuse_bulk
+            self.c_automata.cases.first.active.diffuse = elements.diffuse_bulk_mp
+
+            self.c_automata.get_cur_ioz_bound = self.c_automata.ioz_depth_furthest_inward
+
+            self.c_automata.precip_func = self.c_automata.precipitation_current_case
+            self.c_automata.get_combi_ind = self.c_automata.get_combi_ind_standard
+
+            self.c_automata.cases.first_mp.precip_step = precip_step_standard
+            self.c_automata.cases.first_mp.check_intersection = ci_single
+
+            self.c_automata.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(
+                Config.PROBABILITIES.PRIMARY,Config.PRODUCTS.PRIMARY)
+
+            self.save_function = None
+
