@@ -50,7 +50,10 @@ class NucleationProbabilities:
         elif param.nucl_adapt_function == 3:
             self.adapt_probabilities = self.dummy_function
 
-        self.get_probabilities = self.get_probabilities_exp
+        if param.p1 == 1:
+            self.get_probabilities = self.get_probabilities_all_one
+        else:
+            self.get_probabilities = self.get_probabilities_exp
 
     def update_constants(self):
         self.const_c_pp = np.log((1 - self.p1.values_pp) / (self.const_a_pp *
@@ -62,6 +65,9 @@ class NucleationProbabilities:
     def get_probabilities_exp(self, numb_of_neighbours, page_ind):
         return self.const_a_pp[page_ind] * np.e ** (self.const_b_pp[page_ind] * numb_of_neighbours +
                                                     self.const_c_pp[page_ind]) + self.const_d_pp[page_ind]
+
+    def get_probabilities_all_one(self, numb_of_neighbours, page_ind):
+        return np.array(np.array(numb_of_neighbours, dtype=bool), dtype=float)
 
     def adapt_nucl_prob(self, page_ind, gamma_primes):
         self.nucl_prob.update_values_at_pos(page_ind, gamma_primes)

@@ -28,8 +28,8 @@ def calc_saturation(c_b, c_o, d_o, d_b, nu=1):
     print(c_b, desired_gamma[0], saturation[0], depth, sep=" ")
 
 # conz_list = [0.25, 0.55, 0.6, 0.65, 0.75, 0.8, 0.85]
-conz_list = [0.2]
-c_o = 0.001
+conz_list = [0.5]
+c_o = 0.01
 d_o = 2.8231080610996937 * 10 ** -12
 d_b = 2.2164389765037816 * 10 ** -14
 # d_b = 5.258262368514388 * 10 ** -15

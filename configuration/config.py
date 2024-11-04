@@ -38,7 +38,7 @@ class Config:
     # primary oxidants
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.001
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.01
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
@@ -46,9 +46,9 @@ class Config:
     # primary actives
     ACTIVES.PRIMARY.ELEMENT = "Al"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
-    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.07
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.2
-    ACTIVES.PRIMARY.CONC_PRECISION = "exact"
+    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.15
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.5
+    ACTIVES.PRIMARY.CONC_PRECISION = "rand"
     ACTIVES.PRIMARY.SPACE_FILL = "full"
     # secondary actives
     # ACTIVES.SECONDARY.ELEMENT = "Al"
@@ -74,12 +74,12 @@ class Config:
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 1000000  # must be >= n_cells_per_axis
+    N_ITERATIONS = 500000  # must be >= n_cells_per_axis
     STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 20
     SIM_TIME = 72000  # [sek]
-    SIZE = 150 * (10 ** -6)  # [m]
+    SIZE = 500 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 1
@@ -98,7 +98,7 @@ class Config:
     INWARD_DIFFUSION = True
     OUTWARD_DIFFUSION = True
     COMPUTE_PRECIPITATION = True
-    SAVE_WHOLE = False
+    SAVE_WHOLE = True
     DECOMPOSE_PRECIPITATIONS = False
     FULL_CELLS = False
     SAVE_PATH = 'C:/test_runs_data/'
@@ -109,7 +109,7 @@ class Config:
     NUMBER_OF_PROCESSES = 24
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
-    MAX_TASK_PER_CHILD = 50000
+    MAX_TASK_PER_CHILD = 1000
     BUFF_SIZE_CONST_ELEM = 1.5
     TERMINATION_COMMAND = 'ctrl+g+m'
 
@@ -122,11 +122,11 @@ class Config:
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.001
+    PROBABILITIES.PRIMARY.p0 = 0.1
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.3
+    PROBABILITIES.PRIMARY.p1 = 1
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1

@@ -88,9 +88,7 @@ def ci_single(cur_case, seeds, oxidant, full_3d):
                                buffer=shm_product_x_nzs.buf)
 
     all_arounds = calc_sur_ind_formation(seeds, active.shape[2] - 1)
-
     neighbours = go_around_bool(active, all_arounds[:, :-2])
-
     arr_len_out = np.array([np.sum(item) for item in neighbours], dtype=np.short)
     temp_ind = np.where(arr_len_out > 0)[0]
 

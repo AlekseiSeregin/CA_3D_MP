@@ -533,14 +533,18 @@ class SimulationConfigurator:
     def calc_precipitation_front_only_cells(self):
         """
         Calculating a position of a precipitation front, considering only cells concentrations without any scaling!
-        As a boundary a product fraction of 0,1% is used.
+        As a boundary a product fraction of 50% is used.
         """
-        product = np.array([np.sum(self.c_automata.primary_product.c3d[:, :, plane_ind]) for plane_ind
+        product = np.array([np.sum(self.c_automata.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.c_automata.cells_per_axis)], dtype=np.uint32)
         product = product / (self.c_automata.cells_per_axis ** 2)
+
+        if self.c_automata.iteration % Config.STRIDE == 0:
+            self.c_automata.record_prod_per_layer(product.shape[0]-1, product, np.zeros(product.shape))
+
         threshold = Config.ACTIVES.PRIMARY.CELLS_CONCENTRATION
         for rev_index, precip_conc in enumerate(np.flip(product)):
-            if precip_conc > threshold / 100:
+            if precip_conc > threshold / 2:
                 position = (len(product) - 1 - rev_index) * Config.SIZE * 10 ** 6 \
                            / self.c_automata.cells_per_axis
                 sqr_time = ((self.c_automata.iteration + 1) * Config.SIM_TIME / (self.c_automata.n_iter * 3600)) ** (1 / 2)
