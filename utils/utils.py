@@ -294,8 +294,8 @@ class Utils:
     def calc_oxidant_data(self):
         diff_coeff = Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
         probabilities = self.calc_prob(diff_coeff)
-        Config.OXIDANTS.PRIMARY.PROBABILITIES = probabilities
-        Config.OXIDANTS.PRIMARY.PROBABILITIES_2D = self.calc_p0_2d(diff_coeff * 10**2)
+        Config.OXIDANTS.PRIMARY.PROBABILITIES = self.calc_prob(Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT)
+        Config.OXIDANTS.PRIMARY.PROBABILITIES_2D = self.calc_p0_2d(Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT_GB)
         Config.OXIDANTS.PRIMARY.PROBABILITIES_SCALE = self.calc_prob(diff_coeff * 10 ** -2)
         Config.OXIDANTS.PRIMARY.PROBABILITIES_INTERFACE = self.calc_prob(diff_coeff * 10 ** 3)
 
@@ -331,6 +331,9 @@ class Utils:
         Config.OXIDANTS.PRIMARY.MOLAR_MASS = MOLAR_MASS[Config.OXIDANTS.PRIMARY.ELEMENT]
         Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT = (get_diff_coeff(Config.TEMPERATURE,
                                                                         Config.OXIDANTS.PRIMARY.DIFFUSION_CONDITION))
+        Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT_GB = (get_diff_coeff(Config.TEMPERATURE,
+                                                                           Config.OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB))
+
         Config.OXIDANTS.SECONDARY.DENSITY = DENSITY[Config.OXIDANTS.SECONDARY.ELEMENT]
         Config.OXIDANTS.SECONDARY.MOLAR_MASS = MOLAR_MASS[Config.OXIDANTS.SECONDARY.ELEMENT]
         Config.OXIDANTS.SECONDARY.DIFFUSION_COEFFICIENT = (get_diff_coeff(Config.TEMPERATURE,

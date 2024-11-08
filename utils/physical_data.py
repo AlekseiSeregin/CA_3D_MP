@@ -10,6 +10,7 @@ def get_diff_coeff(temperature, cond):
     diff_coeff = {"N in Ni20Cr2Ti Krupp": 4.7 * 10 ** -6 * exp(-125720 / (8.314 * (273 + temperature))),
                   "O in Ni at 1000 Smithells_Ransley": 2.4 * 10**-13,
                   "O in Ni Krupp": 4.9 * 10 ** -6 * exp(-164000 / (8.314 * (273 + temperature))),
+                  "O in Ni Krupp 100": 4.9 * 10 ** -6 * exp(-164000 / (8.314 * (273 + temperature))) * 100,
                   "N in Ni Krupp": 1.99 * 10 ** -5 * exp(-132640 / (8.314 * (273 + temperature))),
                   "Al in Ni Krupp": 1.85 * 10 ** -4 * exp(-260780 / (8.314 * (273 + temperature))),
                   "Cr in Ni Krupp": 5.2 * 10 ** -4 * exp(-289000 / (8.314 * (273 + temperature))),

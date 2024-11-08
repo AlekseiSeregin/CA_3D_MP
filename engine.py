@@ -56,8 +56,8 @@ class SimulationConfigurator:
             self.init_product()
 
         self.function_block = FunctionBlock()
-        self.current_func = None #  Must be defined elsewhere
-        self.save_function = None #  Must be defined elsewhere
+        self.current_func = None  # must be defined elsewhere
+        self.save_function = None  # must be defined elsewhere
 
         self.termination_command = Config.TERMINATION_COMMAND
 

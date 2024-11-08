@@ -407,7 +407,7 @@ ELAPSED TIME: {message}
                                    alpha=self.alpha)
 
                 # if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                if False:
+                if True:
                     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
@@ -607,9 +607,7 @@ ELAPSED TIME: {message}
                 ax_qtprecip.elev = elev
                 ax_qtprecip.dist = dist
         else:
-
             ax_all = fig.add_subplot(111, projection='3d')
-
             # # Define the grid for the plane
             # x = np.linspace(0, new_axlim, 100)
             # y = np.linspace(0, new_axlim, 100)
@@ -620,38 +618,37 @@ ELAPSED TIME: {message}
             # # Plot the plane
             # ax_all.plot_surface(X, Y, Z, color='r', alpha=0.5, zorder=0)  # Set alpha to a value between 0 and 1 for transparency
 
-            # if self.Config.INWARD_DIFFUSION:
-            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     if np.any(items):
-            #         items = items * rescale_factor
-            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
-            #                        alpha=self.alpha)
-
-            #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-            #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-            #         items = np.array(self.c.fetchall())
-            #         if np.any(items):
-            #             ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='deeppink',
-            #                            s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
-            #                        alpha=self.alpha)
-            # if self.Config.OUTWARD_DIFFUSION:
-            #     self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     if np.any(items):
-            #         items = items * rescale_factor
-            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='g',
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
-            #                        alpha=self.alpha)
-            #     if self.Config.ACTIVES.SECONDARY_EXISTENCE:
-            #         self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
-            #         items = np.array(self.c.fetchall())
-            #         if np.any(items):
-            #             items = items * rescale_factor
-            #             ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='gold',
-            #                            s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
-            #                        alpha=self.alpha)
+            if self.Config.INWARD_DIFFUSION:
+                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                if np.any(items):
+                    items = items * rescale_factor
+                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
+                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
+                if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
+                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    if np.any(items):
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='deeppink',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
+            if self.Config.OUTWARD_DIFFUSION:
+                self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                if np.any(items):
+                    items = items * rescale_factor
+                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='g',
+                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
+                if self.Config.ACTIVES.SECONDARY_EXISTENCE:
+                    self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
+                    items = np.array(self.c.fetchall())
+                    if np.any(items):
+                        items = items * rescale_factor
+                        ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='gold',
+                                       s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
 
             if self.Config.COMPUTE_PRECIPITATION:
                 self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
@@ -1937,8 +1934,10 @@ ELAPSED TIME: {message}
                     clusters = clusters[np.nonzero(clusters)]
 
                     mean = np.mean(clusters)
+                    stdiv = np.std(clusters)
+
                     nz_len = len(clusters)
-                    print(x_pos, nz_len, mean, sep=" ")
+                    print(x_pos, nz_len, mean, stdiv, sep=" ")
 
     def plot_h(self):
         fig = plt.figure()
@@ -1997,6 +1996,44 @@ def plot_kinetics(data_to_plot, with_kinetic=False):
             # plt.plot(x_values, y_values_soll, label=f'Layer - {rows} kinetic', s=1)
             x *= 0.00035
             plt.plot(x, y_values_soll, label=f'Layer - {rows} kinetic')
+
+    plt.xlabel("Time [sec]")
+    plt.ylabel('Concentration')
+    # plt.legend()
+    plt.show()
+
+
+def plot_kinetics_mult_comb(data_to_plot, number_of_dbs, with_kinetic=False):
+    plt.figure(figsize=(10, 6))
+
+    for _ in range(number_of_dbs):
+        root = tk.Tk()
+        root.withdraw()
+        file_path = filedialog.askopenfilename()
+
+        data = pd.read_csv(file_path, sep=" ", header=None)
+        x_values = data.iloc[:, 0]
+
+        for rows in data_to_plot:
+            x = x_values.copy()
+            index = 2 * rows + 1
+            y_values = data.iloc[:, index]
+            z_ind = np.where(y_values == 0)[0]
+            y_values = np.delete(y_values, z_ind)
+            x = np.delete(x, z_ind)
+            # plt.plot(x_values, y_values, label=f'Layer - {rows}', s=1)
+            # x *= 0.00035
+            plt.plot(x, y_values, label=f'Layer - {rows}')
+
+            if with_kinetic:
+                x = x_values.copy()
+                y_values_soll = data.iloc[:, index + 1]
+                z_ind = np.where(y_values_soll == 0)[0]
+                y_values_soll = np.delete(y_values_soll, z_ind)
+                x = np.delete(x, z_ind)
+                # plt.plot(x_values, y_values_soll, label=f'Layer - {rows} kinetic', s=1)
+                # x *= 0.00035
+                plt.plot(x, y_values_soll, label=f'Layer - {rows} kinetic')
 
     plt.xlabel("Time [sec]")
     plt.ylabel('Concentration')

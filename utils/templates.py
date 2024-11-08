@@ -1,6 +1,7 @@
 import numpy as np
 from configuration import Config
 
+
 class CaseSetUp:
     def __init__(self):
         self.oxidant = None

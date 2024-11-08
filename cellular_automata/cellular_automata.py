@@ -40,9 +40,6 @@ class CellularAutomata:
         self.max_inside_neigh_number = 6 * self.primary_oxid_numb
         self.max_block_neigh_number = 7
 
-        # self.disol_block_p = Config.PROBABILITIES.PRIMARY.p0_d ** Config.PROBABILITIES.PRIMARY.n
-        # self.disol_p = Config.PROBABILITIES.PRIMARY.p0_d
-
         self.primary_fetch_ind = []
         self.secondary_fetch_ind = []
         self.fetch_ind = None
@@ -57,21 +54,22 @@ class CellularAutomata:
                                         [12, 3, 4, 5, 20, 23, 25],
                                         [13, 3, 4, 2, 21, 24, 25]], dtype=np.int64)
 
-        self.numb_of_proc = Config.NUMBER_OF_PROCESSES
-        if self.cells_per_axis % self.numb_of_proc == 0:
-            chunk_size = int(self.cells_per_axis / self.numb_of_proc)
-        else:
-            chunk_size = int((self.cells_per_axis - 1) // (self.numb_of_proc - 1))
+        if Config.MULTIPROCESSING:
+            self.numb_of_proc = Config.NUMBER_OF_PROCESSES
+            if self.cells_per_axis % self.numb_of_proc == 0:
+                chunk_size = int(self.cells_per_axis / self.numb_of_proc)
+            else:
+                chunk_size = int((self.cells_per_axis - 1) // (self.numb_of_proc - 1))
 
-        self.chunk_ranges = np.zeros((self.numb_of_proc, 2), dtype=int)
-        self.chunk_ranges[0] = [0, chunk_size]
+            self.chunk_ranges = np.zeros((self.numb_of_proc, 2), dtype=int)
+            self.chunk_ranges[0] = [0, chunk_size]
 
-        for pos in range(1, self.numb_of_proc):
-            self.chunk_ranges[pos, 0] = self.chunk_ranges[pos-1, 1]
-            self.chunk_ranges[pos, 1] = self.chunk_ranges[pos, 0] + chunk_size
-        self.chunk_ranges[-1, 1] = self.cells_per_axis
+            for pos in range(1, self.numb_of_proc):
+                self.chunk_ranges[pos, 0] = self.chunk_ranges[pos-1, 1]
+                self.chunk_ranges[pos, 1] = self.chunk_ranges[pos, 0] + chunk_size
+            self.chunk_ranges[-1, 1] = self.cells_per_axis
 
-        self.pool = multiprocessing.Pool(processes=self.numb_of_proc, maxtasksperchild=Config.MAX_TASK_PER_CHILD)
+            self.pool = multiprocessing.Pool(processes=self.numb_of_proc, maxtasksperchild=Config.MAX_TASK_PER_CHILD)
 
         self.threshold_inward = Config.THRESHOLD_INWARD
         self.threshold_outward = Config.THRESHOLD_OUTWARD

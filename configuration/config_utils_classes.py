@@ -49,6 +49,7 @@ class ElemInput:
     def __init__(self):
         self.ELEMENT = "None"
         self.DIFFUSION_CONDITION = "None"
+        self.DIFFUSION_CONDITION_GB = "None"
         self.MASS_CONCENTRATION = 0
         self.CELLS_CONCENTRATION = 0
         self.CONC_PRECISION = "rand"

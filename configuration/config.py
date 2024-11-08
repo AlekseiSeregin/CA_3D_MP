@@ -38,7 +38,8 @@ class Config:
     # primary oxidants
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.01
+    OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.6
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
@@ -78,8 +79,8 @@ class Config:
     STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 20
-    SIM_TIME = 72000  # [sek]
-    SIZE = 500 * (10 ** -6)  # [m]
+    SIM_TIME = 7200  # [sek]
+    SIZE = 10000 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 1
@@ -96,16 +97,16 @@ class Config:
     ZETTA_FINAL = 50 * (10 ** -6)  # [m]
 
     INWARD_DIFFUSION = True
-    OUTWARD_DIFFUSION = True
-    COMPUTE_PRECIPITATION = True
+    OUTWARD_DIFFUSION = False
+    COMPUTE_PRECIPITATION = False
     SAVE_WHOLE = True
     DECOMPOSE_PRECIPITATIONS = False
     FULL_CELLS = False
-    SAVE_PATH = 'C:/test_runs_data/'
+    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
-    MULTIPROCESSING = True
+    MULTIPROCESSING = False
     NUMBER_OF_PROCESSES = 24
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
@@ -115,26 +116,26 @@ class Config:
 
     # PROBABILITIES_______________________________________________________________
     PROBABILITIES = ElementGroups()
-    PROBABILITIES.PRIMARY = ConfigProbabilities()
-    PROBABILITIES.SECONDARY = ConfigProbabilities()
+    # PROBABILITIES.PRIMARY = ConfigProbabilities()
+    # PROBABILITIES.SECONDARY = ConfigProbabilities()
     # PROBABILITIES.TERNARY = ConfigProbabilities()
     # PROBABILITIES.QUATERNARY = ConfigProbabilities()
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.1
-    PROBABILITIES.PRIMARY.p0_f = 1
-    PROBABILITIES.PRIMARY.p0_A_const = 1
-    PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 1
-    PROBABILITIES.PRIMARY.p1_f = 1
-    PROBABILITIES.PRIMARY.p1_A_const = 1
-    PROBABILITIES.PRIMARY.p1_B_const = 1
-    PROBABILITIES.PRIMARY.global_A = 1
-    PROBABILITIES.PRIMARY.global_B = None
-    PROBABILITIES.PRIMARY.global_B_f = -20
-    PROBABILITIES.PRIMARY.max_neigh_numb = None
-    PROBABILITIES.PRIMARY.nucl_adapt_function = 5
+    # PROBABILITIES.PRIMARY.p0 = 0.1
+    # PROBABILITIES.PRIMARY.p0_f = 1
+    # PROBABILITIES.PRIMARY.p0_A_const = 1
+    # PROBABILITIES.PRIMARY.p0_B_const = 1
+    # PROBABILITIES.PRIMARY.p1 = 1
+    # PROBABILITIES.PRIMARY.p1_f = 1
+    # PROBABILITIES.PRIMARY.p1_A_const = 1
+    # PROBABILITIES.PRIMARY.p1_B_const = 1
+    # PROBABILITIES.PRIMARY.global_A = 1
+    # PROBABILITIES.PRIMARY.global_B = None
+    # PROBABILITIES.PRIMARY.global_B_f = -20
+    # PROBABILITIES.PRIMARY.max_neigh_numb = None
+    # PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # # dissolution primary_________________________
     # PROBABILITIES.PRIMARY.p0_d = 0.01
     # PROBABILITIES.PRIMARY.p0_d_f = 1
