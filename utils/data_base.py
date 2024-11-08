@@ -19,6 +19,12 @@ class Database:
         self.c.execute("INSERT INTO PickledConfig (pickled_data) VALUES (?)", (pickled_instance,))
         self.conn.commit()
 
+    def save_pickled_microstructure(self, microstructure_instance):
+        pickled_instance = pickle.dumps(microstructure_instance)
+        self.c.execute('''CREATE TABLE IF NOT EXISTS PickledMicrostructure (pickled_data BLOB)''')
+        self.c.execute("INSERT INTO PickledMicrostructure (pickled_data) VALUES (?)", (pickled_instance,))
+        self.conn.commit()
+
     def insert_particle_data(self, particle_type, iteration, data):
         """Particle types allowed: primary_oxidant, secondary_oxidant, primary_active, secondary_active,
         primary_product, secondary_product, ternary_product, quaternary_product"""
@@ -41,7 +47,6 @@ class Database:
 
     def create_time_parameters_table(self):
         self.c.execute("""CREATE TABLE time_parameters (last_i int, elapsed_time float)""")
-
         query = """INSERT INTO time_parameters VALUES(?, ?);"""
         self.c.execute(query, (0, 0,))
 

@@ -6,6 +6,7 @@ import numpy as np
 import time
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from .own_seeds import *
+from configuration import Config
 
 
 class VoronoiMicrostructure:
@@ -21,18 +22,16 @@ class VoronoiMicrostructure:
         self.jump_directions = None
         self.ca_edges = None
         self.ca_faces = None
+        self.seeds = None
 
     def generate_voronoi_3d(self, number_of_grains, periodic=False, seeds=None):
         self.divisor = int(self.n_cells_per_axis / 0.5)
         if seeds is None:
-            seeds = np.random.random_sample((number_of_grains, 3))
-
-            # for seed in seeds:
-            #     print(seed)
+            self.seeds = np.random.random_sample((number_of_grains, 3))
 
         # regular arrangement of seeds for some tests
         elif seeds == 'regular8':
-            seeds = [[(1 / 4), (1 / 4), (1 / 4)],
+            self.seeds = [[(1 / 4), (1 / 4), (1 / 4)],
                      [(1 / 4), (1 / 4) * 3, (1 / 4)],
                      [(1 / 4), (1 / 4) * 3, (1 / 4) * 3],
                      [(1 / 4), (1 / 4), (1 / 4) * 3],
@@ -42,34 +41,34 @@ class VoronoiMicrostructure:
                      [(1 / 4) * 3, (1 / 4), (1 / 4) * 3]]
 
         elif seeds == 'standard':
-            seeds = np.array([[0.71363424, 0.18968331, 0.22064598],
+            self.seeds = np.array([[0.71363424, 0.18968331, 0.22064598],
                               [0.06832179, 0.28305906, 0.10689959],
                               [0.81873141, 0.07915909, 0.28691126],
                               [0.90147317, 0.02136836, 0.87818224],
                               [0.29456042, 0.29805038, 0.2433283 ]])
 
         elif seeds == 'demo':
-            seeds = np.array([[0.99073393, 0.04600333, 0.30824473],
+            self.seeds = np.array([[0.99073393, 0.04600333, 0.30824473],
                               [0.91127096, 0.96590519, 0.09132393],
                               [0.78442506, 0.70838989, 0.31115133],
                               [0.17121934, 0.65835036, 0.09817317],
                               [0.86900279, 0.63286860, 0.99611049],
                               [0.10538952, 0.91241952, 0.26677793]])
         elif seeds == 'own':
-            seeds = np.array(G_500)
+            self.seeds = np.array(G_500)
 
         elif seeds == "plane":
-            seeds = np.array([[0.1, 0.5, 0.5],
+            self.seeds = np.array([[0.1, 0.5, 0.5],
                               [0.9, 0.5, 0.5]])
 
         elif seeds == "mult_planes":
-            seeds = np.array([[0.000001, 0.5, 0.5],
+            self.seeds = np.array([[0.000001, 0.5, 0.5],
                               [0.25, 0.5, 0.5],
                               [0.5, 0.5, 0.5],
                               [0.75, 0.5, 0.5],
                               [0.99999, 0.5, 0.5]])
 
-        vor = pyvoro.compute_voronoi(seeds, [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]], 10,
+        vor = pyvoro.compute_voronoi(self.seeds, [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]], 10,
                                      periodic=[periodic, periodic, periodic])
 
         # list of indexes of already checked cells
@@ -545,16 +544,16 @@ class VoronoiMicrostructure:
                 divided_lines = np.append(divided_lines, new_vector_sec, axis=0)
         self.lines_faces = divided_lines
 
-    def show_microstructure(self, n_cells_per_axis):
+    def show_microstructure(self):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.scatter(self.ca_faces[2], self.ca_faces[1], self.ca_faces[0], color='darkgoldenrod', marker=',', s=1)
         ax.scatter(self.ca_edges[2], self.ca_edges[1], self.ca_edges[0], color='b', marker=',', s=5)
-        ax.scatter(0, n_cells_per_axis/2, n_cells_per_axis/2, color='r', marker=',', s=50)
+        ax.scatter(0, Config.N_CELLS_PER_AXIS/2, Config.N_CELLS_PER_AXIS/2, color='r', marker=',', s=50)
 
-        ax.set_xlim3d(0, n_cells_per_axis)
-        ax.set_ylim3d(0, n_cells_per_axis)
-        ax.set_zlim3d(0, n_cells_per_axis)
+        ax.set_xlim3d(0, Config.N_CELLS_PER_AXIS)
+        ax.set_ylim3d(0, Config.N_CELLS_PER_AXIS)
+        ax.set_zlim3d(0, Config.N_CELLS_PER_AXIS)
 
         plt.show()
         # plt.close()

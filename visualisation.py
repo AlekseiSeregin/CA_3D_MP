@@ -14,6 +14,7 @@ from configuration import update_class_from_dict
 import pandas as pd
 import tkinter as tk
 from tkinter import filedialog
+from microstructure import voronoi
 
 
 class Visualisation:
@@ -22,6 +23,7 @@ class Visualisation:
         self.conn = sql.connect(self.db_name)
         self.c = self.conn.cursor()
         self.Config = None
+        self.microstructure = None
         self.axlim = None
         self.shape = None
         self.last_i = None
@@ -53,6 +55,16 @@ class Visualisation:
             unpickled_dict = pickle.loads(pickled_instance)
             update_class_from_dict(Config, unpickled_dict)
             self.Config = Config()
+
+        table_name = 'PickledMicrostructure'
+        self.c.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+        result = self.c.fetchone()
+        if result is not None:
+            self.c.execute("SELECT pickled_data FROM PickledMicrostructure")
+            result = self.c.fetchone()
+            pickled_instance = result[0]
+            self.microstructure = pickle.loads(pickled_instance)
+            self.microstructure.show_microstructure()
 
         self.utils.print_static_params(Config)
         self.c.execute("SELECT last_i from time_parameters")

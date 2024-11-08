@@ -343,14 +343,30 @@ class SimulationConfigurator:
 
         print()
 
-    def run_simulation(self):
-        self.construct_function_block()
+    def start_simulation(self):
+        try:
+            self.__construct_function_block()
+            self.__start_execution()
+        finally:
+            self.save_results()
+            if Config.MULTIPROCESSING:
+                self.terminate_workers()
+                self.unlink()
+            self.insert_last_it()
+
+            self.db.conn.commit()
+            print()
+            print("____________________________________________________________")
+            print("Simulation was closed at Iteration: ", self.c_automata.iteration)
+            print("____________________________________________________________")
+            print()
+
+    def __start_execution(self):
         self.begin = time.time()
         for self.c_automata.iteration in progressbar.progressbar(range(Config.N_ITERATIONS)):
             if keyboard.is_pressed(self.termination_command):
                 break
             self.function_block.execute()
-
         end = time.time()
         self.elapsed_time = (end - self.begin)
         self.db.insert_time(self.elapsed_time)
@@ -508,6 +524,9 @@ class SimulationConfigurator:
                 self.cases.second.active.transform_to_3d(self.c_automata.curr_max_furthest)
         print("SAVED!")
 
+    def save_microstructure(self, microstructure):
+        self.db.save_pickled_microstructure(microstructure)
+
     def save_results_custom(self):
         if Config.STRIDE > Config.N_ITERATIONS:
             self.cases.first.active.transform_to_descards()
@@ -583,7 +602,7 @@ class SimulationConfigurator:
     def insert_last_it(self):
         self.db.insert_last_iteration(self.c_automata.iteration)
 
-    def construct_function_block(self):
+    def __construct_function_block(self):
         """The execution order is: Nucleation -> Dissolution -> Inward Diffusion -> Outward Diffusion -> Save.
         Depending on the initial conditions some steps can be skipped, the execution sequence will be adjusted"""
         # Nucleation
