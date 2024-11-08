@@ -18,15 +18,4 @@ if __name__ == '__main__':
     Config.COMMENT = """This script simulates inward diffusion of O in Ni with GB diffusion along the interfaces created
     via Voronoi tesselation"""
     new_system = NewSystem()
-
-    try:
-        new_system.start_simulation()
-    finally:
-        new_system.save_results()
-        new_system.insert_last_it()
-        new_system.db.conn.commit()
-        print()
-        print("____________________________________________________________")
-        print("Simulation was closed at Iteration: ", new_system.c_automata.iteration)
-        print("____________________________________________________________")
-        print()
+    new_system.start_simulation()

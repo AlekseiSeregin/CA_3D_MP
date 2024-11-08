@@ -353,7 +353,6 @@ class SimulationConfigurator:
                 self.terminate_workers()
                 self.unlink()
             self.insert_last_it()
-
             self.db.conn.commit()
             print()
             print("____________________________________________________________")
