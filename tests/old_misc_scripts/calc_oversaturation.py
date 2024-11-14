@@ -7,7 +7,7 @@ def calculate_right_site(gamma, phi):
              ((phi ** 0.5) * np.e**(phi * gamma**2) * special.erfc(gamma * phi**0.5))
 
 
-def calc_saturation(c_b, c_o, d_o, d_b, nu=1):
+def calc_saturation(c_b, c_o, d_o, d_b, time, nu=1):
     curr_phi = d_o / d_b
     left_side = c_o / (nu * c_b)
     gammas = np.linspace(0, 1, 100001)
@@ -23,17 +23,18 @@ def calc_saturation(c_b, c_o, d_o, d_b, nu=1):
     saturation = 1/((np.pi ** 0.5) * desired_gamma * (curr_phi ** 0.5) * np.e**(curr_phi * desired_gamma**2) *
                     special.erfc(desired_gamma * curr_phi**0.5))
 
-    depth = 2 * desired_gamma[0] * ((d_o * 72000)**0.5)
-
+    depth = 2 * desired_gamma[0] * ((d_o * time)**0.5)
     print(c_b, desired_gamma[0], saturation[0], depth, sep=" ")
 
 # conz_list = [0.25, 0.55, 0.6, 0.65, 0.75, 0.8, 0.85]
-conz_list = [0.5]
-c_o = 0.01
+
+conz_list = [0.2]
+c_o = 0.0012
 d_o = 2.8231080610996937 * 10 ** -12
-d_b = 2.2164389765037816 * 10 ** -14
-# d_b = 5.258262368514388 * 10 ** -15
+# d_b = 2.2164389765037816 * 10 ** -14
+time = 72000
+d_b = 5.258262368514388 * 10 ** -15
 # c_b = 0.08
 
 for active_conz in conz_list:
-    calc_saturation(active_conz, c_o, d_o, d_b)
+    calc_saturation(active_conz, c_o, d_o, d_b, time)
