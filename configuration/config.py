@@ -107,7 +107,7 @@ class Config:
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 15
+    NUMBER_OF_PROCESSES = 23
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
     MAX_TASK_PER_CHILD = 5000
