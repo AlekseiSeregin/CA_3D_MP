@@ -10,7 +10,6 @@ if __name__ == '__main__':
             self.cases.first.active.diffuse = elements.diffuse_bulk_mp
 
             self.c_automata.get_cur_ioz_bound = self.c_automata.ioz_depth_furthest_inward
-
             self.c_automata.precip_func = self.c_automata.precipitation_current_case
             self.c_automata.get_combi_ind = self.c_automata.get_combi_ind_atomic
 
@@ -18,7 +17,6 @@ if __name__ == '__main__':
             self.c_automata.cases.first_mp.check_intersection = ci_single
 
             self.c_automata.decomposition = self.c_automata.dissolution_atomic_stop_if_stable
-
             self.c_automata.decomposition_intrinsic = self.c_automata.simple_decompose_mp
             self.c_automata.cases.first_mp.decomposition = dissolution_zhou_wei_no_bsf
 

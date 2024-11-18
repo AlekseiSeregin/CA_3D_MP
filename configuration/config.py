@@ -74,8 +74,8 @@ class Config:
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 300  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 300000  # must be >= n_cells_per_axis
+    N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_ITERATIONS = 100000  # must be >= n_cells_per_axis
     STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 20
@@ -83,7 +83,7 @@ class Config:
     SIZE = 100 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
-    PHASE_FRACTION_LIMIT = 0.028
+    PHASE_FRACTION_LIMIT = 0.0418
     THRESHOLD_INWARD = 1
     THRESHOLD_OUTWARD = 1
     NEIGH_RANGE = 1   # neighbouring ranges    1, 2, 3, 4, 5,  6,  7,  8,  9,  10
@@ -102,15 +102,15 @@ class Config:
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = True
     FULL_CELLS = False
-    SAVE_PATH = 'C:/test_runs_data/'
+    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 23
+    NUMBER_OF_PROCESSES = 15
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
-    MAX_TASK_PER_CHILD = 5000
+    MAX_TASK_PER_CHILD = 50000
     BUFF_SIZE_CONST_ELEM = 1.5
     TERMINATION_COMMAND = 'ctrl+g+m'
 
@@ -123,11 +123,11 @@ class Config:
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.3
+    PROBABILITIES.PRIMARY.p0 = 0.7
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.6
+    PROBABILITIES.PRIMARY.p1 = 0.9
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1
@@ -137,7 +137,7 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 0.05
+    PROBABILITIES.PRIMARY.p0_d = 0.01
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 5
