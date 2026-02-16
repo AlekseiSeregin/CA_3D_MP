@@ -63,6 +63,13 @@ def plot_spinel_over_time(time_series, spinel_series, layers):
     for layer in layers:
         plt.plot(time_series, [spinel[layer] for spinel in spinel_series], label=f'Layer {layer}')
 
+    # output_file_path =  "E:/kinetics.txt"
+    # with open(output_file_path, "w", encoding='utf-8') as f:
+    #     for time, oxide  in zip(time_series, spinel_series):
+    #         data = [time / 3600, oxide[5] * 100, oxide[10] * 100, oxide[15] * 100, oxide[20] * 100, oxide[40] * 100, oxide[50] * 100, oxide[60] * 100]
+    #         # print(time, oxide[5], oxide[10], oxide[15], oxide[20], oxide[40], oxide[50], oxide[60], sep=" ")
+    #         f.write(" ".join(map(str, data)) + "\n")
+
     plt.xlabel('Time')
     plt.ylabel('SPINEL')
     plt.title('SPINEL Data Over Time')
@@ -89,7 +96,8 @@ def find_closest_key(target, tree, keys):
 if __name__ == "__main__":
     # Example usage
     # file_pattern = 'C:/Users/adam-wrmjvo101twvweh/Downloads/outputs/out*.txt'
-    file_pattern = 'C:/Users/alexe/Downloads/ni5cr_1000it/ni5cr_1000it/out*.txt'
+    file_pattern = 'E:/PhD/Termine intern/coupling_juelich/ni5cr_1000it/out*.txt'
+
 
     # output_file = "C:/CA_3D_MP/thermodynamics/LUT_NiCr5.pkl"
     #
@@ -119,9 +127,9 @@ if __name__ == "__main__":
     #
     #     some = consolidated_data[closest_key]
     #     print()
-    layers = np.arange(0, 99, 1)
+    # layers = np.arange(0, 99, 1)
 
-    # layers = [0, 1, 2, 3, 4, 5]
+    layers = [5, 10, 15, 20, 40, 50, 60]
     # Specify the layers you want to plot
     plot_spinel_over_time(time_series, spinel_series, layers)
 

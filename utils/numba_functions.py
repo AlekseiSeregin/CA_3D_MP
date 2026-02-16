@@ -2,8 +2,11 @@ import numba
 import numpy as np
 # from scipy.special import dtype
 
+# Cache is True by default, but we can set it to False to force Numba to recompile the function on each call
+_CACHE = False
 
-@numba.njit(nopython=True, fastmath=True)
+
+@numba.njit(fastmath=True, cache=_CACHE)
 def go_around_bool(array_3d, arounds):
     all_neighbours = []
     # trick to initialize an empty list with known type
@@ -16,7 +19,7 @@ def go_around_bool(array_3d, arounds):
     return np.array(all_neighbours, dtype=np.bool_)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def separate_in_interface(scale, arounds):
     out_int = [np.uint32(x) for x in range(0)]
     in_int = [np.uint32(x) for x in range(0)]
@@ -36,7 +39,7 @@ def separate_in_interface(scale, arounds):
     return np.array(in_int, dtype=np.uint32), np.array(blocked, dtype=np.uint32), np.array(out_int, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def go_around_int(array_3d, arounds):
     all_neighbours = []
     # trick to initialize an empty list with known type
@@ -49,7 +52,7 @@ def go_around_int(array_3d, arounds):
     return np.array(all_neighbours, dtype=np.ubyte)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def go_around_int_and_summ(array_3d, arounds):
     all_neighbours = []
     # trick to initialize an empty list with known type
@@ -62,7 +65,7 @@ def go_around_int_and_summ(array_3d, arounds):
     return np.array(all_neighbours, dtype=np.ubyte)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def go_around_bool_dissol(array_3d, arounds):
     all_neigh = []
     # trick to initialize an empty list with known type
@@ -75,7 +78,7 @@ def go_around_bool_dissol(array_3d, arounds):
     return np.array(all_neigh, dtype=np.bool_)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def check_at_coord_dissol(array_3d, coords):
     # trick to initialize an empty list with known type
     result_coords = [np.uint32(x) for x in range(0)]
@@ -85,7 +88,7 @@ def check_at_coord_dissol(array_3d, coords):
     return np.array(result_coords, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def check_at_coord(array_3d, coordinates):
     # trick to initialize an empty list with known type
     result_coords = [np.bool_(x) for x in range(0)]
@@ -94,7 +97,7 @@ def check_at_coord(array_3d, coordinates):
     return np.array(result_coords, dtype=np.bool_)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def check_at_coord_new(array_3d, coordinates):
     # trick to initialize an empty list with known type
     result_ind = [np.uint32(x) for x in range(0)]
@@ -107,13 +110,13 @@ def check_at_coord_new(array_3d, coordinates):
     return np.array(result_ind, dtype=np.uint32), np.array(counts, dtype=np.ubyte)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def insert_counts(array_3d, points, threshold):
     for point in points.transpose():
         array_3d[point[0], point[1], point[2]] += threshold
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def decrease_counts(array_3d, points):
     zero_positions = []
     for ind, point in enumerate(points.transpose()):
@@ -124,13 +127,13 @@ def decrease_counts(array_3d, points):
     return zero_positions
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def just_decrease_counts(array_3d, points):
     for point in points.transpose():
         array_3d[point[0], point[1], point[2]] -= 1
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def check_in_scale(scale, cells, dirs):
     # trick to initialize an empty list with known type
     out_scale = [np.uint32(x) for x in range(0)]
@@ -142,7 +145,7 @@ def check_in_scale(scale, cells, dirs):
     return np.array(out_scale, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def check_in_scale_adj(scale, cells):
     # trick to initialize an empty list with known type
     out_scale = [np.uint32(x) for x in range(0)]
@@ -155,7 +158,7 @@ def check_in_scale_adj(scale, cells):
     return np.array(out_scale, dtype=np.uint32), np.array(in_scale, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def check_in_scale_mp(scale, cells, dirs, working_range):
     # trick to initialize an empty list with known type
     out_scale = [np.uint32(x) for x in range(0)]
@@ -167,7 +170,7 @@ def check_in_scale_mp(scale, cells, dirs, working_range):
     return np.array(out_scale, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def check_in_scale_mp_adj(scale, cells, working_range):
     # trick to initialize an empty list with known type
     out_scale = [np.uint32(x) for x in range(0)]
@@ -180,7 +183,7 @@ def check_in_scale_mp_adj(scale, cells, working_range):
     return np.array(out_scale, dtype=np.uint32), np.array(in_scale, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def separate_in_gb(bool_arr):
     # trick to initialize an empty list with known type
     out_gb = [np.uint32(x) for x in range(0)]
@@ -193,7 +196,7 @@ def separate_in_gb(bool_arr):
     return np.array(in_gb, dtype=np.uint32), np.array(out_gb, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def aggregate(aggregated_ind, all_neigh_bool):
     # trick to initialize an empty list with known type
     where_blocks = [np.uint32(x) for x in range(0)]
@@ -205,7 +208,7 @@ def aggregate(aggregated_ind, all_neigh_bool):
     return np.array(where_blocks, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def aggregate_and_count(aggregated_ind, all_neigh_bool):
     # trick to initialize an empty list with known type
     block_counts = [np.uint32(x) for x in range(0)]
@@ -218,7 +221,7 @@ def aggregate_and_count(aggregated_ind, all_neigh_bool):
     return np.array(block_counts, dtype=np.uint32)
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def diff_single(directions, probs, random_numbs):
     for index, direction in enumerate(directions.transpose()):
         rand_numb = random_numbs.random()
@@ -237,7 +240,7 @@ def diff_single(directions, probs, random_numbs):
         directions[:, index] = new_direction
 
 
-@numba.njit(nopython=True, fastmath=True)
+@numba.njit(fastmath=True, cache=_CACHE)
 def complete_diff_step(cells, directions, probs, random_numbs):
     for index, direction in enumerate(directions.transpose()):
         rand_numb = random_numbs.random()
@@ -282,4 +285,70 @@ def complete_diff_step(cells, directions, probs, random_numbs):
             directions[2, index] = -1
 
 
+@numba.njit(fastmath=True, cache=_CACHE)
+def diffuse_bulk_chunk(cells, dirs, start, end, p1, p2, p3, p4, p_r, cells_per_axis,
+                      boundary_z_left=0, boundary_z_right=1, boundary_z_periodic=1):
+    """
+    Chopard-Droz diffusion for a contiguous chunk [start:end] of particles.
+    Modifies cells and dirs in place. Returns indices (global) of particles that left the z-domain.
 
+    Z-boundary is set by the default args above; change them here to choose:
+      boundary_z_left:   0 = open (delete when z < 0),  1 = reflect (z=1, dirs[2]=1)
+      boundary_z_right:  0 = open (delete when z > max),  1 = reflect (z=max-2, dirs[2]=-1)
+      boundary_z_periodic: 0 = use left/right, 1 = periodic z (wrap, no deletion)
+    """
+    chunk_size = end - start
+    out_buf = np.empty(chunk_size, dtype=np.int64)
+    n_out = 0
+    max_z = cells_per_axis - 1
+    for i in range(start, end):
+        r = np.random.random()
+        d0 = dirs[0, i]
+        d1 = dirs[1, i]
+        d2 = dirs[2, i]
+        if r <= p1:
+            dirs[0, i], dirs[1, i], dirs[2, i] = d2, d0, d1
+        elif r <= p2:
+            dirs[0, i], dirs[1, i], dirs[2, i] = -d2, -d0, -d1
+        elif r <= p3:
+            dirs[0, i], dirs[1, i], dirs[2, i] = d1, d2, d0
+        elif r <= p4:
+            dirs[0, i], dirs[1, i], dirs[2, i] = -d1, -d2, -d0
+        elif r <= p_r:
+            dirs[0, i], dirs[1, i], dirs[2, i] = -d0, -d1, -d2
+
+        cells[0, i] += dirs[0, i]
+        cells[1, i] += dirs[1, i]
+        cells[2, i] += dirs[2, i]
+
+        # periodic x, y
+        if cells[0, i] < 0:
+            cells[0, i] += cells_per_axis
+        elif cells[0, i] >= cells_per_axis:
+            cells[0, i] -= cells_per_axis
+        if cells[1, i] < 0:
+            cells[1, i] += cells_per_axis
+        elif cells[1, i] >= cells_per_axis:
+            cells[1, i] -= cells_per_axis
+
+        # z: open (delete), reflect, or periodic
+        z = cells[2, i]
+        if boundary_z_periodic == 1:
+            z = ((z % cells_per_axis) + cells_per_axis) % cells_per_axis
+            cells[2, i] = z
+        else:
+            if z < 0:
+                if boundary_z_left == 1:
+                    cells[2, i] = 1
+                    dirs[2, i] = 1
+                else:
+                    out_buf[n_out] = i
+                    n_out += 1
+            elif z > max_z:
+                if boundary_z_right == 1:
+                    cells[2, i] = max_z - 1
+                    dirs[2, i] = -1
+                else:
+                    out_buf[n_out] = i
+                    n_out += 1
+    return out_buf[:n_out]

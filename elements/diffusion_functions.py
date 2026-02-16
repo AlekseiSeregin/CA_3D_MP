@@ -40,9 +40,9 @@ def diffuse_bulk_mp(working_range, cur_case, p_ranges):
     # adjusting a coordinates of side points for correct shifting
     ind_left = np.where(cells[2, working_range] < 0)[0]
     # closed left bound (reflection)
-    cells[2, working_range[ind_left]] = 1
-    dirs[2, working_range[ind_left]] = 1
-    ind_left = np.array([], dtype=int)
+    # cells[2, working_range[ind_left]] = 1
+    # dirs[2, working_range[ind_left]] = 1
+    # ind_left = np.array([], dtype=int)
     # _______________________
     # periodic____________________________________
     # self.cells[2, working_range[ind_left]] = self.cells_per_axis - 1
@@ -59,22 +59,63 @@ def diffuse_bulk_mp(working_range, cur_case, p_ranges):
 
     ind_right = np.where(cells[2, working_range] > cells_per_axis - 1)[0]
     # closed right bound (reflection)____________
-    # cells[2, ind_right] = cells_per_axis - 2
-    # dirs[2, ind_right] = -1
-    # ind_right = []
+    cells[2, ind_right] = cells_per_axis - 2
+    dirs[2, ind_right] = -1
+    ind_right = []
     # ___________________________________________
     # open right bound___________________________
     # if only ind_right!!!
     # ___________________________________________
     # periodic____________________________________
     # self.cells[2, working_range[ind_right]] = 0
-    # ind_right = = np.array([], dtype=int)
+    # ind_right = np.array([], dtype=int)
     # ____________________________________________
 
     shm_cells.close()
     shm_dirs.close()
 
-    return working_range[np.concatenate((ind_left, ind_right))]
+    idx = np.asarray(np.concatenate((ind_left, ind_right)), dtype=np.intp)
+    return working_range[idx]
+
+
+def diffuse_bulk_mp_numba(working_range, cur_case, p_ranges):
+    """
+    Outward diffusion (Chopard-Droz) using a Numba JIT kernel; one pass over the chunk,
+    no repeated np.where or temporary arrays. Switch to this for higher throughput.
+    """
+    start, end = int(working_range[0]), int(working_range[1])
+    cells_per_axis = cur_case.cells_per_axis
+
+    shm_cells = shared_memory.SharedMemory(name=cur_case.active_cells_shm_mdata.name)
+    cells = np.ndarray(
+        cur_case.active_cells_shm_mdata.shape,
+        dtype=cur_case.active_cells_shm_mdata.dtype,
+        buffer=shm_cells.buf,
+    )
+    shm_dirs = shared_memory.SharedMemory(name=cur_case.active_dirs_shm_mdata.name)
+    dirs = np.ndarray(
+        cur_case.active_dirs_shm_mdata.shape,
+        dtype=cur_case.active_dirs_shm_mdata.dtype,
+        buffer=shm_dirs.buf,
+    )
+
+    to_del = numba_functions.diffuse_bulk_chunk(
+        cells,
+        dirs,
+        start,
+        end,
+        float(p_ranges.p1_range),
+        float(p_ranges.p2_range),
+        float(p_ranges.p3_range),
+        float(p_ranges.p4_range),
+        float(p_ranges.p_r_range),
+        cells_per_axis,
+    )
+
+    shm_cells.close()
+    shm_dirs.close()
+
+    return to_del
 
 
 def diffuse_with_scale(working_range, cur_case, p_ranges):
@@ -188,7 +229,8 @@ def diffuse_with_scale(working_range, cur_case, p_ranges):
     shm_cells.close()
     shm_dirs.close()
 
-    return working_range[np.concatenate((ind_left, ind_right))]
+    idx = np.asarray(np.concatenate((ind_left, ind_right)), dtype=np.intp)
+    return working_range[idx]
 
 
 def diffuse_with_scale_adj(working_range, cur_case, p_ranges):
@@ -321,4 +363,5 @@ def diffuse_with_scale_adj(working_range, cur_case, p_ranges):
     shm_cells.close()
     shm_dirs.close()
 
-    return working_range[np.concatenate((ind_left, ind_right))]
+    idx = np.asarray(np.concatenate((ind_left, ind_right)), dtype=np.intp)
+    return working_range[idx]

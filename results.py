@@ -3,8 +3,8 @@ import tkinter as tk
 from tkinter import filedialog
 
 # plot_kinetics(np.arange(100), with_kinetic=True)
-layers = np.arange(0, 100, 1)
-# layers = (3,)
+# layers = np.arange(0, 100, 1)
+layers = (1, 3, 4, 6, 14, 20, 27)
 # plot_kinetics(layers, with_kinetic=False)
 
 root = tk.Tk()
@@ -24,7 +24,7 @@ visualise.plot_2d(plot_separate=False)
 # for i in range(260, 301):
 #     visualise.plot_2d(plot_separate=False, slice_pos=i)
 
-visualise.plot_concentration(plot_separate=False, conc_type="atomic_tc", analytic_sol=False)
+visualise.plot_concentration(plot_separate=False, conc_type="cells", analytic_sol=False)
 # visualise.plot_concentration(plot_separate=False, conc_type="cells", analytic_sol=True, iteration=iter)
 # visualise.animate_concentration(conc_type="cells", analytic_sol=True)
 

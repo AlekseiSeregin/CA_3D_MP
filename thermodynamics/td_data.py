@@ -43,8 +43,18 @@ class TdDATA:
         return np.array([[obj.corundum_cr, obj.corundum_al, obj.spinel_cr, obj.spinel_al, obj.halite]
                          for obj in objects]).T
 
+    def get_look_up_data_single(self, primary, secondary, oxidant):
+        """Look up thermodynamic data for a single point (primary, secondary, oxidant). Returns 1D array of shape (5,) with [corundum_cr, corundum_al, spinel_cr, spinel_al, halite]."""
+        point = np.array([primary, secondary, oxidant], dtype=float)
+        _, index = self.tree.query(point, k=1)
+        key = tuple(self.keys[index].flat)
+        obj = self.TD_lookup[key]
+        return np.array([obj.corundum_cr, obj.corundum_al, obj.spinel_cr, obj.spinel_al, obj.halite])
+
 
 if __name__ == '__main__':
     test_data = TdDATA()
     test_data.fetch_look_up_from_file()
+    print(test_data.get_look_up_data_single(1, 1, 40))
+
 

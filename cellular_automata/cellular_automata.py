@@ -1,9 +1,12 @@
+import os
 import sys
+import threading
 import utils
 import multiprocessing
 from .nes_for_mp import *
 from .dissolution_functions import *
 from thermodynamics import *
+from thermodynamics import JMatProWorkerPool
 
 
 class CellularAutomata:
@@ -54,8 +57,43 @@ class CellularAutomata:
                                         [12, 3, 4, 5, 20, 23, 25],
                                         [13, 3, 4, 2, 21, 24, 25]], dtype=np.int64)
 
+        # Intelligent worker allocation to avoid CPU oversubscription
+        _cpu_count = os.cpu_count() or 1
+        _max_workers = Config.NUMBER_OF_PROCESSES if Config.NUMBER_OF_PROCESSES > 0 else _cpu_count
+        
+        # Calculate worker allocation
+        # Option 1: Split evenly (default) - can be overridden via Config
+        # Option 2: Prioritize CA workers (more frequent tasks)
+        # Option 3: Prioritize JMatPro workers (longer-running tasks)
+        if hasattr(Config, 'JMATPRO_WORKER_RATIO'):
+            # Use explicit ratio if configured (e.g., 0.3 means 30% for JMatPro, 70% for CA)
+            jmatpro_ratio = Config.JMATPRO_WORKER_RATIO
+            ca_workers = max(1, int(_max_workers * (1 - jmatpro_ratio)))
+            jmatpro_workers = max(1, _max_workers - ca_workers)
+        else:
+            # Default: Split 60/40 (CA gets more since it's used more frequently)
+            # JMatPro calculations are longer but less frequent
+            ca_workers = max(1, int(_max_workers * 0.6))
+            jmatpro_workers = max(1, _max_workers - ca_workers)
+        
+        # Ensure we don't exceed CPU count
+        ca_workers = min(ca_workers, _cpu_count)
+        jmatpro_workers = min(jmatpro_workers, _cpu_count)
+        total_workers = ca_workers + jmatpro_workers
+        
+        # Warn if oversubscription would occur
+        if total_workers > _cpu_count:
+            print(f"Warning: Total workers ({total_workers}) exceeds CPU count ({_cpu_count}). "
+                  f"Consider reducing NUMBER_OF_PROCESSES or setting JMATPRO_WORKER_RATIO.")
+            # Cap at CPU count, prioritizing CA workers
+            if ca_workers + jmatpro_workers > _cpu_count:
+                excess = (ca_workers + jmatpro_workers) - _cpu_count
+                jmatpro_workers = max(1, jmatpro_workers - excess)
+        
         if Config.MULTIPROCESSING:
-            self.numb_of_proc = Config.NUMBER_OF_PROCESSES
+            self.numb_of_proc = ca_workers
+            if self.numb_of_proc < 1:
+                self.numb_of_proc = 1
             if self.cells_per_axis % self.numb_of_proc == 0:
                 chunk_size = int(self.cells_per_axis / self.numb_of_proc)
             else:
@@ -70,6 +108,14 @@ class CellularAutomata:
             self.chunk_ranges[-1, 1] = self.cells_per_axis
 
             self.pool = multiprocessing.Pool(processes=self.numb_of_proc, maxtasksperchild=Config.MAX_TASK_PER_CHILD)
+        
+        # Store worker allocation info for debugging
+        self.worker_allocation = {
+            'ca_workers': ca_workers,
+            'jmatpro_workers': jmatpro_workers,
+            'total_cpus': _cpu_count,
+            'max_configured': _max_workers
+        }
 
         self.threshold_inward = Config.THRESHOLD_INWARD
         self.threshold_outward = Config.THRESHOLD_OUTWARD
@@ -85,10 +131,16 @@ class CellularAutomata:
         # self.TdDATA = td_data.TdDATA()
         # self.TdDATA.fetch_look_up_from_file()
         # self.curr_look_up = None
+        self.TdDATA = JMatProWorkerPool(
+            temperature=Config.TEMPERATURE,
+            num_workers=jmatpro_workers,  # Use allocated number, not total
+            task_timeout=3.0,
+            max_retries=3
+        )
 
         # self.KinDATA = kin_data.KinDATA("LUT_NiCr5.pkl")
         # self.KinDATA.fetch_look_up_from_file()
-        # self.curr_look_up = None
+        self.curr_look_up = None
 
         self.prev_stab_count = 0
 
@@ -1170,12 +1222,131 @@ class CellularAutomata:
         if self.iteration % Config.STRIDE == 0:
             self.record_prod_per_layer(self.ioz_bound, product_c, curr_look_up)
 
-        some = (curr_look_up * (1 - Config.PROD_ERROR))
+        # some = (curr_look_up * (1 - Config.PROD_ERROR))
 
         self.product_indexes = np.where(product_c < (curr_look_up * (1 - Config.PROD_ERROR)))[0]
 
         self.comb_indexes = self.get_active_oxidant_mutual_indexes(oxidant, active)
         self.comb_indexes = np.intersect1d(self.comb_indexes, self.product_indexes)
+    
+    def _jmatpro_raw_to_phase_array(self, raw_list):
+        """Postprocess raw JMatPro output to (5, n) phase fraction array. raw_list: list of dicts from TdDATA.get_look_up_data.
+        Each raw entry can be phase_name -> molar_fraction (float) or phase_name -> dict with 'molar_fraction', 'elements', 'composition'."""
+        mapping = getattr(Config, 'JMATPRO_PHASE_MAPPING', _DEFAULT_JMATPRO_PHASE_MAPPING)
+        n = len(raw_list)
+        out = np.zeros((5, n), dtype=float)
+        for i, raw in enumerate(raw_list):
+            if not isinstance(raw, dict):
+                continue
+            for idx, jmatpro_names in enumerate(mapping):
+                for name in jmatpro_names:
+                    if name in raw:
+                        val = raw[name]
+                        out[idx, i] = val["molar_fraction"] if isinstance(val, dict) else val
+                        break
+        return out
+
+    def get_comb_ind_jmatpro(self):
+        """Single active, single oxidant only (no secondary elements)."""
+        self.ioz_bound = self.get_cur_ioz_bound()
+
+        oxidant = np.array([np.sum(self.cases.first.oxidant.c3d[:, :, plane_ind]) for plane_ind
+                            in range(self.ioz_bound + 1)], dtype=np.uint32)
+        oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
+
+        active = np.array([np.sum(self.cases.first.active.c3d[:, :, plane_ind]) for plane_ind
+                           in range(self.ioz_bound + 1)], dtype=np.uint32)
+        active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
+        outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
+
+        product = np.array([np.sum(self.cases.first.product.c3d[:, :, plane_ind]) for plane_ind
+                            in range(self.ioz_bound + 1)], dtype=np.uint32)
+        product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
+        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL * \
+                               Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
+
+        matrix_moles = (self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles)
+        whole_moles = (matrix_moles + oxidant_moles + active_moles + product_moles)
+
+        product_c = product_moles / whole_moles
+
+        oxidant_pure_moles = (oxidant_moles + (product_moles * 3/5))
+        active_pure_moles = active_moles + (product_moles * 2/5)
+        active_pure_eq_mat_moles = active_pure_moles * Config.ACTIVES.PRIMARY.T
+
+
+        matrix_moles_pure = self.matrix_moles_per_page - active_pure_eq_mat_moles
+        whole_moles_pure = matrix_moles_pure + oxidant_pure_moles + active_pure_moles
+
+        oxidant_pure_c = oxidant_pure_moles * 100 / whole_moles_pure
+        active_pure_c = active_pure_moles * 100 / whole_moles_pure
+
+        elements = [
+            getattr(Config.MATRIX, "ELEMENT", "Ni"),
+            self.cases.first.active.elem_name,
+            self.cases.first.oxidant.elem_name,
+        ]
+        compositions = []
+        for i in range(len(active_pure_c)):
+            a_i = float(active_pure_c[i])
+            o_i = float(oxidant_pure_c[i])
+            base = 100.0 - a_i - o_i
+            if base < 0:
+                base = 0.0
+                total = a_i + o_i
+                if total > 100.0:
+                    scale = 100.0 / total
+                    compositions.append([base, a_i * scale, o_i * scale])
+                else:
+                    compositions.append([base, a_i, o_i])
+            else:
+                compositions.append([base, a_i, o_i])
+
+        task_ids = self.TdDATA.submit_tasks(compositions, elements=elements)
+        raw_list = self.TdDATA.get_results(task_ids, wait=True, timeout=100000.0)
+
+        # Preserve composition index: result[i] must match composition[i] (task_ids[i])
+        def _m2o3_fraction(raw):
+            m2o3 = raw.get("M2O3") if isinstance(raw, dict) else None
+            if m2o3 is None:
+                return 0.0
+            if isinstance(m2o3, dict):
+                return float(m2o3.get("molar_fraction", 0.0))
+            return float(m2o3)
+        curr_look_up = np.array([_m2o3_fraction(raw_list.get(tid, {})) for tid in task_ids])
+
+        t_ind_p = np.where(curr_look_up > 0)[0]
+        t_ind_z = np.where(curr_look_up == 0)[0]
+        primary_error = (curr_look_up[t_ind_p] - product_c[t_ind_p]) / curr_look_up[t_ind_p]
+        primary_pos_ind = t_ind_p[np.where(primary_error > Config.PROD_ERROR)[0]]
+
+        coef_ind = np.where(primary_error < -Config.PROD_ERROR)[0]
+        primary_neg_ind = t_ind_p[coef_ind]
+        adj_coeff_neg = primary_error[coef_ind] * -1
+        d_ind = t_ind_z[np.where(product_c[t_ind_z] > 0)[0]]
+
+        self.cur_case = self.cases.first
+        self.cur_case_mp = self.cases.first_mp
+        if len(primary_pos_ind) > 0:
+            oxidant_indexes = np.where(oxidant > 0)[0]
+            active_indexes = np.where(active > 0)[0]
+            min_act = active_indexes.min(initial=self.cells_per_axis)
+            indexs = np.where(oxidant_indexes >= min_act - 1)[0]
+            self.comb_indexes = oxidant_indexes[indexs]
+            self.comb_indexes = np.intersect1d(primary_pos_ind, self.comb_indexes)
+        else:
+            self.comb_indexes = []
+
+            # if len(self.comb_indexes) > 0:
+                # self.cases.reaccumulate_products(self.cur_case)
+                # self.precip_mp()
+
+        # if len(primary_neg_ind) > 0 or len(d_ind) > 0 or len(primary_pos_ind) > 0:
+        #     self.comb_indexes = np.concatenate((primary_neg_ind, d_ind, primary_pos_ind))
+        #     adj_coeff = np.concatenate((adj_coeff_neg, np.ones(len(d_ind)), np.zeros(len(primary_pos_ind))))
+        #     self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
+        #     self.decomposition_intrinsic()
+
 
     def get_combi_ind_atomic_with_kinetic_and_KP(self):
         self.ioz_bound = self.get_cur_ioz_bound()
@@ -2056,12 +2227,12 @@ class CellularAutomata:
             self.cur_case.dissolution_probabilities.adapt_probabilities(self.comb_indexes, frac)
             self.decomposition_intrinsic()
 
-    def dissolution_atomic_stop_if_no_active(self):
-        self.ioz_bound = self.get_cur_ioz_bound()
+    def dissolution_stop_if_no_active(self):
+        # self.ioz_bound = self.get_cur_ioz_bound()
         self.comb_indexes = np.where(self.cur_case.prod_indexes)[0]
 
-        temp = np.where(self.comb_indexes <= self.ioz_bound)[0]
-        self.comb_indexes = self.comb_indexes[temp]
+        # temp = np.where(self.comb_indexes <= self.ioz_bound)[0]
+        # self.comb_indexes = self.comb_indexes[temp]
 
         active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind in self.comb_indexes], dtype=np.uint32)
 
@@ -2198,7 +2369,7 @@ class CellularAutomata:
         # print(pos)
         curr_look_up = self.KinDATA.get_look_up_data(times, pos)
 
-        some = (curr_look_up * (1 + Config.PROD_ERROR))
+        # some = (curr_look_up * (1 + Config.PROD_ERROR))
 
         self.product_indexes = np.where(product_c > (curr_look_up * (1 + Config.PROD_ERROR)))[0]
         tind = np.where(product_c > curr_look_up)[0]
@@ -2252,7 +2423,7 @@ class CellularAutomata:
                       dissolution_probabilities, dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL) for chunk_range in
                      self.chunk_ranges]
 
-            results = self.pool.map(worker, tasks)
+            results = list(self.pool.imap_unordered(worker, tasks))
 
             to_dissolve = np.array(np.concatenate(results, axis=1), dtype=np.ushort)
             if len(to_dissolve[0]) > 0:
@@ -2267,29 +2438,20 @@ class CellularAutomata:
 
     def dissolution_standard(self):
         # self.comb_indexes = self.get_cur_dissol_ioz_bound()
-
         self.product_indexes = np.where(self.cur_case.prod_indexes)[0]
         # temp = np.where(self.comb_indexes <= self.ioz_bound)[0]
         # self.comb_indexes = self.comb_indexes[temp]
-
         # not_stable_ind = np.where(self.product_x_not_stab)[0]
         # nz_ind = np.where(self.product_x_nzs)[0]
-
         # self.product_indexes = np.intersect1d(not_stable_ind, nz_ind)
-
         product = np.array([np.any(self.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
                             in self.product_indexes])
-
         where_no_prod = np.where(~product)[0]
         self.cur_case.prod_indexes[self.product_indexes[where_no_prod]] = False
-
         self.comb_indexes = np.where(self.cur_case.prod_indexes)[0]
 
         if len(self.comb_indexes) > 0:
             self.decomposition_intrinsic()
-        # else:
-        #     print("PRODUCT FULLY DISSOLVED AFTER ", self.iteration, " ITERATIONS")
-        #     sys.exit()
 
     def ci_single_only_p1(self, seeds):
         all_arounds = self.utils.calc_sur_ind_formation(seeds, self.cur_case.active.c3d.shape[2] - 1)
@@ -2490,7 +2652,7 @@ class CellularAutomata:
                 indices.append([start, end])
                 start = end
             tasks = [(wr, self.cur_case_mp, self.cur_case.active.p_ranges, self.cur_case.active.diffuse) for wr in indices]
-            results = self.pool.map(worker, tasks)
+            results = list(self.pool.imap_unordered(worker, tasks))
             to_del = np.array(np.concatenate(results))
             self.cur_case.active.dell_cells_from_diff_arrays(to_del)
             self.cur_case.active.fill_first_page()
@@ -2725,7 +2887,8 @@ class CellularAutomata:
                   self.cur_case_mp.dissolution_probabilities, self.cur_case_mp.decomposition) for chunk_range in
                  self.chunk_ranges]
 
-        results = self.pool.map(worker, tasks)
+        # imap_unordered yields results as they complete (order not needed for concatenation)
+        results = list(self.pool.imap_unordered(worker, tasks))
 
         to_dissolve = np.array(np.concatenate(results, axis=1), dtype=np.ushort)
         if len(to_dissolve[0]) > 0:

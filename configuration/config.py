@@ -39,7 +39,7 @@ class Config:
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
     # OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.0012
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.01
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
@@ -48,7 +48,7 @@ class Config:
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Cr in Ni Krupp"
     ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.05
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.2
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.3
     ACTIVES.PRIMARY.CONC_PRECISION = "rand"
     ACTIVES.PRIMARY.SPACE_FILL = "full"
     # secondary actives
@@ -75,15 +75,15 @@ class Config:
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 100000  # must be >= n_cells_per_axis
-    STRIDE = 40  # n_iterations / stride = n_iterations for outward diffusion
+    N_ITERATIONS = 500000  # must be >= n_cells_per_axis
+    STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
-    PRECIP_TRANSFORM_DEPTH = 20
+    PRECIP_TRANSFORM_DEPTH = 10
     SIM_TIME = 72000  # [sek]
-    SIZE = 100 * (10 ** -6)  # [m]
+    SIZE = 500 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
-    PHASE_FRACTION_LIMIT = 0.0418
+    PHASE_FRACTION_LIMIT = 0.036
     THRESHOLD_INWARD = 1
     THRESHOLD_OUTWARD = 1
     NEIGH_RANGE = 1   # neighbouring ranges    1, 2, 3, 4, 5,  6,  7,  8,  9,  10
@@ -93,23 +93,33 @@ class Config:
 
     PROD_INCR_CONST = 1 * 10 ** -5
     PROD_ERROR = 0.01
-    ZETTA_ZERO = 1 * (10 ** -6)  # [m]
-    ZETTA_FINAL = 50 * (10 ** -6)  # [m]
+    ZETTA_ZERO = 10 * (10 ** -6)  # [m]
+    ZETTA_FINAL = 43 * (10 ** -6)  # [m]
 
     INWARD_DIFFUSION = True
     OUTWARD_DIFFUSION = True
     COMPUTE_PRECIPITATION = True
     SAVE_WHOLE = False
-    DECOMPOSE_PRECIPITATIONS = True
+    DECOMPOSE_PRECIPITATIONS = False
     FULL_CELLS = False
-    SAVE_PATH = 'W:/SIMCA/test_runs_data/'
+    SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
     MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 15
+    NUMBER_OF_PROCESSES = 2  # Total workers to allocate (split between CA and JMatPro)
+    # JMatPro worker allocation ratio (0.0-1.0): fraction of NUMBER_OF_PROCESSES allocated to JMatPro
+    # Remaining workers go to CA calculations. Default: auto (60% CA, 40% JMatPro)
+    # Examples:
+    #   JMATPRO_WORKER_RATIO = 0.4  # 40% JMatPro, 60% CA (recommended for balanced workload)
+    #   JMATPRO_WORKER_RATIO = 0.5  # 50/50 split
+    #   JMATPRO_WORKER_RATIO = None  # Auto: 40% JMatPro, 60% CA
+    JMATPRO_WORKER_RATIO = 0.5  # None = auto allocation
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
+    # Worker recycling: long-lived workers can grow RAM (NumPy/Python allocator fragmentation).
+    # int = recycle after N tasks (reclaims RAM; new workers load Numba from disk cache).
+    # None = never recycle (no Numba recompile; RAM may grow on very long runs).
     MAX_TASK_PER_CHILD = 50000
     BUFF_SIZE_CONST_ELEM = 1.5
     TERMINATION_COMMAND = 'ctrl+g+m'
@@ -123,11 +133,11 @@ class Config:
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.7
+    PROBABILITIES.PRIMARY.p0 = 0.999
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.9
+    PROBABILITIES.PRIMARY.p1 = 0.99999
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1
@@ -137,11 +147,11 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 0.01
+    PROBABILITIES.PRIMARY.p0_d = 1e-3
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 5
-    PROBABILITIES.PRIMARY.p1_d = 0.001
+    PROBABILITIES.PRIMARY.p1_d = 1e-4
     PROBABILITIES.PRIMARY.p1_d_f = 1
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 10

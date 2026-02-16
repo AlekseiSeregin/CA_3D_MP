@@ -32,13 +32,13 @@ def calc_saturation(c_b, c_o, d_o, d_b, time, nu=1.0):
 
 # conz_list = [0.25, 0.55, 0.6, 0.65, 0.75, 0.8, 0.85]
 
-conz_list = [0.0561]
+conz_list = [0.9]
 c_o = 45e-5
 d_o = (2.8231080610996937 * 10 ** -12) * 1
 # d_b = 2.2164389765037816 * 10 ** -14
 time = 20 * 3600
 d_b = (5.258262368514388 * 10 ** -15) * 1
 # c_b = 0.08
-nu = 1.5
+nu = 1
 for active_conz in conz_list:
     calc_saturation(active_conz, c_o, d_o, d_b, time, nu=nu)

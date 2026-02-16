@@ -15,6 +15,7 @@ import pandas as pd
 import tkinter as tk
 from tkinter import filedialog
 from microstructure import voronoi
+import csv
 
 
 class Visualisation:
@@ -30,8 +31,8 @@ class Visualisation:
         self.oxid_numb = None
         self.utils = utils.Utils()
         self.generate_param_from_db()
-        self.cell_size_full = 20
-        self.cell_size = 20
+        self.cell_size_full = 40
+        self.cell_size = 40
         self.linewidth_f = 0.1
         self.linewidth = 0.2
         self.alpha = 1
@@ -728,7 +729,7 @@ ELAPSED TIME: {message}
                                    s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth_f,
                                    alpha=self.alpha)
 
-                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='r',
+                    ax_all.scatter(not_fulls[:, 2], not_fulls[:, 1], not_fulls[:, 0], marker=',', color='darkred',
                                    s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
                                    alpha=self.alpha)
 
@@ -789,8 +790,8 @@ ELAPSED TIME: {message}
         # plt.savefig(f'C:/test_runs_data/{iteration}.jpeg')
         # plt.savefig(f"//juno/homes/user/aseregin/Desktop/simuls/{iteration}.jpeg")
 
-        # csfont = {'fontname': 'Times New Roman'}
-        csfont = {'fontname': 'Arial'}
+        csfont = {'fontname': 'Times New Roman'}
+        # csfont = {'fontname': 'Arial'}
         # # # Rescale the axis values
         step = new_axlim / 5
         ticks = np.arange(0, new_axlim + rescale_factor, step)
@@ -806,11 +807,11 @@ ELAPSED TIME: {message}
 
         # Get the tick labels and set font properties
         for tick in ax_all.get_xticklabels():
-            tick.set_fontname('Arial')
+            tick.set_fontname('Times New Roman')
         for tick in ax_all.get_yticklabels():
-            tick.set_fontname('Arial')
+            tick.set_fontname('Times New Roman')
         for tick in ax_all.get_zticklabels():
-            tick.set_fontname('Arial')
+            tick.set_fontname('Times New Roman')
 
         ax_all.set_xlabel("X [µm]", **csfont, fontsize=f_size*cm, labelpad=20)
         ax_all.set_ylabel("Y [µm]", **csfont, fontsize=f_size*cm, labelpad=20)
@@ -926,22 +927,22 @@ ELAPSED TIME: {message}
         else:
             ax_all = fig.add_subplot(111)
             ax_all.set_facecolor('gainsboro')
-            if self.Config.INWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
-                if np.any(items):
-                    ind = np.where(items[:, 0] == slice_pos)
-                    items = items[ind] * rescale_factor
-                    ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='b',
-                                   s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
-                if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
-                    if np.any(items):
-                        ind = np.where(items[:, 0] == slice_pos)
-                        items = items[ind] * rescale_factor
-                        ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='deeppink',
-                                       s=self.cell_size_full * (72. / fig.dpi) ** 2)
+            # if self.Config.INWARD_DIFFUSION:
+            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+            #     items = np.array(self.c.fetchall())
+            #     if np.any(items):
+            #         ind = np.where(items[:, 0] == slice_pos)
+            #         items = items[ind] * rescale_factor
+            #         ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='b',
+            #                        s=self.cell_size_full * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth)
+            #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
+            #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
+            #         items = np.array(self.c.fetchall())
+            #         if np.any(items):
+            #             ind = np.where(items[:, 0] == slice_pos)
+            #             items = items[ind] * rescale_factor
+            #             ax_all.scatter(items[:, 2], items[:, 1], marker=',', color='deeppink',
+            #                            s=self.cell_size_full * (72. / fig.dpi) ** 2)
             if self.Config.OUTWARD_DIFFUSION:
                 self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
                 items = np.array(self.c.fetchall())
@@ -1697,10 +1698,10 @@ ELAPSED TIME: {message}
 
         elif conc_type.lower() == "cells":
             conc_type_caption = "cells concentration [%]"
-            # n_cells_page = (self.axlim ** 2) * self.Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
+            n_cells_page = (self.axlim ** 2) * self.Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
 
             # DELETE!!!
-            n_cells_page = (self.axlim ** 2)
+            # n_cells_page = (self.axlim ** 2)
 
             inward = inward * 100 / n_cells_page
             sinward = sinward * 100 / n_cells_page
@@ -1856,8 +1857,8 @@ ELAPSED TIME: {message}
         #     print(x_pos * 1000000, inw, otw, soutw, pp, sp, tp, qp, qip, sep=" ")
             # print(x_pos * 1000000, " ", inw)
 
-        # for x_pos, out, ac in zip(x, outward, analytical_concentration):
-        #     print(x_pos * 1000000, out, ac, sep=" ")
+        # for x_pos, inw, out, ac in zip(x, inward, outward, primary_product):
+        #     print(x_pos * 1000000, inw, out, ac, sep=" ")
 
         plt.show()
 
@@ -1988,6 +1989,9 @@ def plot_kinetics(data_to_plot, with_kinetic=False):
     plt.figure(figsize=(10, 6))
     x_values = data.iloc[:, 0]
 
+    some_data = []
+    # some_data.append(x_values * 0.04239 * (1/3600))
+
     for rows in data_to_plot:
         x = x_values.copy()
         index = 2 * rows + 1
@@ -1996,8 +2000,9 @@ def plot_kinetics(data_to_plot, with_kinetic=False):
         y_values = np.delete(y_values, z_ind)
         x = np.delete(x, z_ind)
         # plt.plot(x_values, y_values, label=f'Layer - {rows}', s=1)
-        x *= 0.00035
+        x *= 0.04239 * (1/3600)
         plt.plot(x, y_values, label=f'Layer - {rows}')
+        some_data.append([x, y_values * 100])
 
         if with_kinetic:
             x = x_values.copy()
@@ -2006,8 +2011,47 @@ def plot_kinetics(data_to_plot, with_kinetic=False):
             y_values_soll = np.delete(y_values_soll, z_ind)
             x = np.delete(x, z_ind)
             # plt.plot(x_values, y_values_soll, label=f'Layer - {rows} kinetic', s=1)
-            x *= 0.00035
+            # x *= 0.00035
             plt.plot(x, y_values_soll, label=f'Layer - {rows} kinetic')
+
+    # x_values *= 0.04239 * (1/3600)
+    # for item in x_values:
+    #     print(item)
+    # for item in some_data:
+    #     for dat in item:
+    #         print(dat)
+    #
+    #     print(":::::::::::::::::::")
+    # Find the maximum length of x and y_values
+    # max_len = max(
+    #     max(len(x) if isinstance(x, (list, np.ndarray)) else 0,
+    #         len(y) if isinstance(y, (list, np.ndarray)) else 0)
+    #     for x, y in some_data
+    # )
+    #
+    # # Prepare the data for columns, filling shorter lists/arrays with None
+    # columns = []
+    # for x, y_values in some_data:
+    #     x = x if isinstance(x, (list, np.ndarray)) else []
+    #     y_values = y_values if isinstance(y_values, (list, np.ndarray)) else []
+    #
+    #     x_extended = list(x) + [None] * (max_len - len(x))
+    #     y_extended = list(y_values) + [None] * (max_len - len(y_values))
+    #
+    #     columns.append(x_extended)
+    #     columns.append(y_extended)
+    #
+    # # Transpose columns for saving as rows
+    # transposed = list(zip(*columns))
+    #
+    # # Save to text file
+    # output_file = "output_data.txt"
+    # with open(output_file, "w") as f:
+    #     for row in transposed:
+    #         f.write("\t".join(str(value) if value is not None else "" for value in row) + "\n")
+    #
+    # print(f"Data saved to {output_file}")
+
 
     plt.xlabel("Time [sec]")
     plt.ylabel('Concentration')
