@@ -57,6 +57,15 @@ _DIRS_6 = np.array([
     [-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]
 ], dtype=np.int8)
 
+
+def _pack_dir(dx, dy, dz):
+    """Pack (dx, dy, dz) each in {-1, 0, 1} into one byte (2 bits per component)."""
+    return (int(dx) + 1) + ((int(dy) + 1) << 2) + ((int(dz) + 1) << 4)
+
+
+# Precomputed packed form of _DIRS_6 for initial placement
+_DIRS_6_PACKED = np.array([_pack_dir(d[0], d[1], d[2]) for d in _DIRS_6], dtype=np.uint8)
+
 # Flat index for 3D (i, j, k) in C order: i changes fastest
 # Use Python ints to avoid overflow with numpy int32 when n is large (e.g. n² or n³ > 2^31)
 def _idx(i, j, k, n):
@@ -157,14 +166,16 @@ def _partition_domain(n, n_blocks, bc_x):
 
 
 # ---------------------------------------------------------------------------
-# Shared buffer layout: one segment = [count (n³ int32)][dirs (n³·max_per_cell·3 int8)]
+# Shared buffer layout: one segment = [count (n³ int8)][dirs (n³·max_per_cell uint8 packed)]
+# Packed dirs: one byte per (dx,dy,dz) with dx,dy,dz in {-1,0,1}: byte = (dx+1)|((dy+1)<<2)|((dz+1)<<4)
 # ---------------------------------------------------------------------------
 
 def _views_from_segment(shm, n, max_per_cell, count_bytes, dirs_bytes):
-    """Return (count, dirs) as numpy views on the shared segment (zero-copy)."""
+    """Return (count, dirs) as numpy views on the shared segment (zero-copy). dirs are packed: (n3, max_per_cell) uint8."""
     n3 = n * n * n
-    count = np.ndarray((n3,), dtype=np.int32, buffer=shm.buf, offset=0)
-    dirs = np.ndarray((n3, max_per_cell, 3), dtype=np.int8, buffer=shm.buf, offset=count_bytes)
+    count_dtype = np.int8 if count_bytes == n3 else np.int32
+    count = np.ndarray((n3,), dtype=count_dtype, buffer=shm.buf, offset=0)
+    dirs = np.ndarray((n3, max_per_cell), dtype=np.uint8, buffer=shm.buf, offset=count_bytes)
     return count, dirs
 
 
@@ -191,9 +202,10 @@ if _NUMBA_AVAILABLE:
                     if nc == 0:
                         continue
                     for c in range(nc):
-                        d0 = read_dirs[idx, c, 0]
-                        d1 = read_dirs[idx, c, 1]
-                        d2 = read_dirs[idx, c, 2]
+                        b = read_dirs[idx, c]
+                        d0 = (b & 3) - 1
+                        d1 = ((b >> 2) & 3) - 1
+                        d2 = ((b >> 4) & 3) - 1
                         r = np.random.random()
                         if r <= p1:
                             nd0, nd1, nd2 = d2, d0, d1
@@ -216,9 +228,7 @@ if _NUMBA_AVAILABLE:
                         slot = write_count[nidx]
                         if slot >= max_per_cell:
                             continue
-                        write_dirs[nidx, slot, 0] = ndx
-                        write_dirs[nidx, slot, 1] = ndy
-                        write_dirs[nidx, slot, 2] = ndz
+                        write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
                         write_count[nidx] = slot + 1
 
     # x reflection: clamp and flip
@@ -237,9 +247,10 @@ if _NUMBA_AVAILABLE:
                     if nc == 0:
                         continue
                     for c in range(nc):
-                        d0 = read_dirs[idx, c, 0]
-                        d1 = read_dirs[idx, c, 1]
-                        d2 = read_dirs[idx, c, 2]
+                        b = read_dirs[idx, c]
+                        d0 = (b & 3) - 1
+                        d1 = ((b >> 2) & 3) - 1
+                        d2 = ((b >> 4) & 3) - 1
                         r = np.random.random()
                         if r <= p1:
                             nd0, nd1, nd2 = d2, d0, d1
@@ -267,9 +278,7 @@ if _NUMBA_AVAILABLE:
                         slot = write_count[nidx]
                         if slot >= max_per_cell:
                             continue
-                        write_dirs[nidx, slot, 0] = ndx
-                        write_dirs[nidx, slot, 1] = ndy
-                        write_dirs[nidx, slot, 2] = ndz
+                        write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
                         write_count[nidx] = slot + 1
 
     # x deletion: clamp, skip write if out of bounds
@@ -288,9 +297,10 @@ if _NUMBA_AVAILABLE:
                     if nc == 0:
                         continue
                     for c in range(nc):
-                        d0 = read_dirs[idx, c, 0]
-                        d1 = read_dirs[idx, c, 1]
-                        d2 = read_dirs[idx, c, 2]
+                        b = read_dirs[idx, c]
+                        d0 = (b & 3) - 1
+                        d1 = ((b >> 2) & 3) - 1
+                        d2 = ((b >> 4) & 3) - 1
                         r = np.random.random()
                         if r <= p1:
                             nd0, nd1, nd2 = d2, d0, d1
@@ -315,9 +325,7 @@ if _NUMBA_AVAILABLE:
                         slot = write_count[nidx]
                         if slot >= max_per_cell:
                             continue
-                        write_dirs[nidx, slot, 0] = ndx
-                        write_dirs[nidx, slot, 1] = ndy
-                        write_dirs[nidx, slot, 2] = ndz
+                        write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
                         write_count[nidx] = slot + 1
 
     # Choose kernel once from config (bc_x: 0=periodic, 1=reflection, 2=deletion)
@@ -362,7 +370,7 @@ def _worker_subblock(args):
     #     # Fast path: use numba-compiled kernel
     _diffuse_subblock_kernel(
         read_count, read_dirs, write_count, write_dirs,
-        x_lo, x_hi, n, max_per_cell, bc_x, bc_y, bc_z,
+        x_lo, x_hi, n, max_per_cell, bc_x,
         p1, p2, p3, p4, p_r, seed
     )
   
@@ -421,7 +429,7 @@ def _worker_gap_x(args):
     # if _NUMBA_AVAILABLE:
     _diffuse_subblock_kernel(
         read_count, read_dirs, write_count, write_dirs,
-        gap_x, gap_x, n, max_per_cell, bc_x, bc_y, bc_z,
+        gap_x, gap_x, n, max_per_cell, bc_x,
         p1, p2, p3, p4, p_r, seed
     )
 
@@ -487,20 +495,18 @@ def _parse_boundary(s):
 
 
 def run_example():
-    n = 300
-    n_workers = 5
+    n = 500
+    n_workers = 10
     n_blocks = n_workers
     n_steps = 20
-    total_particles = 100000
+    total_particles = 100_000
     max_per_cell = 2
 
     # Boundary condition per axis: "periodic", "reflection", or "deletion" (open)
     boundary_x = "periodic"
-    boundary_y = "periodic"
-    boundary_z = "periodic"
     bc_x = _parse_boundary(boundary_x)
-    bc_y = _parse_boundary(boundary_y)
-    bc_z = _parse_boundary(boundary_z)
+    bc_y = BC_PERIODIC  # y, z always periodic in kernel
+    bc_z = BC_PERIODIC
 
     interior_ranges, gap_x_set = _partition_domain(n, n_blocks, bc_x)
     if not interior_ranges:
@@ -511,10 +517,10 @@ def run_example():
     gap_groups = _partition_gap_x_parallel(gap_x_set, min_spacing=3)
 
     n3 = n * n * n
-    count_dtype = np.int32
-    dirs_dtype = np.int8
+    count_dtype = np.int8  # max 127; max_per_cell ≤ 50
     count_bytes = n3 * np.dtype(count_dtype).itemsize
-    dirs_bytes = n3 * max_per_cell * 3 * np.dtype(dirs_dtype).itemsize
+    # Packed dirs: one byte per (dx,dy,dz) with values in {-1,0,1}
+    dirs_bytes = n3 * max_per_cell * 1
     segment_bytes = count_bytes + dirs_bytes
 
     # Two contiguous shared segments (one per buffer): [count][dirs]
@@ -532,8 +538,7 @@ def run_example():
         idx = _idx(i, j, k, n)
         c = A_count[idx]
         if c < max_per_cell:
-            d = _DIRS_6[rng.integers(0, 6)]
-            A_dirs[idx, c, 0], A_dirs[idx, c, 1], A_dirs[idx, c, 2] = d[0], d[1], d[2]
+            A_dirs[idx, c] = _DIRS_6_PACKED[rng.integers(0, 6)]
             A_count[idx] = c + 1
 
     class FakePRanges:
