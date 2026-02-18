@@ -72,56 +72,6 @@ def _idx(i, j, k, n):
     ni, nj, nk, nn = int(i), int(j), int(k), int(n)
     return ni + nn * (nj + nn * nk)
 
-
-def _chopard_droz_one(rng, d, p1, p2, p3, p4, p_r):
-    """One Chopard–Droz step: rotate/reflect direction; return (dx,dy,dz) as int8."""
-    r = rng.random()
-    if r <= p1:
-        return (d[2], d[0], d[1])
-    if r <= p2:
-        return (-d[2], -d[0], -d[1])
-    if r <= p3:
-        return (d[1], d[2], d[0])
-    if r <= p4:
-        return (-d[1], -d[2], -d[0])
-    if r <= p_r:
-        return (-d[0], -d[1], -d[2])
-    return (int(d[0]), int(d[1]), int(d[2]))
-
-
-def _apply_boundary(i, j, k, dx, dy, dz, n, bc_x, bc_y, bc_z):
-    """
-    Apply boundary conditions per axis. Return (nx, ny, nz, ndx, ndy, ndz, deleted).
-    - periodic: wrap coordinate, direction unchanged.
-    - reflection: clamp to [0, n-1] and flip direction when hitting the wall.
-    - deletion: if move would go out of [0, n-1], deleted=True (particle removed).
-    """
-    deleted = False
-    out = []
-    nn = int(n)
-    for v, d, bc in [(i, dx, bc_x), (j, dy, bc_y), (k, dz, bc_z)]:
-        # Cast to Python ints to avoid overflow warnings with numpy int8/int32
-        v_int, d_int = int(v), int(d)
-        v_new = v_int + d_int
-        d_new = d_int
-        if bc == BC_PERIODIC:
-            v_new = ((v_new % nn) + nn) % nn
-        elif bc == BC_REFLECTION:
-            if v_new < 0:
-                v_new = 0
-                d_new = -d_int
-            elif v_new >= nn:
-                v_new = nn - 1
-                d_new = -d_int
-        else:  # BC_DELETION
-            if v_new < 0 or v_new >= nn:
-                deleted = True
-            v_new = max(0, min(nn - 1, v_new))
-        out.append((v_new, d_new))
-    (nx, ndx), (ny, ndy), (nz, ndz) = out
-    return nx, ny, nz, ndx, ndy, ndz, deleted
-
-
 # ---------------------------------------------------------------------------
 # Subblock partition: 2-cell gap between neighbouring blocks (x-axis)
 # ---------------------------------------------------------------------------
@@ -185,169 +135,160 @@ def _views_from_segment(shm, n, max_per_cell, count_bytes, dirs_bytes):
 # Boundary condition is fixed for the whole run. Three separate kernels with x-BC
 # inlined (no branch). The right one is chosen from config (boundary_x) before the run.
 
-if _NUMBA_AVAILABLE:
-    # x periodic: no branch, just wrap
-    @numba.njit(fastmath=True, cache=True)
-    def _diffuse_subblock_kernel_x_periodic(
-        read_count, read_dirs, write_count, write_dirs,
-        x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
-    ):
-        np.random.seed(seed)
-        n2 = n * n
-        for k in range(n):
-            for j in range(n):
-                for i in range(x_lo, x_hi + 1):
-                    idx = i + n * j + n2 * k
-                    nc = read_count[idx]
-                    if nc == 0:
+# x periodic: no branch, just wrap
+@numba.njit(fastmath=True, cache=True)
+def _diffuse_subblock_kernel_x_periodic(
+    read_count, read_dirs, write_count, write_dirs,
+    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+):
+    np.random.seed(seed)
+    n2 = n * n
+    for k in range(n):
+        for j in range(n):
+            for i in range(x_lo, x_hi + 1):
+                idx = i + n * j + n2 * k
+                nc = read_count[idx]
+                if nc == 0:
+                    continue
+                for c in range(nc):
+                    b = read_dirs[idx, c]
+                    d0 = int(b & 3) - 1
+                    d1 = int((b >> 2) & 3) - 1
+                    d2 = int((b >> 4) & 3) - 1
+                    r = np.random.random()
+                    if r <= p1:
+                        nd0, nd1, nd2 = d2, d0, d1
+                    elif r <= p2:
+                        nd0, nd1, nd2 = -d2, -d0, -d1
+                    elif r <= p3:
+                        nd0, nd1, nd2 = d1, d2, d0
+                    elif r <= p4:
+                        nd0, nd1, nd2 = -d1, -d2, -d0
+                    elif r <= p_r:
+                        nd0, nd1, nd2 = -d0, -d1, -d2
+                    else:
+                        nd0, nd1, nd2 = d0, d1, d2
+                    nx = ((i + nd0) % n + n) % n
+                    ndx = nd0
+                    ny = ((j + nd1) % n + n) % n
+                    nz = ((k + nd2) % n + n) % n
+                    ndy, ndz = nd1, nd2
+                    nidx = nx + n * ny + n2 * nz
+                    slot = write_count[nidx]
+                    if slot >= max_per_cell:
                         continue
-                    for c in range(nc):
-                        b = read_dirs[idx, c]
-                        d0 = (b & 3) - 1
-                        d1 = ((b >> 2) & 3) - 1
-                        d2 = ((b >> 4) & 3) - 1
-                        r = np.random.random()
-                        if r <= p1:
-                            nd0, nd1, nd2 = d2, d0, d1
-                        elif r <= p2:
-                            nd0, nd1, nd2 = -d2, -d0, -d1
-                        elif r <= p3:
-                            nd0, nd1, nd2 = d1, d2, d0
-                        elif r <= p4:
-                            nd0, nd1, nd2 = -d1, -d2, -d0
-                        elif r <= p_r:
-                            nd0, nd1, nd2 = -d0, -d1, -d2
-                        else:
-                            nd0, nd1, nd2 = d0, d1, d2
-                        nx = ((i + nd0) % n + n) % n
-                        ndx = nd0
-                        ny = ((j + nd1) % n + n) % n
-                        nz = ((k + nd2) % n + n) % n
-                        ndy, ndz = nd1, nd2
-                        nidx = nx + n * ny + n2 * nz
-                        slot = write_count[nidx]
-                        if slot >= max_per_cell:
-                            continue
-                        write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
-                        write_count[nidx] = slot + 1
+                    write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
+                    write_count[nidx] = slot + 1
 
-    # x reflection: clamp and flip
-    @numba.njit(fastmath=True, cache=True)
-    def _diffuse_subblock_kernel_x_reflection(
-        read_count, read_dirs, write_count, write_dirs,
-        x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
-    ):
-        np.random.seed(seed)
-        n2 = n * n
-        for k in range(n):
-            for j in range(n):
-                for i in range(x_lo, x_hi + 1):
-                    idx = i + n * j + n2 * k
-                    nc = read_count[idx]
-                    if nc == 0:
-                        continue
-                    for c in range(nc):
-                        b = read_dirs[idx, c]
-                        d0 = (b & 3) - 1
-                        d1 = ((b >> 2) & 3) - 1
-                        d2 = ((b >> 4) & 3) - 1
-                        r = np.random.random()
-                        if r <= p1:
-                            nd0, nd1, nd2 = d2, d0, d1
-                        elif r <= p2:
-                            nd0, nd1, nd2 = -d2, -d0, -d1
-                        elif r <= p3:
-                            nd0, nd1, nd2 = d1, d2, d0
-                        elif r <= p4:
-                            nd0, nd1, nd2 = -d1, -d2, -d0
-                        elif r <= p_r:
-                            nd0, nd1, nd2 = -d0, -d1, -d2
-                        else:
-                            nd0, nd1, nd2 = d0, d1, d2
-                        v_new = i + nd0
-                        if v_new < 0:
-                            nx, ndx = 0, -nd0
-                        elif v_new >= n:
-                            nx, ndx = n - 1, -nd0
-                        else:
-                            nx, ndx = v_new, nd0
-                        ny = ((j + nd1) % n + n) % n
-                        nz = ((k + nd2) % n + n) % n
-                        ndy, ndz = nd1, nd2
-                        nidx = nx + n * ny + n2 * nz
-                        slot = write_count[nidx]
-                        if slot >= max_per_cell:
-                            continue
-                        write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
-                        write_count[nidx] = slot + 1
-
-    # x deletion: clamp, skip write if out of bounds
-    @numba.njit(fastmath=True, cache=True)
-    def _diffuse_subblock_kernel_x_deletion(
-        read_count, read_dirs, write_count, write_dirs,
-        x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
-    ):
-        np.random.seed(seed)
-        n2 = n * n
-        for k in range(n):
-            for j in range(n):
-                for i in range(x_lo, x_hi + 1):
-                    idx = i + n * j + n2 * k
-                    nc = read_count[idx]
-                    if nc == 0:
-                        continue
-                    for c in range(nc):
-                        b = read_dirs[idx, c]
-                        d0 = (b & 3) - 1
-                        d1 = ((b >> 2) & 3) - 1
-                        d2 = ((b >> 4) & 3) - 1
-                        r = np.random.random()
-                        if r <= p1:
-                            nd0, nd1, nd2 = d2, d0, d1
-                        elif r <= p2:
-                            nd0, nd1, nd2 = -d2, -d0, -d1
-                        elif r <= p3:
-                            nd0, nd1, nd2 = d1, d2, d0
-                        elif r <= p4:
-                            nd0, nd1, nd2 = -d1, -d2, -d0
-                        elif r <= p_r:
-                            nd0, nd1, nd2 = -d0, -d1, -d2
-                        else:
-                            nd0, nd1, nd2 = d0, d1, d2
-                        v_new = i + nd0
-                        if v_new < 0 or v_new >= n:
-                            continue
+# x reflection: clamp and flip
+@numba.njit(fastmath=True, cache=True)
+def _diffuse_subblock_kernel_x_reflection(
+    read_count, read_dirs, write_count, write_dirs,
+    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+):
+    np.random.seed(seed)
+    n2 = n * n
+    for k in range(n):
+        for j in range(n):
+            for i in range(x_lo, x_hi + 1):
+                idx = i + n * j + n2 * k
+                nc = read_count[idx]
+                if nc == 0:
+                    continue
+                # Safety: clamp nc to max_per_cell to prevent reading beyond array bounds
+                nc = min(nc, max_per_cell)
+                for c in range(nc):
+                    b = read_dirs[idx, c]
+                    d0 = int(b & 3) - 1
+                    d1 = int((b >> 2) & 3) - 1
+                    d2 = int((b >> 4) & 3) - 1
+                    r = np.random.random()
+                    if r <= p1:
+                        nd0, nd1, nd2 = d2, d0, d1
+                    elif r <= p2:
+                        nd0, nd1, nd2 = -d2, -d0, -d1
+                    elif r <= p3:
+                        nd0, nd1, nd2 = d1, d2, d0
+                    elif r <= p4:
+                        nd0, nd1, nd2 = -d1, -d2, -d0
+                    elif r <= p_r:
+                        nd0, nd1, nd2 = -d0, -d1, -d2
+                    else:
+                        nd0, nd1, nd2 = d0, d1, d2
+                    v_new = i + nd0
+                    if v_new < 0:
+                        nx, ndx = 0, -nd0
+                    elif v_new >= n:
+                        nx, ndx = n - 1, -nd0
+                    else:
                         nx, ndx = v_new, nd0
-                        ny = ((j + nd1) % n + n) % n
-                        nz = ((k + nd2) % n + n) % n
-                        ndy, ndz = nd1, nd2
-                        nidx = nx + n * ny + n2 * nz
-                        slot = write_count[nidx]
-                        if slot >= max_per_cell:
-                            continue
-                        write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
-                        write_count[nidx] = slot + 1
+                    ny = ((j + nd1) % n + n) % n
+                    nz = ((k + nd2) % n + n) % n
+                    ndy, ndz = nd1, nd2
+                    nidx = nx + n * ny + n2 * nz
+                    slot = write_count[nidx]
+                    if slot >= max_per_cell:
+                        continue
+                    write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
+                    write_count[nidx] = slot + 1
 
-    # Choose kernel once from config (bc_x: 0=periodic, 1=reflection, 2=deletion)
-    _BC_X_KERNELS = (
-        _diffuse_subblock_kernel_x_periodic,
-        _diffuse_subblock_kernel_x_reflection,
-        _diffuse_subblock_kernel_x_deletion,
-    )
+# x deletion: clamp, skip write if out of bounds
+@numba.njit(fastmath=True, cache=True)
+def _diffuse_subblock_kernel_x_deletion(
+    read_count, read_dirs, write_count, write_dirs,
+    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+):
+    np.random.seed(seed)
+    n2 = n * n
+    for k in range(n):
+        for j in range(n):
+            for i in range(x_lo, x_hi + 1):
+                idx = i + n * j + n2 * k
+                nc = read_count[idx]
+                if nc == 0:
+                    continue
+                # Safety: clamp nc to max_per_cell to prevent reading beyond array bounds
+                nc = min(nc, max_per_cell)
+                for c in range(nc):
+                    b = read_dirs[idx, c]
+                    d0 = int(b & 3) - 1
+                    d1 = int((b >> 2) & 3) - 1
+                    d2 = int((b >> 4) & 3) - 1
+                    r = np.random.random()
+                    if r <= p1:
+                        nd0, nd1, nd2 = d2, d0, d1
+                    elif r <= p2:
+                        nd0, nd1, nd2 = -d2, -d0, -d1
+                    elif r <= p3:
+                        nd0, nd1, nd2 = d1, d2, d0
+                    elif r <= p4:
+                        nd0, nd1, nd2 = -d1, -d2, -d0
+                    elif r <= p_r:
+                        nd0, nd1, nd2 = -d0, -d1, -d2
+                    else:
+                        nd0, nd1, nd2 = d0, d1, d2
+                    v_new = i + nd0
+                    if v_new < 0 or v_new >= n:
+                        continue
+                    nx, ndx = v_new, nd0
+                    ny = ((j + nd1) % n + n) % n
+                    nz = ((k + nd2) % n + n) % n
+                    ndy, ndz = nd1, nd2
+                    nidx = nx + n * ny + n2 * nz
+                    slot = write_count[nidx]
+                    if slot >= max_per_cell:
+                        continue
+                    write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
+                    write_count[nidx] = slot + 1
 
-    def _diffuse_subblock_kernel(
-        read_count, read_dirs, write_count, write_dirs,
-        x_lo, x_hi, n, max_per_cell, bc_x,
-        p1, p2, p3, p4, p_r, seed
-    ):
-        k = _BC_X_KERNELS[int(bc_x)]
-        return k(read_count, read_dirs, write_count, write_dirs,
-                 x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed)
-else:
-    # Fallback: pure Python (slower)
-    def _diffuse_subblock_kernel(*args):
-        raise RuntimeError("Numba not available; install numba for JIT compilation")
-
+# Choose kernel once from config (bc_x: 0=periodic, 1=reflection, 2=deletion)
+_BC_X_KERNELS = (
+    _diffuse_subblock_kernel_x_periodic,
+    _diffuse_subblock_kernel_x_reflection,
+    _diffuse_subblock_kernel_x_deletion,
+)
+# GLOBAL_KERNEL will be set once at setup in run_example() based on bc_x
+GLOBAL_KERNEL = _diffuse_subblock_kernel_x_periodic  # Default, will be overwritten
 
 # ---------------------------------------------------------------------------
 # Worker: attach to two shared segments (read, write), operate in place; no copy
@@ -357,20 +298,19 @@ def _worker_subblock(args):
     """
     Worker: attach to read/write shared segments by name; use views only (zero-copy).
     Applies boundary conditions (periodic/reflection/deletion). No data returned to main.
+    GLOBAL_KERNEL is set once at setup, so workers call it directly (no lookup).
     """
     (read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-     x_lo, x_hi, bc_x, bc_y, bc_z, p1, p2, p3, p4, p_r, seed) = args
+     x_lo, x_hi, p1, p2, p3, p4, p_r, seed) = args
 
     shm_r = shared_memory.SharedMemory(name=read_name)
     shm_w = shared_memory.SharedMemory(name=write_name)
     read_count, read_dirs = _views_from_segment(shm_r, n, max_per_cell, count_bytes, dirs_bytes)
     write_count, write_dirs = _views_from_segment(shm_w, n, max_per_cell, count_bytes, dirs_bytes)
 
-    # if _NUMBA_AVAILABLE:
-    #     # Fast path: use numba-compiled kernel
-    _diffuse_subblock_kernel(
+    GLOBAL_KERNEL(
         read_count, read_dirs, write_count, write_dirs,
-        x_lo, x_hi, n, max_per_cell, bc_x,
+        x_lo, x_hi, n, max_per_cell,
         p1, p2, p3, p4, p_r, seed
     )
   
@@ -417,19 +357,19 @@ def _worker_gap_x(args):
     """
     Worker for gap processing: process one gap x-coordinate (all j, k for that x).
     Same as _worker_subblock but for a single x value.
+    GLOBAL_KERNEL is set once at setup, so workers call it directly (no lookup).
     """
     (read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-     gap_x, bc_x, bc_y, bc_z, p1, p2, p3, p4, p_r, seed) = args
+     gap_x, p1, p2, p3, p4, p_r, seed) = args
 
     shm_r = shared_memory.SharedMemory(name=read_name)
     shm_w = shared_memory.SharedMemory(name=write_name)
     read_count, read_dirs = _views_from_segment(shm_r, n, max_per_cell, count_bytes, dirs_bytes)
     write_count, write_dirs = _views_from_segment(shm_w, n, max_per_cell, count_bytes, dirs_bytes)
 
-    # if _NUMBA_AVAILABLE:
-    _diffuse_subblock_kernel(
+    GLOBAL_KERNEL(
         read_count, read_dirs, write_count, write_dirs,
-        gap_x, gap_x, n, max_per_cell, bc_x,
+        gap_x, gap_x, n, max_per_cell,
         p1, p2, p3, p4, p_r, seed
     )
 
@@ -438,7 +378,7 @@ def _worker_gap_x(args):
 
 
 def _update_gap_parallel(read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-                        gap_groups, bc_x, bc_y, bc_z, p1, p2, p3, p4, p_r, pool, rng):
+                        gap_groups, p1, p2, p3, p4, p_r, pool, rng):
     """
     Update gap cells in parallel. gap_groups is precomputed once at setup.
     """
@@ -448,7 +388,7 @@ def _update_gap_parallel(read_name, write_name, n, max_per_cell, count_bytes, di
     for group_idx, group in enumerate(gap_groups):
         args_list = [
             (read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-             gap_x, bc_x, bc_y, bc_z, p1, p2, p3, p4, p_r, base_seed + group_idx * 1000 + x_idx)
+             gap_x, p1, p2, p3, p4, p_r, base_seed + group_idx * 1000 + x_idx)
             for x_idx, gap_x in enumerate(group)
         ]
         pool.map(_worker_gap_x, args_list)
@@ -456,12 +396,13 @@ def _update_gap_parallel(read_name, write_name, n, max_per_cell, count_bytes, di
 
 def diffuse_3d_one_step_shm(
     read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-    subblock_arg_templates, gap_groups, bc_x, bc_y, bc_z, p1, p2, p3, p4, p_r, pool, rng
+    subblock_arg_templates, gap_groups, p1, p2, p3, p4, p_r, pool, rng
 ):
     """
     One step: zero write buffer, run workers (read → write), then parallel gap.
     subblock_arg_templates and gap_groups are precomputed once at setup.
-    (p1, p2, p3, p4, p_r) and bc_* are also precomputed/constant.
+    GLOBAL_KERNEL is set once at setup, so workers call it directly (no lookup).
+    (p1, p2, p3, p4, p_r) are also precomputed/constant.
     """
     # Zero write buffer
     shm_w = shared_memory.SharedMemory(name=write_name)
@@ -478,7 +419,7 @@ def diffuse_3d_one_step_shm(
 
     _update_gap_parallel(
         read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-        gap_groups, bc_x, bc_y, bc_z, p1, p2, p3, p4, p_r, pool, rng
+        gap_groups, p1, p2, p3, p4, p_r, pool, rng
     )
 
 
@@ -495,18 +436,16 @@ def _parse_boundary(s):
 
 
 def run_example():
-    n = 500
-    n_workers = 10
+    n = 300
+    n_workers = 7
     n_blocks = n_workers
-    n_steps = 20
+    n_steps = 100
     total_particles = 100_000
     max_per_cell = 2
 
     # Boundary condition per axis: "periodic", "reflection", or "deletion" (open)
     boundary_x = "periodic"
     bc_x = _parse_boundary(boundary_x)
-    bc_y = BC_PERIODIC  # y, z always periodic in kernel
-    bc_z = BC_PERIODIC
 
     interior_ranges, gap_x_set = _partition_domain(n, n_blocks, bc_x)
     if not interior_ranges:
@@ -557,8 +496,13 @@ def run_example():
     p3_val = p_ranges.p3_range
     p4_val = p_ranges.p4_range
     p_r_val = p_ranges.p_r_range
+    
+    # Set GLOBAL_KERNEL once at setup (selected based on bc_x, never changes during run)
+    if _NUMBA_AVAILABLE:
+        globals()['GLOBAL_KERNEL'] = _BC_X_KERNELS[int(bc_x)]
+    
     subblock_arg_templates = [
-        (n, max_per_cell, count_bytes, dirs_bytes, x_lo, x_hi, bc_x, bc_y, bc_z,
+        (n, max_per_cell, count_bytes, dirs_bytes, x_lo, x_hi,
          p1_val, p2_val, p3_val, p4_val, p_r_val)
         for (x_lo, x_hi) in interior_ranges
     ]
@@ -572,7 +516,7 @@ def run_example():
                 print(f"Step {step}")
                 diffuse_3d_one_step_shm(
                     read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-                    subblock_arg_templates, gap_groups, bc_x, bc_y, bc_z,
+                    subblock_arg_templates, gap_groups,
                     p1_val, p2_val, p3_val, p4_val, p_r_val, pool, rng
                 )
                 read_name, write_name = write_name, read_name
