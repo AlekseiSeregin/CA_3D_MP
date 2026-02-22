@@ -26,6 +26,9 @@ class CellularAutomata:
         self.furthest_index = 0
         self.ioz_bound = 0
 
+        # New 3D diffusion engine (set by engine when USE_NEW_DIFFUSION_ENGINE is True)
+        self.diffusion_engine = None
+
         # functions
         self.precip_func = None  # must be defined elsewhere
         self.get_combi_ind = None  # must be defined elsewhere
@@ -131,12 +134,13 @@ class CellularAutomata:
         # self.TdDATA = td_data.TdDATA()
         # self.TdDATA.fetch_look_up_from_file()
         # self.curr_look_up = None
-        self.TdDATA = JMatProWorkerPool(
-            temperature=Config.TEMPERATURE,
-            num_workers=jmatpro_workers,  # Use allocated number, not total
-            task_timeout=3.0,
-            max_retries=3
-        )
+
+        # self.TdDATA = JMatProWorkerPool(
+        #     temperature=Config.TEMPERATURE,
+        #     num_workers=jmatpro_workers,  # Use allocated number, not total
+        #     task_timeout=3.0,
+        #     max_retries=3
+        # )
 
         # self.KinDATA = kin_data.KinDATA("LUT_NiCr5.pkl")
         # self.KinDATA.fetch_look_up_from_file()
@@ -2625,20 +2629,49 @@ class CellularAutomata:
             self.cur_case.product.fix_full_cells(seeds)  # precip on place of oxidant!
 
     def diffusion_inward(self):
+        inward = []
+        inward.append(self.cases.first.oxidant)
+        if Config.OXIDANTS.SECONDARY_EXISTENCE and self.cases.second.oxidant is not self.cases.first.oxidant:
+            inward.append(self.cases.second.oxidant)
+        if inward:
+            self.diffusion_engine.diffuse_multiple(inward)
+        # Legacy path: per-element diffuse()
         # self.cases.reaccumulate_products_no_exclusion()
-        self.cur_case.oxidant.diffuse()
-        if Config.OXIDANTS.SECONDARY_EXISTENCE:
-            self.cur_case.oxidant.diffuse()
+        # self.cur_case.oxidant.diffuse()
+        # if Config.OXIDANTS.SECONDARY_EXISTENCE:
+        #     self.cur_case.oxidant.diffuse()
 
     def diffusion_outward(self):
         if (self.iteration + 1) % Config.STRIDE == 0:
-            self.cur_case = self.cases.first
-            self.cur_case_mp = self.cases.first_mp
-            self.diffusion_outward_mp()
-            if Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.cur_case = self.cases.second
-                self.cur_case_mp = self.cases.second_mp
-                self.diffusion_outward_mp()
+            outward = []
+            outward.append(self.cases.first.active)
+            if Config.ACTIVES.SECONDARY_EXISTENCE and self.cases.second.active is not self.cases.first.active:
+                outward.append(self.cases.second.active)
+            if outward:
+                self.diffusion_engine.diffuse_multiple(outward)
+
+    def diffuse_all(self):
+        elems_to_diffuse = []
+        elems_to_diffuse.extend(self.cases.all_oxidants)
+        if (self.iteration + 1) % Config.STRIDE == 0:
+            elems_to_diffuse.extend(self.cases.all_actives)
+        
+        self.diffusion_engine.diffuse_multiple(elems_to_diffuse)
+
+        for elem in self.cases.all_oxidants:
+            elem.fill_first_page()
+
+
+
+        # Legacy path: diffusion_outward_mp (uses element.diffuse, last_in_diff_arr, etc.)
+        # if (self.iteration + 1) % Config.STRIDE == 0:
+        #     self.cur_case = self.cases.first
+        #     self.cur_case_mp = self.cases.first_mp
+        #     self.diffusion_outward_mp()
+        #     if Config.ACTIVES.SECONDARY_EXISTENCE:
+        #         self.cur_case = self.cases.second
+        #         self.cur_case_mp = self.cases.second_mp
+        #         self.diffusion_outward_mp()
 
     def diffusion_outward_mp(self):
         if (self.iteration + 1) % Config.STRIDE == 0:

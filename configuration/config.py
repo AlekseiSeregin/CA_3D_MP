@@ -39,11 +39,14 @@ class Config:
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
     # OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.3
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.1
+    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 1  # optional; else DIFFUSION_MAX_PER_CELL_FALLBACK
+
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
     # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
     # OXIDANTS.SECONDARY.CELLS_CONCENTRATION = 0.01
+
     # primary actives
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Cr in Ni Krupp"
@@ -51,6 +54,8 @@ class Config:
     ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.1
     ACTIVES.PRIMARY.CONC_PRECISION = "rand"
     ACTIVES.PRIMARY.SPACE_FILL = "full"
+    ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 1  # optional; else DIFFUSION_MAX_PER_CELL_FALLBACK
+
     # secondary actives
     # ACTIVES.SECONDARY.ELEMENT = "Al"
     # ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
@@ -74,13 +79,13 @@ class Config:
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 20  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 500000  # must be >= n_cells_per_axis
-    STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
+    N_CELLS_PER_AXIS = 300  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_ITERATIONS = 1000  # must be >= n_cells_per_axis
+    STRIDE = 1  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     PRECIP_TRANSFORM_DEPTH = 10
     SIM_TIME = 72000  # [sek]
-    SIZE = 4000 * (10 ** -6)  # [m]
+    SIZE = 400 * (10 ** -6)  # [m]
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 0.036
@@ -100,10 +105,17 @@ class Config:
     OUTWARD_DIFFUSION = False
 
     # 3D Chopard–Droz diffusion (shared-memory MP): workers per element type
+    # max_per_cell is per element: set ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL, OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL, etc.
+    # Fallback only when an element's DIFFUSION_MAX_PER_CELL is not set.
     OUTWARD_DIFFUSION_WORKERS = 1
-    INWARD_DIFFUSION_WORKERS = 1
-    DIFFUSION_MAX_PER_CELL = 1
-    DIFFUSION_BOUNDARY_X = "periodic"  # periodic | reflection | deletion
+    INWARD_DIFFUSION_WORKERS = 5
+    DIFFUSION_MAX_PER_CELL_FALLBACK = 1  # used only when ACTIVES/OXIDANTS.*.DIFFUSION_MAX_PER_CELL not set
+    DIFFUSION_BOUNDARY_X = "deletion"  # fallback when per-side not set: periodic | reflection | deletion
+    # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
+    DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "reflection"   # periodic | reflection | deletion
+    DIFFUSION_BOUNDARY_X_OUTWARD_RIGHT = "deletion"
+    DIFFUSION_BOUNDARY_X_INWARD_LEFT = "deletion"
+    DIFFUSION_BOUNDARY_X_INWARD_RIGHT = "deletion"
     COMPUTE_PRECIPITATION = False
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = False
@@ -112,15 +124,15 @@ class Config:
     SAVE_POST_PROCESSED_INPUT = True
 
     # Execution___________________________________________________________________
-    MULTIPROCESSING = True
-    NUMBER_OF_PROCESSES = 15  # Total workers to allocate (split between CA and JMatPro)
+    MULTIPROCESSING = False
+    NUMBER_OF_PROCESSES = 10  # Total workers to allocate (split between CA and JMatPro)
     # JMatPro worker allocation ratio (0.0-1.0): fraction of NUMBER_OF_PROCESSES allocated to JMatPro
     # Remaining workers go to CA calculations. Default: auto (60% CA, 40% JMatPro)
     # Examples:
     #   JMATPRO_WORKER_RATIO = 0.4  # 40% JMatPro, 60% CA (recommended for balanced workload)
     #   JMATPRO_WORKER_RATIO = 0.5  # 50/50 split
     #   JMATPRO_WORKER_RATIO = None  # Auto: 40% JMatPro, 60% CA
-    JMATPRO_WORKER_RATIO = 0.3  # None = auto allocation
+    JMATPRO_WORKER_RATIO = 0.1  # None = auto allocation
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
     # Worker recycling: long-lived workers can grow RAM (NumPy/Python allocator fragmentation).

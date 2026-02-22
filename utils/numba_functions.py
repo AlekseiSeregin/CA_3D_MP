@@ -352,3 +352,58 @@ def diffuse_bulk_chunk(cells, dirs, start, end, p1, p2, p3, p4, p_r, cells_per_a
                     out_buf[n_out] = i
                     n_out += 1
     return out_buf[:n_out]
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def init_particles_rand(count, dirs, n, n2, max_per_cell, total_particles, packed_dirs, k_lo, seed):
+    """Place total_particles randomly in 3D grid; cap at max_per_cell per cell. Fills count and dirs in place."""
+    np.random.seed(seed)
+    placed = 0
+    while placed < total_particles:
+        k = np.random.randint(k_lo, n)
+        i = np.random.randint(0, n)
+        j = np.random.randint(0, n)
+        idx = i + n * j + n2 * k
+        if count[idx] < max_per_cell:
+            c = count[idx]
+            dirs[idx, c] = packed_dirs[np.random.randint(0, 6)]
+            count[idx] = c + 1
+            placed += 1
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def init_particles_exact(count, dirs, n, n2, max_per_cell, n_per, k_lo, packed_dirs, seed):
+    """Place n_per particles per z-slice (k_lo..n-1), random 2D position without replacement per slice. Fills count and dirs in place."""
+    np.random.seed(seed)
+    nn = n * n
+    for k in range(k_lo, n):
+        # Fisher–Yates shuffle to get n_per distinct 2D indices
+        arr = np.arange(nn)
+        for i in range(nn - 1, nn - n_per - 1, -1):
+            j = np.random.randint(0, i + 1)
+            arr[i], arr[j] = arr[j], arr[i]
+        for p in range(n_per):
+            idx_2d = arr[nn - 1 - p]
+            i = idx_2d % n
+            j = idx_2d // n
+            idx = i + n * j + n2 * k
+            if count[idx] < max_per_cell:
+                c = count[idx]
+                dirs[idx, c] = packed_dirs[np.random.randint(0, 6)]
+                count[idx] = c + 1
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def fill_first_page_kernel(count, dirs, n, n2, max_per_cell, num_to_add, dir_packed, seed):
+    """Add num_to_add particles on x=0 plane (zy plane); random (j,k), idx = n*j + n2*k. In place."""
+    np.random.seed(seed)
+    placed = 0
+    while placed < num_to_add:
+        j = np.random.randint(0, n)
+        k = np.random.randint(0, n)
+        idx = n * j + n2 * k
+        if count[idx] < max_per_cell:
+            c = count[idx]
+            dirs[idx, c] = dir_packed
+            count[idx] = c + 1
+            placed += 1

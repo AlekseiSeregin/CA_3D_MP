@@ -2,14 +2,11 @@ from utils.numba_functions import *
 from configuration import Config
 from multiprocessing import shared_memory
 from cellular_automata.nes_for_mp import *
-import sys
-import random
 import numpy as np
 
 
 try:
     from diffusion_3d_mp_example import (
-        DiffusionEngine,
         _DIRS_6_PACKED,
         _views_from_segment,  # Helper for buffer creation
     )
@@ -19,36 +16,6 @@ except ImportError:
     DiffusionEngine = None
     DiffusibleElement = None
     _DIRS_6_PACKED = None
-
-
-def _diffusion_grid_idx(i, j, k, n):
-    """Flat index for 3D (i, j, k) in C order: i changes fastest."""
-    ni, nj, nk, nn = int(i), int(j), int(k), int(n)
-    return ni + nn * (nj + nn * nk)
-
-
-def flat_to_grid_sync(count, dirs_grid, cells_flat, dirs_flat, n, max_per_cell):
-    """
-    Fill grid (count, dirs_grid) from flat representation.
-    cells_flat: (3, N) int (i, j, k) per column; dirs_flat: (3, N) int in {-1,0,1}.
-    Clamps to grid bounds and drops particles beyond max_per_cell per cell.
-    Part of element/setup logic; kept for any code that still needs to fill grid from flat data.
-    """
-    n3 = n * n * n
-    count.fill(0)
-    dirs_grid.fill(0)
-    for p in range(cells_flat.shape[1]):
-        i, j, k = int(cells_flat[0, p]), int(cells_flat[1, p]), int(cells_flat[2, p])
-        if i < 0 or i >= n or j < 0 or j >= n or k < 0 or k >= n:
-            continue
-        idx = _diffusion_grid_idx(i, j, k, n)
-        c = count[idx]
-        if c >= max_per_cell:
-            continue
-        dx, dy, dz = int(dirs_flat[0, p]), int(dirs_flat[1, p]), int(dirs_flat[2, p])
-        packed = (dx + 1) + (dy + 1) * 4 + (dz + 1) * 16
-        dirs_grid[idx, c] = np.uint8(min(max(packed, 0), 255))
-        count[idx] = c + 1
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +48,7 @@ def create_diffusion_buffers(n, max_per_cell):
 
 
 class ActiveElem:
+    element_type = 'outward'
     def __init__(self, settings):
         self.elem_name = settings.ELEMENT
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
@@ -108,7 +76,7 @@ class ActiveElem:
         self.shms_unlinked = False
 
         # 3D diffusion grid (count + packed dirs) is now PRIMARY storage (no flat arrays)
-        self._diff_max_per_cell = getattr(Config, 'DIFFUSION_MAX_PER_CELL', 50)
+        self.max_per_cell = getattr(settings, 'DIFFUSION_MAX_PER_CELL', None) or getattr(Config, 'DIFFUSION_MAX_PER_CELL_FALLBACK', 50)
         self._diff_shm_A = self._diff_shm_B = None
         self._diff_A_count = self._diff_A_dirs = self._diff_B_count = self._diff_B_dirs = None
         self._diff_read_name = self._diff_write_name = None
@@ -120,7 +88,7 @@ class ActiveElem:
     def _init_diffusion_buffers(self):
         """Create shared-memory diffusion grids (count + dirs) and prepare run."""
         n = self.cells_per_axis
-        max_per_cell = self._diff_max_per_cell
+        max_per_cell = self.max_per_cell
         
         # Create element-specific buffers
         # Note: DiffusionParameters are now handled internally by DiffusionEngine
@@ -129,53 +97,32 @@ class ActiveElem:
          self._diff_B_count, self._diff_B_dirs) = create_diffusion_buffers(n, max_per_cell)
         self._diff_read_name = self._diff_shm_A.name
         self._diff_write_name = self._diff_shm_B.name
-        
-        # Store only element-specific probability values
-        p1 = self.p1_range
-        p_r_extra = self.p_r_range - self.p4_range
-        self._diff_step_args = {
-            "p1": p1,
-            "p2": 2 * p1,
-            "p3": 3 * p1,
-            "p4": 4 * p1,
-            "p_r": 4 * p1 + p_r_extra,
-        }
+        # Expose count buffer as c3d_shm_mdata for nucleation/precipitation (same shm, first segment)
+        self.c3d_shm_mdata = SharedMetaData(
+            self._diff_shm_A.name, (n, n, n), np.int8
+        )
+        self.cells_shm_mdata = None  # legacy flat cells; not used when USE_NEW_DIFFUSION_ENGINE
+        self.dirs_shm_mdata = None
 
     def _init_particles_in_grid(self, settings):
-        """Initialize particles directly in the 3D grid (no flat arrays). CONC_PRECISION: 'rand' or 'exact'. SPACE_FILL: 'full' or 'half'."""
+        """Initialize particles directly in the 3D grid (no flat arrays). CONC_PRECISION: 'rand' or 'exact'. SPACE_FILL: 'full' or 'half'. Uses Numba JIT for speed."""
         n = self.cells_per_axis
-        max_per_cell = self._diff_max_per_cell
-        rng = np.random.default_rng()
+        max_per_cell = self.max_per_cell
         count = self._diff_A_count
         dirs = self._diff_A_dirs
         count.fill(0)
         dirs.fill(0)
         n2 = n * n
         k_lo = n // 2 if getattr(settings, 'SPACE_FILL', 'full').lower() == 'half' else 0
-        # Packed directions: (dx+1)+(dy+1)*4+(dz+1)*16 for ±x, ±y, ±z (same order as diffusion module)
         packed_dirs = _DIRS_6_PACKED if _DIRS_6_PACKED is not None else np.array([20, 22, 17, 25, 5, 37], dtype=np.uint8)
+        seed = int(np.random.default_rng().integers(0, 2**31))
 
         if settings.CONC_PRECISION.lower() == 'rand':
             total_particles = int(self.n_per_page * self.cells_per_axis)
-            for _ in range(total_particles):
-                k = rng.integers(k_lo, n)
-                i = rng.integers(0, n)
-                j = rng.integers(0, n)
-                idx = i + n * j + n2 * k
-                if count[idx] < max_per_cell:
-                    count[idx] += 1
-                    dirs[idx, count[idx] - 1] = packed_dirs[rng.integers(0, 6)]
+            init_particles_rand(count, dirs, n, n2, max_per_cell, total_particles, packed_dirs, k_lo, seed)
         elif settings.CONC_PRECISION.lower() == 'exact':
             n_per = min(int(self.n_per_page), n * n)
-            for k in range(k_lo, n):
-                indices_2d = rng.choice(n * n, size=n_per, replace=False)
-                for idx_2d in indices_2d:
-                    i = idx_2d % n
-                    j = idx_2d // n
-                    idx = i + n * j + n2 * k
-                    if count[idx] < max_per_cell:
-                        count[idx] += 1
-                        dirs[idx, count[idx] - 1] = packed_dirs[rng.integers(0, 6)]
+            init_particles_exact(count, dirs, n, n2, max_per_cell, n_per, k_lo, packed_dirs, seed)
         else:
             raise ValueError(f"Wrong CONC_PRECISION for outward element! (use 'exact' or 'rand')")
 
@@ -187,33 +134,21 @@ class ActiveElem:
 
     def get_diffusion_state(self):
         """Return current diffusion state for DiffusionEngine (DiffusibleElement protocol)."""
-        args = self._diff_step_args
         return {
             'read_name': self._diff_read_name,
             'write_name': self._diff_write_name,
-            'p1': args["p1"],
-            'p2': args["p2"],
-            'p3': args["p3"],
-            'p4': args["p4"],
-            'p_r': args["p_r"],
-        }
-    
-    def get_diffusion_config(self):
-        """Return diffusion configuration (DiffusibleElement protocol)."""
-        p1 = self.p1_range
-        p_r_extra = self.p_r_range - self.p4_range
-        return {
-            'max_per_cell': self._diff_max_per_cell,
-            'element_type': 'outward',  # ActiveElem is outward diffusion
-            'p1': p1,
-            'p_r_extra': p_r_extra,
+            'p1': self.p1_range,
+            'p2': self.p2_range,
+            'p3': self.p3_range,
+            'p4': self.p4_range,
+            'p_r': self.p_r_range,
         }
     
     def swap_diffusion_buffers(self):
         """Swap read/write buffers after diffusion step (DiffusibleElement protocol)."""
         self._diff_read_name, self._diff_write_name = self._diff_write_name, self._diff_read_name
 
-    def get_diffusion_grid_3d(self, copy=False):
+    def get_3d_grid(self, copy=False):
         """
         Return the current diffusion read buffer as 3D arrays.
         
@@ -224,25 +159,50 @@ class ActiveElem:
         """
         read_count, read_dirs = self._get_current_grid()
         n = self.cells_per_axis
-        max_per_cell = self._diff_max_per_cell
+        max_per_cell = self.max_per_cell
         count_3d = read_count.reshape(n, n, n)
         dirs_3d = read_dirs.reshape(n, n, n, max_per_cell)
         if copy:
             return count_3d.copy(), dirs_3d.copy()
         return count_3d, dirs_3d
-    
+
+    def get_cells_coords(self):
+        """
+        Return particle coordinates for DB/results: shape (3, N) with rows (z, y, x)
+        from the current diffusion read buffer. Used by save_results when using the new 3D grid.
+        """
+        read_count, _ = self._get_current_grid()
+        n = self.cells_per_axis
+        count_3d = read_count.reshape(n, n, n)
+        idx = np.nonzero(count_3d)
+        if len(idx[0]) == 0:
+            return np.zeros((3, 0), dtype=np.short)
+        counts = count_3d[idx].astype(np.intp)
+        i, j, k = idx[0], idx[1], idx[2]
+        z = np.repeat(k, counts)
+        y = np.repeat(j, counts)
+        x = np.repeat(i, counts)
+        return np.stack([z, y, x], axis=0).astype(np.short)
+
+    def transform_to_descards(self):
+        """No-op for 3D grid representation (legacy flat-array path used transform before diffuse)."""
+        pass
+
+    def transform_to_3d(self, _depth=None):
+        """No-op for 3D grid representation (legacy path converted flat back to 3D after save)."""
+        pass
+
     def close_and_unlink_shm(self):
         if not self.shms_unlinked:
-            # c3d_shared removed - no longer needed
-            if _DIFFUSION_SHM_AVAILABLE and self._diff_shm_A is not None:
-                self._diff_shm_A.close()
-                self._diff_shm_A.unlink()
-                self._diff_shm_B.close()
-                self._diff_shm_B.unlink()
+            self._diff_shm_A.close()
+            self._diff_shm_A.unlink()
+            self._diff_shm_B.close()
+            self._diff_shm_B.unlink()
             self.shms_unlinked = True
 
 
 class OxidantElem:
+    element_type = 'inward'
     def __init__(self, settings, utils):
         self.elem_name = settings.ELEMENT
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
@@ -257,8 +217,8 @@ class OxidantElem:
         self.current_count = 0
         self.furthest_index = None
 
-        self.p_ranges_scale = self.generate_prob_ranges(settings.PROBABILITIES_SCALE)
-        self.p_ranges_interface = self.generate_prob_ranges(settings.PROBABILITIES_INTERFACE)
+        self.p_ranges_scale = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
+        self.p_ranges_interface = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
 
         self.extended_axis = self.cells_per_axis + self.neigh_range
         self.extended_shape = (self.cells_per_axis, self.cells_per_axis, self.extended_axis)
@@ -273,7 +233,7 @@ class OxidantElem:
         self.microstructure = None
 
         # 3D diffusion grid (inward) is now PRIMARY storage (no flat arrays)
-        self._diff_max_per_cell = getattr(Config, 'DIFFUSION_MAX_PER_CELL', 50)
+        self.max_per_cell = getattr(settings, 'DIFFUSION_MAX_PER_CELL', None) or getattr(Config, 'DIFFUSION_MAX_PER_CELL_FALLBACK', 50)
         self._diff_shm_A = self._diff_shm_B = None
         self._diff_A_count = self._diff_A_dirs = self._diff_B_count = self._diff_B_dirs = None
         self._diff_read_name = self._diff_write_name = None
@@ -651,44 +611,28 @@ class OxidantElem:
 
     def fill_first_page(self, time=0):
         """
-        Generate new particles on the diffusion surface (z = 0, k = 0).
-        Works directly with grid (_diff_A_count, _diff_A_dirs) - no flat arrays.
+        Generate new particles on the diffusion surface (first x-page: x=0, i.e. the zy plane).
+        Particles are placed at random (y, z) on that plane. Uses Numba JIT for speed.
         """
-        if not _DIFFUSION_SHM_AVAILABLE or self._diff_A_count is None:
-            return
-        
-        n = self.cells_per_axis
-        max_per_cell = self._diff_max_per_cell
-        rng = np.random.default_rng()
-        
-        # Get current read buffer
         count = self._diff_A_count if self._diff_read_name == self._diff_shm_A.name else self._diff_B_count
         dirs = self._diff_A_dirs if self._diff_read_name == self._diff_shm_A.name else self._diff_B_dirs
-        
-        # Count particles at z=0 (k=0) - first n² indices
+
+        n = self.cells_per_axis
         n2 = n * n
-        self.current_count = int(count[:n2].sum())
+        # x=0 plane: linear indices n*j + n2*k for j,k in 0..n-1
+        count_3d = count.reshape(n, n, n)
+        self.current_count = int(count_3d[0, :, :].sum())
         adj_cells_pro_page = self.n_per_page - self.current_count
-        
+
         if adj_cells_pro_page > 0:
-            # Direction (0, 0, 1) packed: (0+1) + (0+1)*4 + (1+1)*16 = 1 + 4 + 32 = 37
-            dir_packed = np.uint8(37)  # Inward direction (positive z)
-            
-            # Generate random (i, j) positions on z=0 plane
-            for _ in range(adj_cells_pro_page):
-                i = rng.integers(0, n)
-                j = rng.integers(0, n)
-                idx = i + n * j  # k=0, so idx = i + n*j + n²*0 = i + n*j
-                
-                # Add particle if cell is not full
-                if count[idx] < max_per_cell:
-                    count[idx] += 1
-                    dirs[idx, count[idx] - 1] = dir_packed
+            dir_packed = np.uint8(37)  # (0, 0, 1) inward
+            seed = int(np.random.default_rng().integers(0, 2**31))
+            fill_first_page_kernel(count, dirs, n, n2, self.max_per_cell, adj_cells_pro_page, dir_packed, seed)
 
     def _init_diffusion_buffers_oxidant(self):
         """Create shared-memory diffusion grids for inward diffusion."""
         n = self.cells_per_axis
-        max_per_cell = self._diff_max_per_cell
+        max_per_cell = self.max_per_cell
         
         # Create element-specific buffers
         # Note: DiffusionParameters are now handled internally by DiffusionEngine
@@ -697,17 +641,8 @@ class OxidantElem:
          self._diff_B_count, self._diff_B_dirs) = create_diffusion_buffers(n, max_per_cell)
         self._diff_read_name = self._diff_shm_A.name
         self._diff_write_name = self._diff_shm_B.name
-        
-        # Store only element-specific probability values
-        p1 = self.p1_range
-        p_r_extra = self.p_r_range - self.p4_range
-        self._diff_step_args = {
-            "p1": p1,
-            "p2": 2 * p1,
-            "p3": 3 * p1,
-            "p4": 4 * p1,
-            "p_r": 4 * p1 + p_r_extra,
-        }
+        # Expose count buffer as c3d_shm_mdata for engine/case_mp (same shm, first segment)
+        self.c3d_shm_mdata = SharedMetaData(self._diff_shm_A.name, (n, n, n), np.int8)
 
     def _get_current_grid(self):
         """Get current read buffer (count, dirs) from grid."""
@@ -717,33 +652,21 @@ class OxidantElem:
 
     def get_diffusion_state(self):
         """Return current diffusion state for DiffusionEngine (DiffusibleElement protocol)."""
-        args = self._diff_step_args
         return {
             'read_name': self._diff_read_name,
             'write_name': self._diff_write_name,
-            'p1': args["p1"],
-            'p2': args["p2"],
-            'p3': args["p3"],
-            'p4': args["p4"],
-            'p_r': args["p_r"],
-        }
-    
-    def get_diffusion_config(self):
-        """Return diffusion configuration (DiffusibleElement protocol)."""
-        p1 = self.p1_range
-        p_r_extra = self.p_r_range - self.p4_range
-        return {
-            'max_per_cell': self._diff_max_per_cell,
-            'element_type': 'inward',  # OxidantElem is inward diffusion
-            'p1': p1,
-            'p_r_extra': p_r_extra,
+            'p1': self.p1_range,
+            'p2': self.p2_range,
+            'p3': self.p3_range,
+            'p4': self.p4_range,
+            'p_r': self.p_r_range,
         }
     
     def swap_diffusion_buffers(self):
         """Swap read/write buffers after diffusion step (DiffusibleElement protocol)."""
         self._diff_read_name, self._diff_write_name = self._diff_write_name, self._diff_read_name
 
-    def get_diffusion_grid_3d(self, copy=False):
+    def get_3d_grid(self, copy=False):
         """
         Return the current diffusion read buffer as 3D arrays.
         
@@ -754,30 +677,50 @@ class OxidantElem:
         """
         read_count, read_dirs = self._get_current_grid()
         n = self.cells_per_axis
-        max_per_cell = self._diff_max_per_cell
+        max_per_cell = self.max_per_cell
         count_3d = read_count.reshape(n, n, n)
         dirs_3d = read_dirs.reshape(n, n, n, max_per_cell)
         if copy:
             return count_3d.copy(), dirs_3d.copy()
         return count_3d, dirs_3d
 
-    @staticmethod
-    def generate_prob_ranges(probabilities):
-        p1_range = probabilities[0]
-        p2_range = 2 * p1_range
-        p3_range = 3 * p1_range
-        p4_range = 4 * p1_range
-        p_r_range = p4_range + probabilities[1]
-        return PRanges(p1_range, p2_range, p3_range, p4_range, p_r_range)
+    def get_cells_coords(self):
+        """
+        Return particle coordinates for DB/results: shape (3, N) with rows (z, y, x)
+        from the current diffusion read buffer. Used by save_results when using the new 3D grid.
+        """
+        read_count, _ = self._get_current_grid()
+        n = self.cells_per_axis
+        count_3d = read_count.reshape(n, n, n)
+        idx = np.nonzero(count_3d)
+        if len(idx[0]) == 0:
+            return np.zeros((3, 0), dtype=np.short)
+        counts = count_3d[idx].astype(np.intp)
+        i, j, k = idx[0], idx[1], idx[2]
+        z = np.repeat(k, counts)
+        y = np.repeat(j, counts)
+        x = np.repeat(i, counts)
+        return np.stack([z, y, x], axis=0).astype(np.short)
+
+    @property
+    def cells(self):
+        """Particle coords (3, N) for DB save; same format as get_cells_coords()."""
+        return self.get_cells_coords()
+
+    def transform_to_descards(self):
+        """No-op for 3D grid representation (legacy flat-array path)."""
+        pass
+
+    def transform_to_3d(self):
+        """No-op for 3D grid representation (legacy path)."""
+        pass
 
     def close_and_unlink_shm(self):
         if not self.shms_unlinked:
-            # c3d_shared removed - no longer needed
-            if _DIFFUSION_SHM_AVAILABLE and self._diff_shm_A is not None:
-                self._diff_shm_A.close()
-                self._diff_shm_A.unlink()
-                self._diff_shm_B.close()
-                self._diff_shm_B.unlink()
+            self._diff_shm_A.close()
+            self._diff_shm_A.unlink()
+            self._diff_shm_B.close()
+            self._diff_shm_B.unlink()
             self.shms_unlinked = True
 
 

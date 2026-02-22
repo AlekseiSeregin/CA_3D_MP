@@ -4,6 +4,7 @@ from configuration import Config
 
 class CaseSetUp:
     def __init__(self):
+        self.is_active = False
         self.oxidant = None
         self.active = None
         self.product = None
@@ -36,6 +37,7 @@ class CaseSetUp:
 
 class CaseSetUpMP:
     def __init__(self):
+        self.is_active = False
         self.active_c3d_shm_mdata = None
         self.active_cells_shm_mdata = None
         self.active_dirs_shm_mdata = None
@@ -88,6 +90,13 @@ class CaseRef:
         self.precip_3d_init_shm = None
         self.precip_3d_init_shm_mdata = None
 
+        self.all_oxidants = []
+        self.all_actives = []
+        self.all_products = []
+
+        self.all_cases = [self.first, self.second, self.third, self.fourth, self.fifth]
+        self.all_cases_mp = [self.first_mp, self.second_mp, self.third_mp, self.fourth_mp, self.fifth_mp]
+
     def close_shms(self):
         self.first.close_and_unlink_shared_memory()
         self.second.close_and_unlink_shared_memory()
@@ -115,8 +124,25 @@ class CaseRef:
         np.add(self.accumulated_products, self.third.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
         np.add(self.accumulated_products, self.fourth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
         np.add(self.accumulated_products, self.fifth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-
-
+    
+    
+    def get_all_oxidants(self):
+        self.all_oxidants = []
+        for case in self.all_cases:
+            if case.oxidant is not None and case.is_active:
+                self.all_oxidants.append(case.oxidant)
+    
+    def get_all_actives(self):
+        self.all_actives = []
+        for case in self.all_cases:
+            if case.active is not None and case.is_active:
+                self.all_actives.append(case.active)
+    
+    def get_all_products(self):
+        self.all_products = []
+        for case in self.all_cases:
+            if case.product is not None and case.is_active:
+                self.all_products.append(case.product)
 
 
 DEFAULT_PARAM = {

@@ -5,6 +5,9 @@ import time
 import keyboard
 from microstructure import voronoi
 import elements
+import numpy as np
+from diffusion_3d_mp_example import DiffusionEngine as _DiffusionEngine
+
 
 
 class FunctionBlock:
@@ -54,6 +57,19 @@ class SimulationConfigurator:
         # setting objects for precipitation
         if Config.COMPUTE_PRECIPITATION:
             self.init_product()
+        
+        # self.cases.get_all_oxidants()
+        # self.cases.get_all_actives()
+        # self.cases.get_all_products()
+
+        # New 3D shared-memory diffusion engine (optional; legacy path remains when USE_NEW_DIFFUSION_ENGINE is False)
+        self.diffusion_engine = None
+        if Config.INWARD_DIFFUSION or Config.OUTWARD_DIFFUSION:
+            n_out = getattr(Config, 'OUTWARD_DIFFUSION_WORKERS', 5)
+            n_in = getattr(Config, 'INWARD_DIFFUSION_WORKERS', 5)
+            rng = np.random.default_rng()
+            self._diffusion_engine = _DiffusionEngine(n_out, n_in, rng)
+            self.c_automata.diffusion_engine = self._diffusion_engine
 
         self.function_block = FunctionBlock()
         self.current_func = None  # must be defined elsewhere
@@ -348,6 +364,9 @@ class SimulationConfigurator:
             self.__construct_function_block()
             self.__start_execution()
         finally:
+            if self._diffusion_engine is not None:
+                self._diffusion_engine.close()
+                self._diffusion_engine = None
             self.save_results()
             if Config.MULTIPROCESSING:
                 self.terminate_workers()
@@ -375,56 +394,50 @@ class SimulationConfigurator:
         self.cases.first.oxidant = elements.OxidantElem(Config.OXIDANTS.PRIMARY, self.utils)
         self.cases.second.oxidant = self.cases.first.oxidant
 
-        self.cases.first_mp.oxidant_c3d_shm_mdata = self.cases.first.oxidant.c3d_shm_mdata
-        self.cases.second_mp.oxidant_c3d_shm_mdata = self.cases.first.oxidant.c3d_shm_mdata
+        self.cases.first_mp.oxidant_c3d_shm_mdata = getattr(self.cases.first.oxidant, 'c3d_shm_mdata', None)
+        self.cases.second_mp.oxidant_c3d_shm_mdata = self.cases.first_mp.oxidant_c3d_shm_mdata
 
         self.cases.third.oxidant = self.cases.first.oxidant
         self.cases.fourth.oxidant = self.cases.first.oxidant
         self.cases.fifth.oxidant = self.cases.first.oxidant
 
-        self.cases.third_mp.oxidant_c3d_shm_mdata = self.cases.first.oxidant.c3d_shm_mdata
-        self.cases.fourth_mp.oxidant_c3d_shm_mdata = self.cases.first.oxidant.c3d_shm_mdata
-        self.cases.fifth_mp.oxidant_c3d_shm_mdata = self.cases.first.oxidant.c3d_shm_mdata
+        self.cases.third_mp.oxidant_c3d_shm_mdata = self.cases.first_mp.oxidant_c3d_shm_mdata
+        self.cases.fourth_mp.oxidant_c3d_shm_mdata = self.cases.first_mp.oxidant_c3d_shm_mdata
+        self.cases.fifth_mp.oxidant_c3d_shm_mdata = self.cases.first_mp.oxidant_c3d_shm_mdata
 
         # ---------------------------------------------------
         if Config.OXIDANTS.SECONDARY_EXISTENCE:
             self.cases.third.oxidant = elements.OxidantElem(Config.OXIDANTS.SECONDARY, self.utils)
             self.cases.fourth.oxidant = self.cases.third.oxidant
-            self.cases.third_mp.oxidant_c3d_shm_mdata = self.cases.third.oxidant.c3d_shm_mdata
-            self.cases.fourth_mp.oxidant_c3d_shm_mdata = self.cases.third.oxidant.c3d_shm_mdata
+            self.cases.third_mp.oxidant_c3d_shm_mdata = getattr(self.cases.third.oxidant, 'c3d_shm_mdata', None)
+            self.cases.fourth_mp.oxidant_c3d_shm_mdata = self.cases.third_mp.oxidant_c3d_shm_mdata
 
     def init_outward(self):
         self.cases.first.active = elements.ActiveElem(Config.ACTIVES.PRIMARY)
         self.cases.third.active = self.cases.first.active
 
         # ---------------------------------------------------
-        # c3d
-        self.cases.first_mp.active_c3d_shm_mdata = self.cases.first.active.c3d_shm_mdata
-        self.cases.third_mp.active_c3d_shm_mdata = self.cases.first.active.c3d_shm_mdata
-
-        self.cases.fifth_mp.active_c3d_shm_mdata = self.cases.first.active.c3d_shm_mdata  # JUST FOR SHAPE!!!
-
-        # cells
-        self.cases.first_mp.active_cells_shm_mdata = self.cases.first.active.cells_shm_mdata
-        self.cases.third_mp.active_cells_shm_mdata = self.cases.first.active.cells_shm_mdata
-        # dirs
-        self.cases.first_mp.active_dirs_shm_mdata = self.cases.first.active.dirs_shm_mdata
-        self.cases.third_mp.active_dirs_shm_mdata = self.cases.first.active.dirs_shm_mdata
+        # c3d (with new diffusion, active exposes count buffer as c3d_shm_mdata for nucleation)
+        self.cases.first_mp.active_c3d_shm_mdata = getattr(self.cases.first.active, 'c3d_shm_mdata', None)
+        self.cases.third_mp.active_c3d_shm_mdata = self.cases.first_mp.active_c3d_shm_mdata
+        self.cases.fifth_mp.active_c3d_shm_mdata = self.cases.first_mp.active_c3d_shm_mdata  # JUST FOR SHAPE!!!
+        # cells/dirs (legacy flat arrays; None when using USE_NEW_DIFFUSION_ENGINE)
+        self.cases.first_mp.active_cells_shm_mdata = getattr(self.cases.first.active, 'cells_shm_mdata', None)
+        self.cases.third_mp.active_cells_shm_mdata = self.cases.first_mp.active_cells_shm_mdata
+        self.cases.first_mp.active_dirs_shm_mdata = getattr(self.cases.first.active, 'dirs_shm_mdata', None)
+        self.cases.third_mp.active_dirs_shm_mdata = self.cases.first_mp.active_dirs_shm_mdata
 
         # ---------------------------------------------------
         if Config.ACTIVES.SECONDARY_EXISTENCE:
             self.cases.second.active = elements.ActiveElem(Config.ACTIVES.SECONDARY)
             self.cases.fourth.active = self.cases.second.active
             # ---------------------------------------------------
-            # c3d
-            self.cases.second_mp.active_c3d_shm_mdata = self.cases.second.active.c3d_shm_mdata
-            self.cases.fourth_mp.active_c3d_shm_mdata = self.cases.second.active.c3d_shm_mdata
-            # cells
-            self.cases.second_mp.active_cells_shm_mdata = self.cases.second.active.cells_shm_mdata
-            self.cases.fourth_mp.active_cells_shm_mdata = self.cases.second.active.cells_shm_mdata
-            # dirs
-            self.cases.second_mp.active_dirs_shm_mdata = self.cases.second.active.dirs_shm_mdata
-            self.cases.fourth_mp.active_dirs_shm_mdata = self.cases.second.active.dirs_shm_mdata
+            self.cases.second_mp.active_c3d_shm_mdata = getattr(self.cases.second.active, 'c3d_shm_mdata', None)
+            self.cases.fourth_mp.active_c3d_shm_mdata = self.cases.second_mp.active_c3d_shm_mdata
+            self.cases.second_mp.active_cells_shm_mdata = getattr(self.cases.second.active, 'cells_shm_mdata', None)
+            self.cases.fourth_mp.active_cells_shm_mdata = self.cases.second_mp.active_cells_shm_mdata
+            self.cases.second_mp.active_dirs_shm_mdata = getattr(self.cases.second.active, 'dirs_shm_mdata', None)
+            self.cases.fourth_mp.active_dirs_shm_mdata = self.cases.second_mp.active_dirs_shm_mdata
 
     def init_product(self):
         # c3d_init
@@ -497,6 +510,7 @@ class SimulationConfigurator:
         case_mp.fix_full_cells = elements.fix_full_cells
 
     def save_results(self):
+        # With USE_NEW_DIFFUSION_ENGINE, oxidant.cells and active.get_cells_coords() read from the 3D diffusion grid (same DB format).
         if Config.STRIDE > Config.N_ITERATIONS:
             self.cases.first.active.transform_to_descards()
             if Config.ACTIVES.SECONDARY_EXISTENCE:
@@ -610,12 +624,17 @@ class SimulationConfigurator:
         # Dissolution
         if Config.DECOMPOSE_PRECIPITATIONS and self.c_automata.decomposition is not None:
             self.function_block.add_func(self.c_automata.decomposition)
-        # Inward Diffusion
-        if Config.INWARD_DIFFUSION and self.c_automata.diffusion_inward is not None:
-            self.function_block.add_func(self.c_automata.diffusion_inward)
-        # Outwards Diffusion
-        if Config.OUTWARD_DIFFUSION and self.c_automata.diffusion_outward is not None:
-            self.function_block.add_func(self.c_automata.diffusion_outward)
+        
+        # Diffusion
+        if Config.INWARD_DIFFUSION or Config.OUTWARD_DIFFUSION:
+            self.function_block.add_func(self.c_automata.diffuse_all)
+
+        # # Inward Diffusion
+        # if Config.INWARD_DIFFUSION and self.c_automata.diffusion_inward is not None:
+        #     self.function_block.add_func(self.c_automata.diffusion_inward)
+        # # Outwards Diffusion
+        # if Config.OUTWARD_DIFFUSION and self.c_automata.diffusion_outward is not None:
+        #     self.function_block.add_func(self.c_automata.diffusion_outward)
         # Save
         if Config.SAVE_WHOLE and self.save_function is not None:
             self.function_block.add_func(self.save_function)
