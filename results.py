@@ -10,15 +10,15 @@ layers = (1, 3, 4, 6, 14, 20, 27)
 root = tk.Tk()
 root.withdraw()
 database_name = filedialog.askopenfilename()
-iter = 9999
+# iter = 9999
 visualise = Visualisation(database_name)
 #
-# visualise.animate_3d(animate_separate=False, const_cam_pos=False)
+visualise.animate_3d(animate_separate=False, const_cam_pos=False)
 
 visualise.plot_3d(plot_separate=False, const_cam_pos=False)
 # visualise.plot_3d(plot_separate=False, const_cam_pos=True, iteration=iter)
 
-visualise.plot_2d(plot_separate=False)
+# visualise.plot_2d(plot_separate=False)
 # visualise.plot_2d(plot_separate=False, iteration=iter)
 
 # for i in range(260, 301):

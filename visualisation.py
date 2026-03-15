@@ -364,13 +364,13 @@ ELAPSED TIME: {message}
         def animate(iteration):
             ax_all.cla()
             ax_all.dist = 4
-            # if self.Config.INWARD_DIFFUSION:
-            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     if np.any(items):
-            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2)
-            #
+            if self.Config.INWARD_DIFFUSION:
+                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                if np.any(items):
+                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
+                                   s=self.cell_size * (72. / fig.dpi) ** 2)
+            
             #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
             #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
             #         items = np.array(self.c.fetchall())
@@ -420,7 +420,7 @@ ELAPSED TIME: {message}
                                    alpha=self.alpha)
 
                 # if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                if True:
+                if False:
                     self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
                     items = np.array(self.c.fetchall())
                     if np.any(items):
@@ -631,14 +631,14 @@ ELAPSED TIME: {message}
             # # Plot the plane
             # ax_all.plot_surface(X, Y, Z, color='r', alpha=0.5, zorder=0)  # Set alpha to a value between 0 and 1 for transparency
 
-            # if self.Config.INWARD_DIFFUSION:
-            #     self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-            #     items = np.array(self.c.fetchall())
-            #     if np.any(items):
-            #         items = items * rescale_factor
-            #         ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
-            #                        s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
-            #                        alpha=self.alpha)
+            if self.Config.INWARD_DIFFUSION:
+                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
+                items = np.array(self.c.fetchall())
+                if np.any(items):
+                    items = items * rescale_factor
+                    ax_all.scatter(items[:, 2], items[:, 1], items[:, 0], marker=',', color='b',
+                                   s=self.cell_size * (72. / fig.dpi) ** 2, edgecolors='black', linewidth=self.linewidth,
+                                   alpha=self.alpha)
             #     if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
             #         self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
             #         items = np.array(self.c.fetchall())
@@ -1698,10 +1698,10 @@ ELAPSED TIME: {message}
 
         elif conc_type.lower() == "cells":
             conc_type_caption = "cells concentration [%]"
-            n_cells_page = (self.axlim ** 2) * self.Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
+            # n_cells_page = (self.axlim ** 2) * self.Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
 
             # DELETE!!!
-            # n_cells_page = (self.axlim ** 2)
+            n_cells_page = (self.axlim ** 2)
 
             inward = inward * 100 / n_cells_page
             sinward = sinward * 100 / n_cells_page
@@ -1821,9 +1821,9 @@ ELAPSED TIME: {message}
                 diff_in = self.Config.OXIDANTS.PRIMARY.DIFFUSION_COEFFICIENT
                 diff_out = self.Config.ACTIVES.PRIMARY.DIFFUSION_COEFFICIENT
 
-                # analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.Config.SIM_TIME)))
-                analytical_concentration = (y_max_out / 2) * (1 - special.erf((- x + 0.0003) / (2 * sqrt(
-                    diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
+                analytical_concentration = y_max * special.erfc(x / (2 * sqrt(diff_in * self.Config.SIM_TIME)))
+                # analytical_concentration = (y_max_out / 2) * (1 - special.erf((- x + 0.002) / (2 * sqrt(
+                #     diff_out * (iteration + 1) * self.Config.SIM_TIME / self.Config.N_ITERATIONS))))
 
                 # ax.set_ylim(0, y_max + y_max * 0.2)
                 # ax.set_ylim(0, y_max_out + y_max_out * 0.1)

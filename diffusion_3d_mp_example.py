@@ -33,44 +33,57 @@ def _idx(i, j, k, n):
     return ni + nn * (nj + nn * nk)
 
 # ---------------------------------------------------------------------------
-# Subblock partition: 2-cell gap between neighbouring blocks (x-axis)
+# Subblock partition: split along z-axis with 2-cell gaps (like x-gaps) to avoid
+# write overlap: particles move ±1 in z so neighbours must not write into same k.
+# x iteration is limited to 0..x_max per step so inward/sparse-x does not waste workers.
 # ---------------------------------------------------------------------------
 
-def _partition_domain(n, n_blocks, bc_left, bc_right):
+def _partition_domain_z(n, n_blocks):
     """
-    Partition x-axis into n_blocks interior ranges with 2-cell gaps.
-    bc_left, bc_right: BC_PERIODIC (0), BC_REFLECTION (1), or BC_DELETION (2).
-    - If both are PERIODIC: reserve an extra gap at x=n-1 so no worker writes across wrap.
-    - Otherwise: particles stay in [0, n-1]; only (n_blocks-1)*2 gap cells between blocks.
+    Partition z-axis (k) into n_blocks interior ranges with 2-cell gaps between blocks.
+    Interior blocks only cover k in [1, n-2] so that with periodic BC in z:
+    - no particle at k=n-1 (boundary) is in an interior block, so no worker writes to k=0 (wrap);
+    - no particle at k=0 is in an interior block, so no worker writes to k=n-1 (wrap).
+    k=0 and k=n-1 are always in gap_z_set and are processed by gap workers only.
+    Returns (z_ranges, gap_z_set): list of (k_lo, k_hi) and set of gap k indices.
     """
-    if n_blocks <= 0 or n < 2 * n_blocks + (n_blocks - 1) * 2:
+    if n_blocks <= 0 or n < 3:
         return [], set(range(n))
     gap_width = 2
-    periodic_both = (bc_left == BC_PERIODIC and bc_right == BC_PERIODIC)
-    total_gaps = (n_blocks - 1) * gap_width + (1 if periodic_both else 0)
-    interior_total = n - total_gaps
+    # Interior indices 1..n-2 only (exclude 0 and n-1 for periodic z safety)
+    interior_size = n - 2
+    total_gaps = (n_blocks - 1) * gap_width
+    interior_total = interior_size - total_gaps
     if interior_total < n_blocks:
         return [], set(range(n))
     base = interior_total // n_blocks
     extra = interior_total % n_blocks
-    interior_ranges = []
-    x = 0
+    z_ranges = []
+    k = 1
     for b in range(n_blocks):
         size = base + (1 if b < extra else 0)
-        if size <= 0:
+        if size <= 0 or k > n - 2:
             break
-        x_hi = x + size - 1
-        if x_hi >= n:
-            break
-        if periodic_both and b == n_blocks - 1 and x_hi >= n - 1:
-            x_hi = min(x_hi, n - 2)
-        interior_ranges.append((x, x_hi))
-        x = x_hi + 1 + gap_width
-    gap_x_set = set()
-    for xi in range(n):
-        if not any(a <= xi <= b for a, b in interior_ranges):
-            gap_x_set.add(xi)
-    return interior_ranges, gap_x_set
+        k_hi = min(k + size - 1, n - 2)
+        z_ranges.append((k, k_hi))
+        k = k_hi + 1 + gap_width
+    gap_z_set = set(ki for ki in range(n) if not any(a <= ki <= b for a, b in z_ranges))
+    return z_ranges, gap_z_set
+
+
+# ---------------------------------------------------------------------------
+# x_max from count: max x (i) where any particle exists (for inward / sparse-x optimization)
+# ---------------------------------------------------------------------------
+
+def _compute_x_max_from_count(read_count, n):
+    """
+    From flat count array (idx = i + n*j + n2*k), return max i such that count[idx] > 0 for some j,k.
+    Returns -1 if no particles. Used to avoid iterating over empty x in diffusion kernels.
+    """
+    nonzero = np.flatnonzero(read_count > 0)
+    if nonzero.size == 0:
+        return -1
+    return int(np.max(nonzero % n))
 
 
 # ---------------------------------------------------------------------------
@@ -93,17 +106,17 @@ def _views_from_segment(shm, n, max_per_cell, count_bytes, dirs_bytes):
 # Boundary condition is fixed for the whole run. Three separate kernels with x-BC
 # inlined (no branch). The right one is chosen from config (boundary_x) before the run.
 
-# x periodic: no branch, just wrap
+# x periodic: no branch, just wrap. Loop over z-block (k_lo..k_hi), then j, then i in 0..x_max.
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_periodic(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -143,13 +156,13 @@ def _diffuse_subblock_kernel_x_periodic(
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_reflection(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -195,16 +208,14 @@ def _diffuse_subblock_kernel_x_reflection(
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_deletion(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
-    # Coordinate convention: i=x, j=y, k=z. This kernel runs on one x-subblock only,
-    # so i ranges from x_lo to x_hi (not 0..n-1). When debugging, the first i you see
-    # is x_lo for this subblock; particles at x=0 are in a different subblock.
+    # Partition by z (k_lo..k_hi); iterate i in 0..x_max only (early out for sparse x).
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -242,6 +253,7 @@ def _diffuse_subblock_kernel_x_deletion(
                         continue
                     write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
                     write_count[nidx] = slot + 1
+    
 
 # Per-side x BC: one kernel per (left, right) combination; no BC branches in hot path.
 # p=periodic(0), r=reflection(1), d=deletion(2). First suffix=left, second=right.
@@ -250,13 +262,13 @@ def _diffuse_subblock_kernel_x_deletion(
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_pr(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -301,13 +313,13 @@ def _diffuse_subblock_kernel_x_pr(
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_pd(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -352,13 +364,13 @@ def _diffuse_subblock_kernel_x_pd(
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_rp(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -403,13 +415,13 @@ def _diffuse_subblock_kernel_x_rp(
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_rd(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -454,13 +466,13 @@ def _diffuse_subblock_kernel_x_rd(
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_dp(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -505,13 +517,13 @@ def _diffuse_subblock_kernel_x_dp(
 @numba.njit(fastmath=True, cache=True)
 def _diffuse_subblock_kernel_x_dr(
     read_count, read_dirs, write_count, write_dirs,
-    x_lo, x_hi, n, max_per_cell, p1, p2, p3, p4, p_r, seed
+    k_lo, k_hi, x_max, n, max_per_cell, p1, p2, p3, p4, p_r, seed
 ):
     np.random.seed(seed)
     n2 = n * n
-    for k in range(n):
+    for k in range(k_lo, k_hi + 1):
         for j in range(n):
-            for i in range(x_lo, x_hi + 1):
+            for i in range(0, x_max + 1):
                 idx = i + n * j + n2 * k
                 nc = read_count[idx]
                 if nc == 0:
@@ -563,10 +575,11 @@ _BC_X_KERNELS_2D = (
 def _worker_subblock(args):
     """
     Worker: attach to read/write shared segments by name; use views only (zero-copy).
+    Domain split by z (k_lo..k_hi); kernel iterates i in 0..x_max only (all workers have work).
     bc_left, bc_right: 0=periodic, 1=reflection, 2=deletion; select one of 9 kernels.
     """
     (read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-     x_lo, x_hi, bc_left, bc_right, p1, p2, p3, p4, p_r, seed) = args
+     k_lo, k_hi, x_max, bc_left, bc_right, p1, p2, p3, p4, p_r, seed) = args
 
     shm_r = shared_memory.SharedMemory(name=read_name)
     shm_w = shared_memory.SharedMemory(name=write_name)
@@ -576,7 +589,7 @@ def _worker_subblock(args):
     kernel_func = _BC_X_KERNELS_2D[bc_left][bc_right]
     kernel_func(
         read_count, read_dirs, write_count, write_dirs,
-        x_lo, x_hi, n, max_per_cell,
+        k_lo, k_hi, x_max, n, max_per_cell,
         p1, p2, p3, p4, p_r, seed
     )
 
@@ -584,48 +597,53 @@ def _worker_subblock(args):
     shm_w.close()
 
 
-def _partition_gap_x_parallel(gap_x_set, min_spacing=3):
+def _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=None):
     """
-    Partition gap x-coordinates into groups that can be processed in parallel.
-    Gap cells at least min_spacing apart have non-overlapping writable x-ranges
-    (since particles move by at most ±1, gap at x=i writes to x in {i-1, i, i+1}).
-    Returns list of groups, each group is a list of x-coordinates safe to process in parallel.
+    Partition gap z-coordinates into groups that can be processed in parallel.
+    Gap k's at least min_spacing apart have non-overlapping writable z-ranges
+    (particles move by at most ±1 in z, so gap at k writes to k in {k-1, k, k+1}).
+    If n_z is given, z is treated as periodic: distance between k=0 and k=n_z-1 is 1,
+    so they are never placed in the same group (they would write to each other).
+    Returns list of groups, each group is a list of k-coordinates safe to process in parallel.
     """
-    if len(gap_x_set) == 0:
+    if len(gap_z_set) == 0:
         return []
-    gap_x_list = sorted(gap_x_set)
+    gap_z_list = sorted(gap_z_set)
+
+    def z_dist(a, b):
+        d = abs(a - b)
+        if n_z is not None and n_z > 0:
+            d = min(d, n_z - d)
+        return d
+
     groups = []
     used = set()
-    for x in gap_x_list:
-        if x in used:
+    for k in gap_z_list:
+        if k in used:
             continue
-        # Start a new group with x
-        group = [x]
-        used.add(x)
-        # Add other gap x's that are at least min_spacing away
-        for y in gap_x_list:
-            if y in used:
+        group = [k]
+        used.add(k)
+        for other in gap_z_list:
+            if other in used:
                 continue
-            # Check if y is far enough from all x's already in this group
             can_add = True
-            for gx in group:
-                if abs(y - gx) < min_spacing:
+            for gk in group:
+                if z_dist(other, gk) < min_spacing:
                     can_add = False
                     break
             if can_add:
-                group.append(y)
-                used.add(y)
+                group.append(other)
+                used.add(other)
         groups.append(group)
     return groups
 
 
-def _worker_gap_x(args):
+def _worker_gap_z(args):
     """
-    Worker for gap processing: process one gap x-coordinate (all j, k for that x).
-    bc_left, bc_right select one of 9 kernels (no BC branches in kernel).
+    Worker for gap z: process one gap k (all i, j for that k). Uses same kernel with k_lo=k_hi=k_gap.
     """
     (read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-     gap_x, bc_left, bc_right, p1, p2, p3, p4, p_r, seed) = args
+     gap_k, x_max, bc_left, bc_right, p1, p2, p3, p4, p_r, seed) = args
 
     shm_r = shared_memory.SharedMemory(name=read_name)
     shm_w = shared_memory.SharedMemory(name=write_name)
@@ -635,7 +653,7 @@ def _worker_gap_x(args):
     kernel_func = _BC_X_KERNELS_2D[bc_left][bc_right]
     kernel_func(
         read_count, read_dirs, write_count, write_dirs,
-        gap_x, gap_x, n, max_per_cell,
+        gap_k, gap_k, x_max, n, max_per_cell,
         p1, p2, p3, p4, p_r, seed
     )
 
@@ -643,29 +661,30 @@ def _worker_gap_x(args):
     shm_w.close()
 
 
-def _update_gap_parallel(read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-                        gap_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng):
+def _update_gap_z_parallel(read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
+                           gap_z_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng, x_max=-1):
     """
-    Update gap cells in parallel. gap_groups is precomputed once at setup.
+    Process gap z cells in parallel. If x_max >= 0 it is passed to the kernel (limit i to 0..x_max).
     """
-    if len(gap_groups) == 0:
+    if len(gap_z_groups) == 0:
         return
     base_seed = rng.integers(0, 2**31)
-    for group_idx, group in enumerate(gap_groups):
+    for group_idx, group in enumerate(gap_z_groups):
         args_list = [
             (read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-             gap_x, bc_left, bc_right, p1, p2, p3, p4, p_r, base_seed + group_idx * 1000 + x_idx)
-            for x_idx, gap_x in enumerate(group)
+             gap_k, x_max, bc_left, bc_right, p1, p2, p3, p4, p_r, base_seed + group_idx * 1000 + ki)
+            for ki, gap_k in enumerate(group)
         ]
-        pool.map(_worker_gap_x, args_list)
+        pool.map(_worker_gap_z, args_list)
 
 
 def diffuse_3d_one_step_shm(
     read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-    subblock_arg_templates, gap_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng
+    subblock_arg_templates, gap_z_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng
 ):
     """
-    One step: zero write buffer, run workers (read → write), then parallel gap.
+    One step: zero write buffer, compute x_max, run interior workers (read → write), then gap-z phase.
+    Domain partitioned by z with 2-cell gaps; gap z-coordinates processed in parallel after interior.
     bc_left, bc_right: 0=periodic, 1=reflection, 2=deletion (per x-side).
     """
     # Zero write buffer
@@ -674,16 +693,23 @@ def diffuse_3d_one_step_shm(
     write_count.fill(0)
     shm_w.close()
 
-    # Only (read_name, write_name) and seeds change per step
+    # Max x coordinate that has any particles (from flat count: i = idx % n)
+    shm_r = shared_memory.SharedMemory(name=read_name)
+    read_count, _ = _views_from_segment(shm_r, n, max_per_cell, count_bytes, dirs_bytes)
+    x_max = _compute_x_max_from_count(read_count, n)
+    shm_r.close()
+
+    # Interior z-blocks (no write overlap: gaps between blocks)
     args_list = [
-        (read_name, write_name, *tpl, rng.integers(0, 2**31))
+        (read_name, write_name, tpl[0], tpl[1], tpl[2], tpl[3], tpl[4], tpl[5], x_max, tpl[6], tpl[7], tpl[8], tpl[9], tpl[10], tpl[11], tpl[12], rng.integers(0, 2**31))
         for tpl in subblock_arg_templates
     ]
     pool.map(_worker_subblock, args_list)
 
-    _update_gap_parallel(
+    # Gap z cells (processed in groups so writable k-ranges don't overlap)
+    _update_gap_z_parallel(
         read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-        gap_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng
+        gap_z_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng, x_max
     )
 
 
@@ -751,7 +777,7 @@ class DiffusionParameters:
         self.count_bytes = prep["count_bytes"]
         self.dirs_bytes = prep["dirs_bytes"]
         self.subblock_arg_templates_base = prep["subblock_arg_templates"]
-        self.gap_groups = prep["gap_groups"]
+        self.gap_z_groups = prep["gap_z_groups"]
         self.bc_left = prep["bc_left"]
         self.bc_right = prep["bc_right"]
     
@@ -778,7 +804,7 @@ class DiffusionParameters:
         return cls._instances[key]
     
     def get_subblock_templates(self, p1, p2, p3, p4, p_r):
-        """Get subblock argument templates with element-specific probabilities and bc_left, bc_right."""
+        """Get subblock argument templates (z-ranges k_lo, k_hi) with element-specific p and bc."""
         return [
             (self.n, self.max_per_cell, self.count_bytes, self.dirs_bytes,
              tpl[4], tpl[5], self.bc_left, self.bc_right, p1, p2, p3, p4, p_r)
@@ -823,6 +849,8 @@ class DiffusionEngine:
         self._rng_base_seed = int(rng.integers(0, 2**31))
         self._thread_local = threading.local()
         self._pools = None  # list of pools, one per element; created on first diffuse_multiple
+        self._nucleation_pool = None  # shared pool for nucleation subblock workers; created on first get_nucleation_pool()
+        self._dissolution_pool = None  # shared pool for dissolution subblock workers (n_outward_workers); created on first get_dissolution_pool()
         # Config (max_per_cell, element_type) is constant per element; boundaries come from Config in diffusion module.
         self._config_cache = {}  # id(element) -> config dict, filled once per element
         self._state_cache = {}   # id(element) -> state dict (read_name, write_name, p1..p_r); names updated after each swap
@@ -883,6 +911,8 @@ class DiffusionEngine:
     
     def _diffuse_with_pool(self, element, pool):
         """Apply one diffusion step to an element using the given dedicated pool."""
+        if getattr(element, "skip_diffusion_this_step", False):
+            return
         max_per_cell = element.max_per_cell
         element_type = element.element_type
         state = self._get_cached_state(element)
@@ -900,7 +930,7 @@ class DiffusionEngine:
             state['read_name'], state['write_name'],
             params.n, params.max_per_cell,
             params.count_bytes, params.dirs_bytes,
-            subblock_templates, params.gap_groups, params.bc_left, params.bc_right,
+            subblock_templates, params.gap_z_groups, params.bc_left, params.bc_right,
             state['p1'], state['p2'], state['p3'], state['p4'], state['p_r'],
             pool, rng
         )
@@ -960,30 +990,49 @@ class DiffusionEngine:
                 range(len(elements_list))
             ))
     
+    def get_nucleation_pool(self):
+        """Return a process pool of size n_inward_workers for nucleation subblock workers. Creates on first call."""
+        if self._nucleation_pool is None:
+            self._nucleation_pool = mp.Pool(self.n_inward_workers)
+        return self._nucleation_pool
+
+    def get_dissolution_pool(self):
+        """Return a process pool of size n_outward_workers for dissolution subblock workers. Creates on first call."""
+        if self._dissolution_pool is None:
+            self._dissolution_pool = mp.Pool(self.n_outward_workers)
+        return self._dissolution_pool
+
     def close(self):
-        """Close all cached process pools. Call when done with the engine."""
+        """Close all cached process pools (diffusion and nucleation). Call when done with the engine."""
         if self._pools is not None:
             for p in self._pools:
                 p.close()
                 p.join()
             self._pools = None
+        if self._nucleation_pool is not None:
+            self._nucleation_pool.close()
+            self._nucleation_pool.join()
+            self._nucleation_pool = None
+        if self._dissolution_pool is not None:
+            self._dissolution_pool.close()
+            self._dissolution_pool.join()
+            self._dissolution_pool = None
 
 
 def prepare_diffusion_run(n, n_workers, max_per_cell, boundary_x_left, boundary_x_right, p1, p_r_extra):
     """
-    Precompute partition, gap groups, subblock templates and p values.
+    Precompute z-partition (with gaps), gap_z_groups, and subblock templates.
     boundary_x_left, boundary_x_right: 'periodic'|'reflection'|'deletion' per x-side.
-    Returns dict with: interior_ranges, gap_groups, subblock_arg_templates, count_bytes, dirs_bytes,
-    bc_left, bc_right, p1_val, ...
+    Returns dict with: z_ranges, gap_z_groups, subblock_arg_templates, count_bytes, dirs_bytes, ...
     """
     bc_left = _parse_boundary(boundary_x_left)
     bc_right = _parse_boundary(boundary_x_right)
     n_blocks = max(1, n_workers)
-    interior_ranges, gap_x_set = _partition_domain(n, n_blocks, bc_left, bc_right)
-    if not interior_ranges:
-        interior_ranges = [(0, min(n - 2, n - 1))]
-        gap_x_set = set(range(n)) - {x for a, b in interior_ranges for x in range(a, b + 1)}
-    gap_groups = _partition_gap_x_parallel(gap_x_set, min_spacing=3)
+    z_ranges, gap_z_set = _partition_domain_z(n, n_blocks)
+    if not z_ranges:
+        z_ranges = [(0, n - 1)]
+        gap_z_set = set(range(n)) - {k for a, b in z_ranges for k in range(a, b + 1)}
+    gap_z_groups = _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=n)
     n3 = n * n * n
     count_bytes = n3 * 1
     dirs_bytes = n3 * max_per_cell * 1
@@ -992,13 +1041,13 @@ def prepare_diffusion_run(n, n_workers, max_per_cell, boundary_x_left, boundary_
     p4_val = 4 * p1
     p_r_val = 4 * p1 + p_r_extra
     subblock_arg_templates = [
-        (n, max_per_cell, count_bytes, dirs_bytes, x_lo, x_hi, bc_left, bc_right,
+        (n, max_per_cell, count_bytes, dirs_bytes, k_lo, k_hi, bc_left, bc_right,
          p1, p2_val, p3_val, p4_val, p_r_val)
-        for (x_lo, x_hi) in interior_ranges
+        for (k_lo, k_hi) in z_ranges
     ]
     return {
-        "interior_ranges": interior_ranges,
-        "gap_groups": gap_groups,
+        "z_ranges": z_ranges,
+        "gap_z_groups": gap_z_groups,
         "subblock_arg_templates": subblock_arg_templates,
         "count_bytes": count_bytes,
         "dirs_bytes": dirs_bytes,
@@ -1028,12 +1077,11 @@ def run_example():
     bc_left = _parse_boundary(boundary_x_left)
     bc_right = _parse_boundary(boundary_x_right)
 
-    interior_ranges, gap_x_set = _partition_domain(n, n_blocks, bc_left, bc_right)
-    if not interior_ranges:
-        print("Partition failed. Using single block.")
-        interior_ranges = [(0, min(n - 2, n - 1))]
-        gap_x_set = set(range(n)) - {x for a, b in interior_ranges for x in range(a, b + 1)}
-    gap_groups = _partition_gap_x_parallel(gap_x_set, min_spacing=3)
+    z_ranges, gap_z_set = _partition_domain_z(n, n_blocks)
+    if not z_ranges:
+        z_ranges = [(0, n - 1)]
+        gap_z_set = set(range(n)) - {k for a, b in z_ranges for k in range(a, b + 1)}
+    gap_z_groups = _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=n)
 
     n3 = n * n * n
     count_dtype = np.int8  # max 127; max_per_cell ≤ 50
@@ -1070,16 +1118,16 @@ def run_example():
     p_ranges.p4_range = 4 * p1
     p_ranges.p_r_range = 4 * p1 + p_r_extra
 
-    # Precompute once: subblock arg templates with bc_left, bc_right
+    # Precompute once: subblock arg templates and gap_z_groups
     p1_val = p_ranges.p1_range
     p2_val = p_ranges.p2_range
     p3_val = p_ranges.p3_range
     p4_val = p_ranges.p4_range
     p_r_val = p_ranges.p_r_range
     subblock_arg_templates = [
-        (n, max_per_cell, count_bytes, dirs_bytes, x_lo, x_hi, bc_left, bc_right,
+        (n, max_per_cell, count_bytes, dirs_bytes, k_lo, k_hi, bc_left, bc_right,
          p1_val, p2_val, p3_val, p4_val, p_r_val)
-        for (x_lo, x_hi) in interior_ranges
+        for (k_lo, k_hi) in z_ranges
     ]
 
     read_name, write_name = shm_A.name, shm_B.name
@@ -1091,7 +1139,7 @@ def run_example():
                 print(f"Step {step}")
                 diffuse_3d_one_step_shm(
                     read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-                    subblock_arg_templates, gap_groups, bc_left, bc_right,
+                    subblock_arg_templates, gap_z_groups, bc_left, bc_right,
                     p1_val, p2_val, p3_val, p4_val, p_r_val, pool, rng
                 )
                 read_name, write_name = write_name, read_name

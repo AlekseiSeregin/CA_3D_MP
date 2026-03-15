@@ -535,7 +535,6 @@ class SimulationConfigurator:
             self.cases.first.active.transform_to_3d(self.c_automata.curr_max_furthest)
             if Config.ACTIVES.SECONDARY_EXISTENCE:
                 self.cases.second.active.transform_to_3d(self.c_automata.curr_max_furthest)
-        print("SAVED!")
 
     def save_microstructure(self, microstructure):
         self.db.save_pickled_microstructure(microstructure)

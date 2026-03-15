@@ -1,4 +1,5 @@
 from utils.numba_functions import *
+from utils.numba_functions import nucleation_subblock_kernel, nucleation_subblock_kernel_simple
 from multiprocessing import shared_memory
 from .neigh_indexes import *
 
@@ -33,7 +34,6 @@ def precip_step_standard(cur_case, plane_indexes, fetch_indexes, callback):
 
 
 def precip_step_multi_products(cur_case, plane_indexes, fetch_indexes, callback):
-
     shm_o = shared_memory.SharedMemory(name=cur_case.oxidant_c3d_shm_mdata.name)
     oxidant = np.ndarray(cur_case.oxidant_c3d_shm_mdata.shape, dtype=cur_case.oxidant_c3d_shm_mdata.dtype,
                          buffer=shm_o.buf)
@@ -136,6 +136,146 @@ def ci_single(cur_case, seeds, oxidant, full_3d):
             product_x_nzs[seeds[2][0]] = True
     shm_p.close()
     shm_a.close()
+    shm_product_init.close()
+    shm_product_x_nzs.close()
+
+
+def precip_step_subblock_worker(task):
+    """
+    One worker for z-subblock nucleation: owns active cells with k in [k_lo, k_hi].
+    Seed slab: k in [max(0, k_lo-1), min(n_z-1, k_hi+1)]. For each cell in the seed slab
+    with oxidant > 0 and not full, perform up to oxidant[i,j,k] nucleation attempts,
+    respecting oxidation_number (product cap) and only using active neighbours in [k_lo, k_hi].
+    Inward/outward buffers are diffusion segments [count | dirs]; we decrement count and zero
+    the freed dir slot so the segment stays consistent.
+    task: (cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_oxidant, max_per_cell_active, ind_form).
+    plane_indexes = x-axis (i) indices; worker's z range is [k_lo, k_hi].
+    """
+    cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form = task
+    plane_indexes = np.asarray(plane_indexes, dtype=np.intp).ravel()
+    shm_o = shared_memory.SharedMemory(name=cur_case_mp.oxidant_c3d_shm_mdata.name)
+    n_i, n_j, n_z = cur_case_mp.oxidant_c3d_shm_mdata.shape
+    n3 = n_i * n_j * n_z
+    count_bytes_o = n3 * np.dtype(np.int8).itemsize
+    # Diffusion segment: [count (n³ int8)][dirs (n³ × max_per_cell uint8)]; count view F-order
+    oxidant = np.ndarray(
+        (n_i, n_j, n_z),
+        dtype=np.int8,
+        buffer=shm_o.buf,
+        offset=0,
+        order="F",
+    )
+    oxidant_dirs = np.ndarray(
+        (n3, max_per_cell_o),
+        dtype=np.uint8,
+        buffer=shm_o.buf,
+        offset=count_bytes_o,
+    )
+    shm_a = shared_memory.SharedMemory(name=cur_case_mp.active_c3d_shm_mdata.name)
+    count_bytes_a = n3 * np.dtype(np.int8).itemsize
+    active = np.ndarray(
+        (n_i, n_j, n_z),
+        dtype=np.int8,
+        buffer=shm_a.buf,
+        offset=0,
+        order="F",
+    )
+    active_dirs = np.ndarray(
+        (n3, max_per_cell_a),
+        dtype=np.uint8,
+        buffer=shm_a.buf,
+        offset=count_bytes_a,
+    )
+    shm_p = shared_memory.SharedMemory(name=cur_case_mp.product_c3d_shm_mdata.name)
+    product = np.ndarray(cur_case_mp.product_c3d_shm_mdata.shape, dtype=cur_case_mp.product_c3d_shm_mdata.dtype, buffer=shm_p.buf)
+    shm_full = shared_memory.SharedMemory(name=cur_case_mp.full_shm_mdata.name)
+    full_3d = np.ndarray(cur_case_mp.full_shm_mdata.shape, dtype=cur_case_mp.full_shm_mdata.dtype, buffer=shm_full.buf)
+    shm_product_init = shared_memory.SharedMemory(name=cur_case_mp.precip_3d_init_shm_mdata.name)
+    product_init = np.ndarray(cur_case_mp.precip_3d_init_shm_mdata.shape, dtype=cur_case_mp.precip_3d_init_shm_mdata.dtype, buffer=shm_product_init.buf)
+    shm_product_x_nzs = shared_memory.SharedMemory(name=cur_case_mp.prod_indexes_shm_mdata.name)
+    product_x_nzs = np.ndarray(cur_case_mp.prod_indexes_shm_mdata.shape, dtype=cur_case_mp.prod_indexes_shm_mdata.dtype, buffer=shm_product_x_nzs.buf)
+
+    k_seed_lo = max(0, k_lo - 1)
+    k_seed_hi = min(full_3d.shape[2] - 1, k_hi + 1)
+    # seed_slab_k = z range for this worker (plane_indexes are x indices, not z)
+    seed_slab_k = np.arange(k_seed_lo, k_seed_hi + 1, dtype=np.intp)
+
+    ox_num = cur_case_mp.oxidation_number
+    nucl_prob = cur_case_mp.nucleation_probabilities
+    n_cells = n_i
+
+    # Array 1: offsets for checking actives in yz plane (one step each direction + center), shape (9, 3)
+    active_check_offsets = np.asarray(ind_form[:9], dtype=np.int8)
+
+    # Array 2: flat neighbours of cubic cell for product_init count and probability
+    # ox_num==1: product only on empty cell → 6 face neighbours (no center)
+    # ox_num>1: product can sit oxidation_number times → 6 face + center (0,0,0)
+    face_offsets = np.array(
+        [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]],
+        dtype=np.int8,
+    )
+    if ox_num > 1:
+        flat_neigh_offsets = np.vstack([face_offsets, [[0, 0, 0]]]).astype(np.int8)
+    else:
+        flat_neigh_offsets = face_offsets
+
+    values_pp = np.asarray(nucl_prob.nucl_prob.values_pp, dtype=np.float64)
+    const_a_pp = np.asarray(nucl_prob.const_a_pp, dtype=np.float64)
+    const_b_pp = np.asarray(nucl_prob.const_b_pp, dtype=np.float64)
+    const_c_pp = np.asarray(nucl_prob.const_c_pp, dtype=np.float64)
+    const_d_pp = np.asarray(nucl_prob.const_d_pp, dtype=np.float64)
+    seed = np.random.randint(0, 2**31)
+    # Max x (i) where any oxidant exists (skip x planes with no particles)
+    flat = np.flatnonzero(oxidant.ravel(order="F") > 0)
+    x_max = int(np.max(flat % n_i)) if flat.size > 0 else -1
+
+    use_simple_nucleation = bool(getattr(cur_case_mp, "use_simple_nucleation", False))
+    if use_simple_nucleation:
+        nucleation_subblock_kernel_simple(
+            oxidant,
+            oxidant_dirs,
+            active,
+            active_dirs,
+            product,
+            full_3d,
+            product_x_nzs,
+            ox_num,
+            seed_slab_k,
+            plane_indexes,
+            active_check_offsets,
+            n_cells,
+            x_max,
+            seed,
+        )
+    else:
+        nucleation_subblock_kernel(
+            oxidant,
+            oxidant_dirs,
+            active,
+            active_dirs,
+            product,
+            full_3d,
+            product_init,
+            product_x_nzs,
+            ox_num,
+            seed_slab_k,
+            plane_indexes,
+            active_check_offsets,
+            flat_neigh_offsets,
+            values_pp,
+            const_a_pp,
+            const_b_pp,
+            const_c_pp,
+            const_d_pp,
+            n_cells,
+            x_max,
+            seed,
+        )
+
+    shm_o.close()
+    shm_a.close()
+    shm_p.close()
+    shm_full.close()
     shm_product_init.close()
     shm_product_x_nzs.close()
 

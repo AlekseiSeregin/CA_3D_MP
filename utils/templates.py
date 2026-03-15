@@ -11,6 +11,7 @@ class CaseSetUp:
         self.microstructure = None
         self.prod_indexes = None
         self.product_ind_not_stab = None
+        self.dissolution_probabilities = None
 
         self.fix_init_precip_func_ref = None
         self.precip_3d_init = None
@@ -67,6 +68,8 @@ class CaseSetUpMP:
         self.threshold_outward = None
 
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
+
+        self.use_simple_nucleation = Config.USE_SIMPLE_NUCLEATION
 
 
 class CaseRef:

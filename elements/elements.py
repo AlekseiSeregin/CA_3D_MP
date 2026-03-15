@@ -74,6 +74,7 @@ class ActiveElem:
 
         self.current_count = None
         self.shms_unlinked = False
+        self.skip_diffusion_this_step = False  # set by CA diffuse_all when STRIDE says skip outward this step
 
         # 3D diffusion grid (count + packed dirs) is now PRIMARY storage (no flat arrays)
         self.max_per_cell = getattr(settings, 'DIFFUSION_MAX_PER_CELL', None) or getattr(Config, 'DIFFUSION_MAX_PER_CELL_FALLBACK', 50)
@@ -104,6 +105,12 @@ class ActiveElem:
         self.cells_shm_mdata = None  # legacy flat cells; not used when USE_NEW_DIFFUSION_ENGINE
         self.dirs_shm_mdata = None
 
+    def get_current_c3d_shm_mdata(self):
+        """Return SharedMetaData for the current diffusion *read* buffer (after swap). Use for nucleation so it reads up-to-date grid."""
+        n = self.cells_per_axis
+        name = self._diff_shm_A.name if self._diff_read_name == self._diff_shm_A.name else self._diff_shm_B.name
+        return SharedMetaData(name, (n, n, n), np.int8)
+
     def _init_particles_in_grid(self, settings):
         """Initialize particles directly in the 3D grid (no flat arrays). CONC_PRECISION: 'rand' or 'exact'. SPACE_FILL: 'full' or 'half'. Uses Numba JIT for speed."""
         n = self.cells_per_axis
@@ -113,16 +120,17 @@ class ActiveElem:
         count.fill(0)
         dirs.fill(0)
         n2 = n * n
-        k_lo = n // 2 if getattr(settings, 'SPACE_FILL', 'full').lower() == 'half' else 0
+        i_lo = n // 2 if getattr(settings, 'SPACE_FILL', 'full').lower() == 'half' else 0
         packed_dirs = _DIRS_6_PACKED if _DIRS_6_PACKED is not None else np.array([20, 22, 17, 25, 5, 37], dtype=np.uint8)
         seed = int(np.random.default_rng().integers(0, 2**31))
 
         if settings.CONC_PRECISION.lower() == 'rand':
-            total_particles = int(self.n_per_page * self.cells_per_axis)
-            init_particles_rand(count, dirs, n, n2, max_per_cell, total_particles, packed_dirs, k_lo, seed)
+            num_x_slices = n - i_lo  # full grid: n slices; half (x): n - n//2
+            total_particles = int(self.n_per_page * num_x_slices)
+            init_particles_rand(count, dirs, n, n2, max_per_cell, total_particles, packed_dirs, i_lo, seed)
         elif settings.CONC_PRECISION.lower() == 'exact':
             n_per = min(int(self.n_per_page), n * n)
-            init_particles_exact(count, dirs, n, n2, max_per_cell, n_per, k_lo, packed_dirs, seed)
+            init_particles_exact(count, dirs, n, n2, max_per_cell, n_per, i_lo, packed_dirs, seed)
         else:
             raise ValueError(f"Wrong CONC_PRECISION for outward element! (use 'exact' or 'rand')")
 
@@ -131,6 +139,30 @@ class ActiveElem:
         read_count = self._diff_A_count if self._diff_read_name == self._diff_shm_A.name else self._diff_B_count
         read_dirs = self._diff_A_dirs if self._diff_read_name == self._diff_shm_A.name else self._diff_B_dirs
         return read_count, read_dirs
+
+    def fill_last_page(self, time=0):
+        """
+        If current particle count on the last x-plane (x=n-1) is less than n_per_page, add the difference
+        by sampling from currently empty slots. Uses current read buffer. Concentration target comes from
+        Config ACTIVES.*.CELLS_CONCENTRATION (n_per_page is set from that at init).
+        """
+        count, dirs = self._get_current_grid()
+        n = self.cells_per_axis
+        n2 = n * n
+        max_per_cell = self.max_per_cell
+        count_3d = count.reshape(n, n, n, order="F")
+        current_count = int(count_3d[n - 1, :, :].sum())
+        if current_count >= self.n_per_page:
+            return
+        num_to_add = self.n_per_page - current_count
+        rng = np.random.default_rng()
+        j_coords = rng.integers(0, n, size=num_to_add, dtype=np.intp)
+        k_coords = rng.integers(0, n, size=num_to_add, dtype=np.intp)
+        packed_dirs = np.array([22], dtype=np.uint8)
+        dir_packed = rng.choice(packed_dirs, size=num_to_add)
+        not_inserted = fill_last_page_kernel(count, dirs, n, n2, max_per_cell, j_coords, k_coords, dir_packed)
+        if not_inserted > 0:
+            print(f"Warning: {not_inserted} particles not inserted into last page (outward).")
 
     def get_diffusion_state(self):
         """Return current diffusion state for DiffusionEngine (DiffusibleElement protocol)."""
@@ -160,7 +192,7 @@ class ActiveElem:
         read_count, read_dirs = self._get_current_grid()
         n = self.cells_per_axis
         max_per_cell = self.max_per_cell
-        count_3d = read_count.reshape(n, n, n)
+        count_3d = read_count.reshape(n, n, n, order="F")
         dirs_3d = read_dirs.reshape(n, n, n, max_per_cell)
         if copy:
             return count_3d.copy(), dirs_3d.copy()
@@ -173,7 +205,7 @@ class ActiveElem:
         """
         read_count, _ = self._get_current_grid()
         n = self.cells_per_axis
-        count_3d = read_count.reshape(n, n, n)
+        count_3d = read_count.reshape(n, n, n, order="F")
         idx = np.nonzero(count_3d)
         if len(idx[0]) == 0:
             return np.zeros((3, 0), dtype=np.short)
@@ -611,23 +643,33 @@ class OxidantElem:
 
     def fill_first_page(self, time=0):
         """
-        Generate new particles on the diffusion surface (first x-page: x=0, i.e. the zy plane).
-        Particles are placed at random (y, z) on that plane. Uses Numba JIT for speed.
+        If current particle count on x=0 plane is less than n_per_page, add the difference
+        by sampling from currently empty slots. If already >= n_per_page, do nothing.
+        Uses the current read buffer (same as diffusion step) so we add to the buffer that is actually read.
         """
         count = self._diff_A_count if self._diff_read_name == self._diff_shm_A.name else self._diff_B_count
         dirs = self._diff_A_dirs if self._diff_read_name == self._diff_shm_A.name else self._diff_B_dirs
 
         n = self.cells_per_axis
         n2 = n * n
-        # x=0 plane: linear indices n*j + n2*k for j,k in 0..n-1
-        count_3d = count.reshape(n, n, n)
-        self.current_count = int(count_3d[0, :, :].sum())
-        adj_cells_pro_page = self.n_per_page - self.current_count
+        max_per_cell = self.max_per_cell
+        count_3d = count.reshape(n, n, n, order="F")
+        # Same layout as diffusion (i,j,k)=(x,y,z): x=0 plane is count_3d[0, :, :], linear index n*j + n2*k
+        current_count = int(count_3d[0, :, :].sum())
+        if current_count >= self.n_per_page:
+            return
 
-        if adj_cells_pro_page > 0:
-            dir_packed = np.uint8(37)  # (0, 0, 1) inward
-            seed = int(np.random.default_rng().integers(0, 2**31))
-            fill_first_page_kernel(count, dirs, n, n2, self.max_per_cell, adj_cells_pro_page, dir_packed, seed)
+        num_to_add = self.n_per_page - current_count
+        rng = np.random.default_rng()
+        j_coords = rng.integers(0, n, size=num_to_add, dtype=np.intp)
+        k_coords = rng.integers(0, n, size=num_to_add, dtype=np.intp)
+        # packed_dirs = _DIRS_6_PACKED if _DIRS_6_PACKED is not None else np.array([20, 22, 17, 25, 5, 37], dtype=np.uint8)
+        packed_dirs = np.array([22], dtype=np.uint8)
+        dir_packed = rng.choice(packed_dirs, size=num_to_add)
+        not_inserted = fill_first_page_kernel(count, dirs, n, n2, max_per_cell, j_coords, k_coords, dir_packed)
+        if not_inserted > 0:
+            print(f"Warning: {not_inserted} particles not inserted into first page.")
+
 
     def _init_diffusion_buffers_oxidant(self):
         """Create shared-memory diffusion grids for inward diffusion."""
@@ -643,6 +685,12 @@ class OxidantElem:
         self._diff_write_name = self._diff_shm_B.name
         # Expose count buffer as c3d_shm_mdata for engine/case_mp (same shm, first segment)
         self.c3d_shm_mdata = SharedMetaData(self._diff_shm_A.name, (n, n, n), np.int8)
+
+    def get_current_c3d_shm_mdata(self):
+        """Return SharedMetaData for the current diffusion *read* buffer (after swap). Use for nucleation so it reads up-to-date grid."""
+        n = self.cells_per_axis
+        name = self._diff_shm_A.name if self._diff_read_name == self._diff_shm_A.name else self._diff_shm_B.name
+        return SharedMetaData(name, (n, n, n), np.int8)
 
     def _get_current_grid(self):
         """Get current read buffer (count, dirs) from grid."""
@@ -678,7 +726,7 @@ class OxidantElem:
         read_count, read_dirs = self._get_current_grid()
         n = self.cells_per_axis
         max_per_cell = self.max_per_cell
-        count_3d = read_count.reshape(n, n, n)
+        count_3d = read_count.reshape(n, n, n, order="F")
         dirs_3d = read_dirs.reshape(n, n, n, max_per_cell)
         if copy:
             return count_3d.copy(), dirs_3d.copy()
@@ -691,7 +739,7 @@ class OxidantElem:
         """
         read_count, _ = self._get_current_grid()
         n = self.cells_per_axis
-        count_3d = read_count.reshape(n, n, n)
+        count_3d = read_count.reshape(n, n, n, order="F")
         idx = np.nonzero(count_3d)
         if len(idx[0]) == 0:
             return np.zeros((3, 0), dtype=np.short)
@@ -764,12 +812,20 @@ class Product:
         self.full_c3d[full_precip[0], full_precip[1], full_precip[2]] = True
 
     def transform_c3d_single(self):
-        return np.array(np.nonzero(self.c3d), dtype=np.short)
+        initial = np.array(np.nonzero(self.c3d), dtype=np.short)
+        # Return (z, y, x) as (3, n) array so insert_particle_data transpose -> (n, 3) with cols z,y,x
+        other = np.array([initial[2, :], initial[1, :], initial[0, :]], dtype=np.short)
+        return other
 
     def transform_c3d_mult(self):
         precipitations = np.array(np.nonzero(self.c3d), dtype=np.short)
+        # Return (z, y, x) as (3, n) to match transform_c3d_single / insert_particle_data
+        coords = np.array(
+            [precipitations[2, :], precipitations[1, :], precipitations[0, :]],
+            dtype=np.short,
+        )
         counts = self.c3d[precipitations[0], precipitations[1], precipitations[2]]
-        return np.array(np.repeat(precipitations, counts, axis=1), dtype=np.short)
+        return np.array(np.repeat(coords, counts, axis=1), dtype=np.short)
 
     def close_and_unlink_shm(self):
         if not self.shms_unlinked:

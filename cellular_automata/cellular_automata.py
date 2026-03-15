@@ -1,12 +1,30 @@
 import os
 import sys
 import threading
+import numpy as np
 import utils
 import multiprocessing
+from multiprocessing import shared_memory
 from .nes_for_mp import *
-from .dissolution_functions import *
+from .dissolution_functions import (
+    dissolution_subblock_worker,
+    dissolution_subblock_worker_v2,
+    dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL,
+    get_block_patterns_from_aggregated,
+)
+from utils.numba_functions import (
+    aggregate,
+    go_around_bool,
+    go_around_int,
+    insert_counts,
+    just_decrease_counts,
+)
 from thermodynamics import *
 from thermodynamics import JMatProWorkerPool
+from configuration import Config
+from diffusion_3d_mp_example import _partition_domain_z, _partition_gap_z_parallel, _DIRS_6_PACKED
+from .nucleation_functions import precip_step_subblock_worker
+from .neigh_indexes import ind_formation
 
 
 class CellularAutomata:
@@ -28,6 +46,9 @@ class CellularAutomata:
 
         # New 3D diffusion engine (set by engine when USE_NEW_DIFFUSION_ENGINE is True)
         self.diffusion_engine = None
+        # z-partition for precip subblock (computed once on first use, never changes)
+        self._precip_z_ranges = None
+        self._precip_gap_z_groups = None
 
         # functions
         self.precip_func = None  # must be defined elsewhere
@@ -898,6 +919,38 @@ class CellularAutomata:
             self.comb_indexes = oxidant_indexes[indexs]
         else:
             self.comb_indexes = [self.ioz_bound]
+
+    def get_combi_ind_standard_v2(self):
+        """
+        Same logic as get_combi_ind_standard but:
+        - Works with current c3d layout (uses .c3d or get_3d_grid()[0] for oxidant/active).
+        - ioz_bound = x index of the furthest diffused particle (max over oxidant and active), to narrow the domain.
+        - Vectorized: one sum over axes (0,1) per array instead of a Python loop over planes.
+        Sets self.ioz_bound, self.comb_indexes.
+        """
+        oxidant_3d = self.cur_case.oxidant.get_3d_grid()[0]
+        active_3d = self.cur_case.active.get_3d_grid()[0]
+        n_i = oxidant_3d.shape[0]
+        n_z = oxidant_3d.shape[2]
+
+        # ioz_bound = max x (i) where any oxidant or active particle exists (narrow the domain)
+        flat_o = np.flatnonzero(oxidant_3d.ravel(order="F") > 0)
+        max_x_ox = int(np.max(flat_o % n_i)) if flat_o.size > 0 else -1
+        self.ioz_bound = max(max_x_ox, 0)
+
+        # Sum over (y, z) for each x in one call; result shape (n_i,)
+        oxidant = np.sum(oxidant_3d[:self.ioz_bound+1, :, :], axis=(1, 2)).astype(np.uint32)
+        active = np.sum(active_3d[:self.ioz_bound+1, :, :], axis=(1, 2)).astype(np.uint32)
+
+        oxidant_indexes = np.where(oxidant > 0)[0]
+        active_indexes = np.where(active > 0)[0]
+
+        min_act = active_indexes.min(initial=self.cells_per_axis)
+        if min_act < self.cells_per_axis:
+            indexs = np.where(oxidant_indexes >= min_act - 1)[0]
+            self.comb_indexes = oxidant_indexes[indexs]
+        else:
+            self.comb_indexes = np.array([self.ioz_bound])
 
     def get_combi_ind_cells_around_product(self):
         oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
@@ -2651,17 +2704,19 @@ class CellularAutomata:
                 self.diffusion_engine.diffuse_multiple(outward)
 
     def diffuse_all(self):
-        elems_to_diffuse = []
-        elems_to_diffuse.extend(self.cases.all_oxidants)
-        if (self.iteration + 1) % Config.STRIDE == 0:
-            elems_to_diffuse.extend(self.cases.all_actives)
-        
+        # Always pass full list (oxidants + actives) so diffusion engine never recreates process pools.
+        # Skip outward diffusion when not on a STRIDE step by setting skip_diffusion_this_step on actives.
+        run_outward = (self.iteration + 1) % Config.STRIDE == 0
+        for e in self.cases.all_actives:
+            e.skip_diffusion_this_step = not run_outward
+        elems_to_diffuse = list(self.cases.all_oxidants) + list(self.cases.all_actives)
         self.diffusion_engine.diffuse_multiple(elems_to_diffuse)
 
         for elem in self.cases.all_oxidants:
             elem.fill_first_page()
-
-
+        if run_outward:
+            for elem in self.cases.all_actives:
+                elem.fill_last_page()
 
         # Legacy path: diffusion_outward_mp (uses element.diffuse, last_in_diff_arr, etc.)
         # if (self.iteration + 1) % Config.STRIDE == 0:
@@ -2936,6 +2991,153 @@ class CellularAutomata:
             new_dirs -= 1
             self.cur_case.oxidant.dirs = np.concatenate((self.cur_case.oxidant.dirs, new_dirs), axis=1)
 
+    def dissolution_mp_subblock(self):
+        """
+        Dissolution with x-partitioned workers (like nucleation subblock). Each worker processes
+        its x-planes (plane_indexes); product and active are updated in-place in SHM; returns
+        to_dissolve so we add oxidant on the main process. Reuses the diffusion engine's
+        nucleation pool. No gaps: neighbours are read-only across boundaries.
+        """
+        dp = self.cur_case.dissolution_probabilities
+        if dp is None:
+            return
+        comb = np.asarray(self.comb_indexes, dtype=np.intp).ravel()
+        if comb.size == 0:
+            return
+        n_workers = max(1, getattr(self.diffusion_engine, "n_inward_workers", 4))
+        # Partition x-planes (comb_indexes) across workers
+        n_plane = comb.size
+        chunk_size = max(1, (n_plane + n_workers - 1) // n_workers)
+        plane_chunks = [
+            comb[i : i + chunk_size]
+            for i in range(0, n_plane, chunk_size)
+        ]
+        values_pp = np.asarray(dp.dissol_prob.values_pp, dtype=np.float64)
+        const_a_pp = np.asarray(dp.const_a_pp, dtype=np.float64)
+        const_b_pp = np.asarray(dp.const_b_pp, dtype=np.float64)
+        const_c_pp = np.asarray(dp.const_c_pp, dtype=np.float64)
+        const_d_pp = np.asarray(dp.const_d_pp, dtype=np.float64)
+        tasks = [
+            (
+                self.cur_case_mp,
+                plane_chunks[w],
+                values_pp,
+                const_a_pp,
+                const_b_pp,
+                const_c_pp,
+                const_d_pp,
+            )
+            for w in range(len(plane_chunks))
+        ]
+        pool = self.diffusion_engine.get_nucleation_pool()
+        results = pool.map(dissolution_subblock_worker, tasks)
+        to_dissolve = np.concatenate([r for r in results if r.size > 0], axis=1)
+        if to_dissolve.size == 0:
+            return
+        to_dissolve = np.asarray(to_dissolve, dtype=np.short)
+        # Kernel already did product-- and active++ per particle; add extra active if threshold_outward > 1
+        if self.cur_case_mp.threshold_outward > 1:
+            insert_counts(self.cur_case.active.c3d, to_dissolve, self.cur_case_mp.threshold_outward - 1)
+        repeated_coords = np.repeat(to_dissolve, self.cur_case_mp.threshold_inward, axis=1)
+        self.cur_case.oxidant.cells = np.concatenate((self.cur_case.oxidant.cells, repeated_coords), axis=1)
+        new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], repeated_coords.shape[1])
+        new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
+        new_dirs -= 1
+        self.cur_case.oxidant.dirs = np.concatenate((self.cur_case.oxidant.dirs, new_dirs), axis=1)
+
+    def dissolution_mp_subblock_v2(self):
+        """
+        Dissolution V2: product snapshot for consistent neighbour reads; workers write directly
+        to oxidant write buffer (count + dirs grid) and active. No flat cells/dirs; oxidant is
+        in shared memory. Optional block logic via aggregated_ind and bsf.
+        """
+        dp = self.cur_case.dissolution_probabilities
+        if dp is None:
+            return
+        comb = np.asarray(self.comb_indexes, dtype=np.intp).ravel()
+        if comb.size == 0:
+            return
+        oxidant_elem = self.cur_case.oxidant
+        if not hasattr(oxidant_elem, "get_current_c3d_shm_mdata"):
+            return
+        n_workers = max(1, getattr(self.diffusion_engine, "n_outward_workers", 4))
+        n_z = self.cur_case_mp.product_c3d_shm_mdata.shape[2]
+        # Partition z into contiguous slabs (no gaps), like diffusion
+        base = n_z // n_workers
+        extra = n_z % n_workers
+        z_ranges = []
+        k = 0
+        for w in range(n_workers):
+            size = base + (1 if w < extra else 0)
+            if size <= 0:
+                break
+            k_hi = min(k + size - 1, n_z - 1)
+            z_ranges.append((k, k_hi))
+            k = k_hi + 1
+        if not z_ranges:
+            return
+        block_patterns = get_block_patterns_from_aggregated(getattr(self, "aggregated_ind", None))
+        bsf = float(getattr(dp, "bsf", 1.0))
+        if bsf < 1.0:
+            bsf = 1.0
+
+        # Product snapshot (read-only for workers)
+        shm_product = shared_memory.SharedMemory(name=self.cur_case_mp.product_c3d_shm_mdata.name)
+        product = np.ndarray(
+            self.cur_case_mp.product_c3d_shm_mdata.shape,
+            dtype=self.cur_case_mp.product_c3d_shm_mdata.dtype,
+            buffer=shm_product.buf,
+        )
+        snapshot_shm = shared_memory.SharedMemory(create=True, size=product.nbytes)
+        snapshot = np.ndarray(product.shape, dtype=product.dtype, buffer=snapshot_shm.buf)
+        np.copyto(snapshot, product)
+        shm_product.close()
+        product_snapshot_mdata = SharedMetaData(snapshot_shm.name, snapshot.shape, snapshot.dtype)
+
+        # Add new oxidant to current (read) buffer so particles are in the active state and survive next diffusion
+        oxidant_write_mdata = oxidant_elem.get_current_c3d_shm_mdata()
+        max_per_cell_oxidant = oxidant_elem.max_per_cell
+        active_elem = self.cur_case.active
+        max_per_cell_active = active_elem.max_per_cell
+        packed_dirs = np.asarray(_DIRS_6_PACKED, dtype=np.uint8)
+
+        values_pp = np.asarray(dp.dissol_prob.values_pp, dtype=np.float64)
+        const_a_pp = np.asarray(dp.const_a_pp, dtype=np.float64)
+        const_b_pp = np.asarray(dp.const_b_pp, dtype=np.float64)
+        const_c_pp = np.asarray(dp.const_c_pp, dtype=np.float64)
+        const_d_pp = np.asarray(dp.const_d_pp, dtype=np.float64)
+
+        tasks = [
+            (
+                self.cur_case_mp,
+                comb,
+                k_lo,
+                k_hi,
+                values_pp,
+                const_a_pp,
+                const_b_pp,
+                const_c_pp,
+                const_d_pp,
+                product_snapshot_mdata,
+                oxidant_write_mdata,
+                max_per_cell_oxidant,
+                max_per_cell_active,
+                packed_dirs,
+                block_patterns,
+                bsf,
+            )
+            for (k_lo, k_hi) in z_ranges
+        ]
+
+        pool = self.diffusion_engine.get_dissolution_pool()
+        pool.map(dissolution_subblock_worker_v2, tasks)
+
+        snapshot_shm.close()
+        try:
+            snapshot_shm.unlink()
+        except FileNotFoundError:
+            pass
+
     def precip_mp(self):
         self.cur_case.fix_init_precip_func_ref(self.ioz_bound)
         if len(self.comb_indexes) <= Config.DEPTH_PER_DIV:
@@ -2952,6 +3154,53 @@ class CellularAutomata:
                         self.cur_case_mp.precip_step) for ind in ind_chunks for fetch_batch in self.secondary_fetch_ind]
         self.pool.map(worker, p_tasks)
         self.pool.map(worker, s_tasks)
+
+    def precip_mp_subblock(self):
+        """
+        Nucleation using z-subblock partition (same as diffusion): each worker owns active
+        cells in [k_lo, k_hi] and only decrements active in that range. Seed slab per worker
+        is k in [k_lo-1, k_hi+1]. Iterates over all oxidant particles per cell and respects
+        oxidation_number (product cap). Uses the diffusion engine's nucleation pool.
+        Uses current diffusion read buffers (after swap) so nucleation sees up-to-date oxidant/active.
+        """
+        # Point case_mp at current read buffers (diffusion may have swapped A/B)
+        self.get_combi_ind_standard_v2()
+        oxidant_elem = self.cur_case.oxidant
+        active_elem = self.cur_case.active
+        self.cur_case_mp.oxidant_c3d_shm_mdata = oxidant_elem.get_current_c3d_shm_mdata()
+        self.cur_case_mp.active_c3d_shm_mdata = active_elem.get_current_c3d_shm_mdata()
+        self.cur_case.fix_init_precip_func_ref(self.cells_per_axis)
+        n_cells = self.cells_per_axis
+        n_workers = max(1, self.diffusion_engine.n_inward_workers)
+        if self._precip_z_ranges is None:
+            z_ranges, gap_z_set = _partition_domain_z(n_cells, n_workers)
+            gap_z_groups = _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=n_cells)
+            self._precip_z_ranges = z_ranges
+            self._precip_gap_z_groups = gap_z_groups
+        z_ranges = self._precip_z_ranges
+        gap_z_groups = self._precip_gap_z_groups
+
+        # # plane_indexes = x (i) planes; comb_indexes filled elsewhere or use all x
+        # comb = getattr(self, "comb_indexes", None)
+        # if comb is not None and len(comb) > 0:
+        #     plane_indexes = np.asarray(comb, dtype=np.intp)
+        # else:
+        #     plane_indexes = np.arange(n_cells, dtype=np.intp)
+
+        plane_indexes = np.asarray(self.comb_indexes, dtype=np.intp)
+
+        max_per_cell_o = oxidant_elem.max_per_cell
+        max_per_cell_a = active_elem.max_per_cell
+        ind_form = np.asarray(ind_formation, dtype=np.int8)
+        pool = self.diffusion_engine.get_nucleation_pool()
+        # Interior z-blocks (same partition as diffusion)
+        tasks = [(self.cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form) for (k_lo, k_hi) in z_ranges]
+        pool.map(precip_step_subblock_worker, tasks)
+        # Gap z-planes: process in groups (parallel within group, sequential across groups) like diffusion
+        for group in gap_z_groups:
+            gap_tasks = [(self.cur_case_mp, k, k, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form) for k in group]
+            pool.map(precip_step_subblock_worker, gap_tasks)
+
 
     def ioz_depth_from_kinetics(self):
         self.curr_time = Config.GENERATED_VALUES.TAU * (self.iteration + 1)
