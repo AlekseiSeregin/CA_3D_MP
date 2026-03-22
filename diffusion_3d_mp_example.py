@@ -731,12 +731,11 @@ def _parse_boundary(s):
 
 def _boundary_from_config(element_type, side):
     """Get boundary string from Config for element_type ('outward'|'inward') and side ('left'|'right')."""
-    fallback = getattr(Config, 'DIFFUSION_BOUNDARY_X', 'periodic')
     if element_type == 'outward':
         key = f'DIFFUSION_BOUNDARY_X_OUTWARD_{side.upper()}'
     else:
         key = f'DIFFUSION_BOUNDARY_X_INWARD_{side.upper()}'
-    return getattr(Config, key, fallback)
+    return getattr(Config, key)
 
 
 class DiffusionParameters:
@@ -833,7 +832,7 @@ class DiffusionEngine:
         engine.close()                                    # When done (closes cached pools)
     """
     
-    def __init__(self, n_outward_workers, n_inward_workers, rng):
+    def __init__(self, n_outward_workers, n_inward_workers, rng, worker_pools=None):
         """
         Initialize diffusion engine with worker counts per element and RNG.
         
@@ -845,28 +844,15 @@ class DiffusionEngine:
         self.n_outward_workers = n_outward_workers
         self.n_inward_workers = n_inward_workers
         self.rng = rng
+        self.worker_pools = worker_pools
+        self._pools_managed_externally = worker_pools is not None
         # One RNG per thread so when we run multiple elements in parallel (ThreadPoolExecutor) each has its own stream; no lock.
         self._rng_base_seed = int(rng.integers(0, 2**31))
         self._thread_local = threading.local()
-        self._pools = None  # list of pools, one per element; created on first diffuse_multiple
-        self._nucleation_pool = None  # shared pool for nucleation subblock workers; created on first get_nucleation_pool()
-        self._dissolution_pool = None  # shared pool for dissolution subblock workers (n_outward_workers); created on first get_dissolution_pool()
+        self._pools = None  # list of pools, one per element
         # Config (max_per_cell, element_type) is constant per element; boundaries come from Config in diffusion module.
         self._config_cache = {}  # id(element) -> config dict, filled once per element
         self._state_cache = {}   # id(element) -> state dict (read_name, write_name, p1..p_r); names updated after each swap
-    
-    # def _get_cached_config(self, element):
-    #     """Return diffusion config for element. max_per_cell from Config (not element); element_type from element once, then cached."""
-    #     eid = id(element)
-    #     if eid not in self._config_cache:
-    #         # Only ask element for element_type (outward/inward); max_per_cell comes from Config
-    #         element_type = element.get_diffusion_config().get('element_type', 'outward')
-    #         if element_type == 'outward':
-    #             max_per_cell = getattr(Config, 'OUTWARD_DIFFUSION_MAX_PER_CELL', getattr(Config, 'DIFFUSION_MAX_PER_CELL_FALLBACK', 50))
-    #         else:
-    #             max_per_cell = getattr(Config, 'INWARD_DIFFUSION_MAX_PER_CELL', getattr(Config, 'DIFFUSION_MAX_PER_CELL_FALLBACK', 50))
-    #         self._config_cache[eid] = {'element_type': element_type, 'max_per_cell': max_per_cell}
-    #     return self._config_cache[eid]
     
     def _get_cached_state(self, element):
         """Return diffusion state for element; filled once, then read/write names updated in cache after each swap."""
@@ -889,25 +875,6 @@ class DiffusionEngine:
                 seed=(self._rng_base_seed + threading.get_ident()) % (2**32)
             )
         return self._thread_local.rng
-
-    # def register_elements(self, elements):
-    #     """
-    #     Register elements that will be diffused. Call once at init so the engine knows each
-    #     element's max_per_cell (and element_type) and pre-creates DiffusionParameters.
-    #     After this, diffuse() / diffuse_multiple() use the cached config per element.
-        
-    #     Args:
-    #         elements: iterable of DiffusibleElement instances (e.g. [active_elem, oxidant_elem])
-    #     """
-    #     for elem in elements:
-    #         self._get_cached_state(elem)  # prime state cache (read/write names, p1..p_r)
-    #         max_per_cell = elem.max_per_cell
-    #         element_type = elem.element_type
-    #         DiffusionParameters.get_or_create(
-    #             max_per_cell, element_type,
-    #             boundary_x_left=None,
-    #             boundary_x_right=None,
-    #         )
     
     def _diffuse_with_pool(self, element, pool):
         """Apply one diffusion step to an element using the given dedicated pool."""
@@ -937,24 +904,6 @@ class DiffusionEngine:
         element.swap_diffusion_buffers()
         self._swap_cached_state_names(element)
     
-    # def diffuse(self, element):
-    #     """
-    #     Apply one Chopard-Droz diffusion step to an element.
-    #     Uses a temporary pool (one per element type) for single-element use.
-        
-    #     Args:
-    #         element: DiffusibleElement instance that implements the protocol
-    #     """
-    #     config = self._get_cached_config(element)
-    #     element_type = config.get('element_type', 'outward')
-    #     n = self.n_inward_workers if element_type == 'inward' else self.n_outward_workers
-    #     pool = mp.Pool(n)
-    #     try:
-    #         self._diffuse_with_pool(element, pool)
-    #     finally:
-    #         pool.close()
-    #         pool.join()
-    
     def _ensure_pools(self, elements):
         """Build or reuse one pool per element (outward elements get n_outward_workers each, etc.)."""
         # Preserve order: same as elements; use cached config so get_diffusion_config() is called only once per element
@@ -962,6 +911,13 @@ class DiffusionEngine:
         for e in elements:
             t = e.element_type
             ordered.append((e, self.n_outward_workers if t == 'outward' else self.n_inward_workers))
+
+        if self.worker_pools is not None:
+            # General pool manager creates/caches exactly one pool per element (order-preserving).
+            elements_list = [e for e, _ in ordered]
+            self._pools = self.worker_pools.get_diffusion_pools(elements_list)
+            return ordered
+
         need = len(ordered)
         if self._pools is not None and len(self._pools) == need:
             return ordered
@@ -969,7 +925,8 @@ class DiffusionEngine:
             for p in self._pools:
                 p.close()
                 p.join()
-        self._pools = [mp.Pool(n) for _, n in ordered]
+        maxtasks = int(getattr(Config, "MAX_TASK_PER_CHILD", 0)) or None
+        self._pools = [mp.Pool(n, maxtasksperchild=maxtasks) for _, n in ordered]
         return ordered
     
     def diffuse_multiple(self, elements):
@@ -989,34 +946,14 @@ class DiffusionEngine:
                 lambda i: self._diffuse_with_pool(elements_list[i], pools_list[i]),
                 range(len(elements_list))
             ))
-    
-    def get_nucleation_pool(self):
-        """Return a process pool of size n_inward_workers for nucleation subblock workers. Creates on first call."""
-        if self._nucleation_pool is None:
-            self._nucleation_pool = mp.Pool(self.n_inward_workers)
-        return self._nucleation_pool
-
-    def get_dissolution_pool(self):
-        """Return a process pool of size n_outward_workers for dissolution subblock workers. Creates on first call."""
-        if self._dissolution_pool is None:
-            self._dissolution_pool = mp.Pool(self.n_outward_workers)
-        return self._dissolution_pool
 
     def close(self):
-        """Close all cached process pools (diffusion and nucleation). Call when done with the engine."""
-        if self._pools is not None:
+        """Close all cached process pools used by diffusion. (nucleation/dissolution pools are external)"""
+        if self._pools is not None and not self._pools_managed_externally:
             for p in self._pools:
                 p.close()
                 p.join()
             self._pools = None
-        if self._nucleation_pool is not None:
-            self._nucleation_pool.close()
-            self._nucleation_pool.join()
-            self._nucleation_pool = None
-        if self._dissolution_pool is not None:
-            self._dissolution_pool.close()
-            self._dissolution_pool.join()
-            self._dissolution_pool = None
 
 
 def prepare_diffusion_run(n, n_workers, max_per_cell, boundary_x_left, boundary_x_right, p1, p_r_extra):
@@ -1061,103 +998,3 @@ def prepare_diffusion_run(n, n_workers, max_per_cell, boundary_x_left, boundary_
         "n": n,
         "max_per_cell": max_per_cell,
     }
-
-
-def run_example():
-    n = 300
-    n_workers = 7
-    n_blocks = n_workers
-    n_steps = 100
-    total_particles = 100_000
-    max_per_cell = 2
-
-    # Boundary condition per x-side: "periodic", "reflection", or "deletion"
-    boundary_x_left = "periodic"
-    boundary_x_right = "periodic"
-    bc_left = _parse_boundary(boundary_x_left)
-    bc_right = _parse_boundary(boundary_x_right)
-
-    z_ranges, gap_z_set = _partition_domain_z(n, n_blocks)
-    if not z_ranges:
-        z_ranges = [(0, n - 1)]
-        gap_z_set = set(range(n)) - {k for a, b in z_ranges for k in range(a, b + 1)}
-    gap_z_groups = _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=n)
-
-    n3 = n * n * n
-    count_dtype = np.int8  # max 127; max_per_cell ≤ 50
-    count_bytes = n3 * np.dtype(count_dtype).itemsize
-    # Packed dirs: one byte per (dx,dy,dz) with values in {-1,0,1}
-    dirs_bytes = n3 * max_per_cell * 1
-    segment_bytes = count_bytes + dirs_bytes
-
-    # Two contiguous shared segments (one per buffer): [count][dirs]
-    shm_A = shared_memory.SharedMemory(create=True, size=segment_bytes, name=None)
-    shm_B = shared_memory.SharedMemory(create=True, size=segment_bytes, name=None)
-
-    A_count, A_dirs = _views_from_segment(shm_A, n, max_per_cell, count_bytes, dirs_bytes)
-    B_count, B_dirs = _views_from_segment(shm_B, n, max_per_cell, count_bytes, dirs_bytes)
-
-    A_count.fill(0)
-    A_dirs.fill(0)
-    rng = np.random.default_rng(42)
-    for _ in range(total_particles):
-        i, j, k = rng.integers(0, n, size=3)
-        idx = _idx(i, j, k, n)
-        c = A_count[idx]
-        if c < max_per_cell:
-            A_dirs[idx, c] = _DIRS_6_PACKED[rng.integers(0, 6)]
-            A_count[idx] = c + 1
-
-    class FakePRanges:
-        pass
-    p_ranges = FakePRanges()
-    p1, p_r_extra = 0.15, 0.1
-    p_ranges.p1_range = p1
-    p_ranges.p2_range = 2 * p1
-    p_ranges.p3_range = 3 * p1
-    p_ranges.p4_range = 4 * p1
-    p_ranges.p_r_range = 4 * p1 + p_r_extra
-
-    # Precompute once: subblock arg templates and gap_z_groups
-    p1_val = p_ranges.p1_range
-    p2_val = p_ranges.p2_range
-    p3_val = p_ranges.p3_range
-    p4_val = p_ranges.p4_range
-    p_r_val = p_ranges.p_r_range
-    subblock_arg_templates = [
-        (n, max_per_cell, count_bytes, dirs_bytes, k_lo, k_hi, bc_left, bc_right,
-         p1_val, p2_val, p3_val, p4_val, p_r_val)
-        for (k_lo, k_hi) in z_ranges
-    ]
-
-    read_name, write_name = shm_A.name, shm_B.name
-
-    try:
-        t0 = time.perf_counter()
-        with mp.Pool(n_workers) as pool:
-            for step in range(n_steps):
-                print(f"Step {step}")
-                diffuse_3d_one_step_shm(
-                    read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-                    subblock_arg_templates, gap_z_groups, bc_left, bc_right,
-                    p1_val, p2_val, p3_val, p4_val, p_r_val, pool, rng
-                )
-                read_name, write_name = write_name, read_name
-        elapsed = time.perf_counter() - t0
-
-        if n_steps % 2 == 0:
-            n_final = int(B_count.sum())
-        else:
-            n_final = int(A_count.sum())
-        print(f"  Done. Total particles: {n_final}, time: {elapsed:.3f}s, steps/s: {n_steps/elapsed:.2f}")
-    finally:
-        shm_A.close()
-        shm_B.close()
-        shm_A.unlink()
-        shm_B.unlink()
-
-    return None
-
-
-if __name__ == "__main__":
-    run_example()

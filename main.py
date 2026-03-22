@@ -1,5 +1,5 @@
-from engine import *
-import inspect
+# from engine import *
+# import inspect
 
 # if __name__ == '__main__':
 
@@ -74,13 +74,13 @@ if __name__ == '__main__':
 
             self.c_automata.get_cur_ioz_bound = self.c_automata.ioz_depth_furthest_inward
 
-            self.c_automata.get_combi_ind = self.c_automata.get_combi_ind_standard_v2
+            self.c_automata.get_combi_ind = self.c_automata.get_comb_ind_jmatpro
 
             self.cases.get_all_oxidants()
             self.cases.get_all_actives()
             self.cases.get_all_products()
             self.save_function = self.save_results_only_prod_prime
-            # self.c_automata.cases.first.active.diffuse = elements.diffuse_bulk_mp_numba
+            # self.c_automata.cases.first.active.diffuse = elementsdgm.diffuse_bulk_mp_numba
 
             self.c_automata.decomposition = self.c_automata.dissolution_mp_subblock_v2
 

@@ -64,8 +64,6 @@ class ActiveElem:
         self.p_ranges = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
         self.p_ranges_scale = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
 
-        self.precip_transform_depth = int(Config.PRECIP_TRANSFORM_DEPTH)
-
         extended_axis = self.cells_per_axis + self.neigh_range
         self.extended_shape = (self.cells_per_axis, self.cells_per_axis, extended_axis)
 
@@ -77,7 +75,7 @@ class ActiveElem:
         self.skip_diffusion_this_step = False  # set by CA diffuse_all when STRIDE says skip outward this step
 
         # 3D diffusion grid (count + packed dirs) is now PRIMARY storage (no flat arrays)
-        self.max_per_cell = getattr(settings, 'DIFFUSION_MAX_PER_CELL', None) or getattr(Config, 'DIFFUSION_MAX_PER_CELL_FALLBACK', 50)
+        self.max_per_cell = settings.DIFFUSION_MAX_PER_CELL
         self._diff_shm_A = self._diff_shm_B = None
         self._diff_A_count = self._diff_A_dirs = self._diff_B_count = self._diff_B_dirs = None
         self._diff_read_name = self._diff_write_name = None
@@ -265,7 +263,7 @@ class OxidantElem:
         self.microstructure = None
 
         # 3D diffusion grid (inward) is now PRIMARY storage (no flat arrays)
-        self.max_per_cell = getattr(settings, 'DIFFUSION_MAX_PER_CELL', None) or getattr(Config, 'DIFFUSION_MAX_PER_CELL_FALLBACK', 50)
+        self.max_per_cell = settings.DIFFUSION_MAX_PER_CELL
         self._diff_shm_A = self._diff_shm_B = None
         self._diff_A_count = self._diff_A_dirs = self._diff_B_count = self._diff_B_dirs = None
         self._diff_read_name = self._diff_write_name = None

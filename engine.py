@@ -1,12 +1,13 @@
 from cellular_automata import *
 from utils import data_base
-import progressbar
+from tqdm import tqdm
 import time
 import keyboard
 from microstructure import voronoi
 import elements
 import numpy as np
 from diffusion_3d_mp_example import DiffusionEngine as _DiffusionEngine
+from workers.worker_pools import WorkerPools
 
 
 
@@ -64,11 +65,17 @@ class SimulationConfigurator:
 
         # New 3D shared-memory diffusion engine (optional; legacy path remains when USE_NEW_DIFFUSION_ENGINE is False)
         self.diffusion_engine = None
+        self.worker_pools = None
         if Config.INWARD_DIFFUSION or Config.OUTWARD_DIFFUSION:
             n_out = getattr(Config, 'OUTWARD_DIFFUSION_WORKERS', 5)
             n_in = getattr(Config, 'INWARD_DIFFUSION_WORKERS', 5)
             rng = np.random.default_rng()
-            self._diffusion_engine = _DiffusionEngine(n_out, n_in, rng)
+            # Standalone worker pools for CA + diffusion; pools are not hosted inside DiffusionEngine.
+            self.worker_pools = WorkerPools(n_outward_workers=n_out, n_inward_workers=n_in)
+            self.c_automata.worker_pools = self.worker_pools
+            self.c_automata._ensure_precip_z_states()
+
+            self._diffusion_engine = _DiffusionEngine(n_out, n_in, rng, worker_pools=self.worker_pools)
             self.c_automata.diffusion_engine = self._diffusion_engine
 
         self.function_block = FunctionBlock()
@@ -367,10 +374,10 @@ class SimulationConfigurator:
             if self._diffusion_engine is not None:
                 self._diffusion_engine.close()
                 self._diffusion_engine = None
+            if self.worker_pools is not None:
+                self.worker_pools.close()
+                self.worker_pools = None
             self.save_results()
-            if Config.MULTIPROCESSING:
-                self.terminate_workers()
-                self.unlink()
             self.insert_last_it()
             self.db.conn.commit()
             print()
@@ -381,7 +388,11 @@ class SimulationConfigurator:
 
     def __start_execution(self):
         self.begin = time.time()
-        for self.c_automata.iteration in progressbar.progressbar(range(Config.N_ITERATIONS)):
+        for self.c_automata.iteration in tqdm(
+            range(Config.N_ITERATIONS),
+            desc="Simulation",
+            dynamic_ncols=True,
+        ):
             if keyboard.is_pressed(self.termination_command):
                 break
             self.function_block.execute()

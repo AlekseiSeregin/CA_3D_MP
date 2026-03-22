@@ -40,7 +40,7 @@ class Config:
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
     # OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
     OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.1
-    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 6  # optional; else DIFFUSION_MAX_PER_CELL_FALLBACK
+    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 5
 
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
@@ -54,36 +54,22 @@ class Config:
     ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.3
     ACTIVES.PRIMARY.CONC_PRECISION = "rand"
     ACTIVES.PRIMARY.SPACE_FILL = "full"
-    ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 3  # optional; else DIFFUSION_MAX_PER_CELL_FALLBACK
+    ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 6
 
     # secondary actives
     # ACTIVES.SECONDARY.ELEMENT = "Al"
     # ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
     # ACTIVES.SECONDARY.MASS_CONCENTRATION = 0.04
     # ACTIVES.SECONDARY.CELLS_CONCENTRATION = 2
-    # 0.0308148148148148000000
-    # 0.0770370370370371000000
-    # 0.0038518518518518500000
-    # 0.0154074074074074000000
-    # 0.3851851851851850000000
-    # 0.361111111
-    # 1.20370370370370000000
-    # 1.54074074074074000000
-    # 0.92444444444444400000
-    # 0.51923076923077
-    # 0.96296296296296300000
-    # 0.77037037037037000000
-    # 10.01481481481480000000
-
+ 
     # matrix
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 10000  # must be >= n_cells_per_axis
+    N_ITERATIONS = 1000000  # must be >= n_cells_per_axis
     STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
-    PRECIP_TRANSFORM_DEPTH = 10
     SIM_TIME = 7200  # [sek]
     SIZE = 500 * (10 ** -6)  # [m]
 
@@ -107,10 +93,8 @@ class Config:
     # 3D Chopard–Droz diffusion (shared-memory MP): workers per element type
     # max_per_cell is per element: set ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL, OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL, etc.
     # Fallback only when an element's DIFFUSION_MAX_PER_CELL is not set.
-    OUTWARD_DIFFUSION_WORKERS = 1
-    INWARD_DIFFUSION_WORKERS = 1
-    DIFFUSION_MAX_PER_CELL_FALLBACK = 1  # used only when ACTIVES/OXIDANTS.*.DIFFUSION_MAX_PER_CELL not set
-    DIFFUSION_BOUNDARY_X = "deletion"  # fallback when per-side not set: periodic | reflection | deletion
+    OUTWARD_DIFFUSION_WORKERS = 3
+    INWARD_DIFFUSION_WORKERS = 3
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
     DIFFUSION_BOUNDARY_X_OUTWARD_RIGHT = "reflection"
@@ -125,7 +109,7 @@ class Config:
     USE_SIMPLE_NUCLEATION = True # True: nucleation with no probabilities involved
 
     # Execution___________________________________________________________________
-    MULTIPROCESSING = False
+    # MULTIPROCESSING = False
     NUMBER_OF_PROCESSES = 10  # Total workers to allocate (split between CA and JMatPro)
     # JMatPro worker allocation ratio (0.0-1.0): fraction of NUMBER_OF_PROCESSES allocated to JMatPro
     # Remaining workers go to CA calculations. Default: auto (60% CA, 40% JMatPro)
@@ -140,7 +124,6 @@ class Config:
     # int = recycle after N tasks (reclaims RAM; new workers load Numba from disk cache).
     # None = never recycle (no Numba recompile; RAM may grow on very long runs).
     MAX_TASK_PER_CHILD = 50000
-    BUFF_SIZE_CONST_ELEM = 1.5
     TERMINATION_COMMAND = 'd+g+m'
 
     # PROBABILITIES_______________________________________________________________
@@ -152,11 +135,11 @@ class Config:
     # PROBABILITIES.QUINT = ConfigProbabilities()
 
     # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.00001
+    PROBABILITIES.PRIMARY.p0 = 0.01
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.1
+    PROBABILITIES.PRIMARY.p1 = 0.2
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1
@@ -166,11 +149,11 @@ class Config:
     PROBABILITIES.PRIMARY.max_neigh_numb = None
     PROBABILITIES.PRIMARY.nucl_adapt_function = 5
     # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 0.1
+    PROBABILITIES.PRIMARY.p0_d = 0.8
     PROBABILITIES.PRIMARY.p0_d_f = 1
     PROBABILITIES.PRIMARY.p0_d_A_const = 1
     PROBABILITIES.PRIMARY.p0_d_B_const = 5
-    PROBABILITIES.PRIMARY.p1_d = 0.01
+    PROBABILITIES.PRIMARY.p1_d = 0.7
     PROBABILITIES.PRIMARY.p1_d_f = 1
     PROBABILITIES.PRIMARY.p1_d_A_const = 1
     PROBABILITIES.PRIMARY.p1_d_B_const = 10
@@ -182,7 +165,7 @@ class Config:
     PROBABILITIES.PRIMARY.global_d_B = None
     PROBABILITIES.PRIMARY.global_d_B_f = -0.33
     PROBABILITIES.PRIMARY.n = 2
-    PROBABILITIES.PRIMARY.bsf = 1
+    PROBABILITIES.PRIMARY.bsf = 3
     PROBABILITIES.PRIMARY.dissol_adapt_function = 3
     # ________________________
 

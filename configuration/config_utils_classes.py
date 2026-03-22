@@ -54,7 +54,6 @@ class ElemInput:
         self.CELLS_CONCENTRATION = 0
         self.CONC_PRECISION = "rand"
         self.SPACE_FILL = "full"
-        # Max particles per cell for 3D diffusion; if None, fall back to Config.DIFFUSION_MAX_PER_CELL_FALLBACK
         self.DIFFUSION_MAX_PER_CELL = None
 
     def __bool__(self):

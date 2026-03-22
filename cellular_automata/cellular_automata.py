@@ -3,27 +3,25 @@ import sys
 import threading
 import numpy as np
 import utils
-import multiprocessing
 from multiprocessing import shared_memory
 from .nes_for_mp import *
 from .dissolution_functions import (
-    dissolution_subblock_worker,
     dissolution_subblock_worker_v2,
     dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL,
     get_block_patterns_from_aggregated,
 )
 from utils.numba_functions import (
-    aggregate,
     go_around_bool,
     go_around_int,
     insert_counts,
     just_decrease_counts,
 )
 from thermodynamics import *
-from thermodynamics import JMatProWorkerPool
 from configuration import Config
 from diffusion_3d_mp_example import _partition_domain_z, _partition_gap_z_parallel, _DIRS_6_PACKED
-from .nucleation_functions import precip_step_subblock_worker
+from .nucleation_functions import (
+    precip_step_subblock_worker,
+)
 from .neigh_indexes import ind_formation
 
 
@@ -46,9 +44,17 @@ class CellularAutomata:
 
         # New 3D diffusion engine (set by engine when USE_NEW_DIFFUSION_ENGINE is True)
         self.diffusion_engine = None
+        # Standalone mp.Pool instances for nucleation/dissolution (set by engine)
+        self.worker_pools = None
         # z-partition for precip subblock (computed once on first use, never changes)
         self._precip_z_ranges = None
         self._precip_gap_z_groups = None
+        self._precip_z_blocks = None
+        self._precip_partition_sig = None
+        # Negative partition (swap blocks and gaps) for alternating artefact reduction.
+        self._precip_z_ranges_neg = None
+        self._precip_gap_z_groups_neg = None
+        self._precip_z_blocks_neg = None
 
         # functions
         self.precip_func = None  # must be defined elsewhere
@@ -86,20 +92,10 @@ class CellularAutomata:
         _max_workers = Config.NUMBER_OF_PROCESSES if Config.NUMBER_OF_PROCESSES > 0 else _cpu_count
         
         # Calculate worker allocation
-        # Option 1: Split evenly (default) - can be overridden via Config
-        # Option 2: Prioritize CA workers (more frequent tasks)
-        # Option 3: Prioritize JMatPro workers (longer-running tasks)
-        if hasattr(Config, 'JMATPRO_WORKER_RATIO'):
-            # Use explicit ratio if configured (e.g., 0.3 means 30% for JMatPro, 70% for CA)
-            jmatpro_ratio = Config.JMATPRO_WORKER_RATIO
-            ca_workers = max(1, int(_max_workers * (1 - jmatpro_ratio)))
-            jmatpro_workers = max(1, _max_workers - ca_workers)
-        else:
-            # Default: Split 60/40 (CA gets more since it's used more frequently)
-            # JMatPro calculations are longer but less frequent
-            ca_workers = max(1, int(_max_workers * 0.6))
-            jmatpro_workers = max(1, _max_workers - ca_workers)
-        
+        jmatpro_ratio = Config.JMATPRO_WORKER_RATIO
+        ca_workers = max(1, int(_max_workers * (1 - jmatpro_ratio)))
+        jmatpro_workers = max(1, _max_workers - ca_workers)
+    
         # Ensure we don't exceed CPU count
         ca_workers = min(ca_workers, _cpu_count)
         jmatpro_workers = min(jmatpro_workers, _cpu_count)
@@ -113,26 +109,7 @@ class CellularAutomata:
             if ca_workers + jmatpro_workers > _cpu_count:
                 excess = (ca_workers + jmatpro_workers) - _cpu_count
                 jmatpro_workers = max(1, jmatpro_workers - excess)
-        
-        if Config.MULTIPROCESSING:
-            self.numb_of_proc = ca_workers
-            if self.numb_of_proc < 1:
-                self.numb_of_proc = 1
-            if self.cells_per_axis % self.numb_of_proc == 0:
-                chunk_size = int(self.cells_per_axis / self.numb_of_proc)
-            else:
-                chunk_size = int((self.cells_per_axis - 1) // (self.numb_of_proc - 1))
-
-            self.chunk_ranges = np.zeros((self.numb_of_proc, 2), dtype=int)
-            self.chunk_ranges[0] = [0, chunk_size]
-
-            for pos in range(1, self.numb_of_proc):
-                self.chunk_ranges[pos, 0] = self.chunk_ranges[pos-1, 1]
-                self.chunk_ranges[pos, 1] = self.chunk_ranges[pos, 0] + chunk_size
-            self.chunk_ranges[-1, 1] = self.cells_per_axis
-
-            self.pool = multiprocessing.Pool(processes=self.numb_of_proc, maxtasksperchild=Config.MAX_TASK_PER_CHILD)
-        
+         
         # Store worker allocation info for debugging
         self.worker_allocation = {
             'ca_workers': ca_workers,
@@ -154,6 +131,8 @@ class CellularAutomata:
         self.product_x_not_stab = np.full(self.cells_per_axis, True, dtype=bool)
         # self.TdDATA = td_data.TdDATA()
         # self.TdDATA.fetch_look_up_from_file()
+        self.TdDATA = None
+        self.jmatpro_pool = None
         # self.curr_look_up = None
 
         # self.TdDATA = JMatProWorkerPool(
@@ -171,754 +150,21 @@ class CellularAutomata:
 
         self.precipitation_stride = Config.STRIDE * Config.STRIDE_MULTIPLIER
 
-        self.save_rate = self.n_iter // Config.STRIDE
-        self.cumul_prod = utils.my_data_structs.MyBufferSingle((self.cells_per_axis, self.save_rate), dtype=float)
-        self.growth_rate = utils.my_data_structs.MyBufferSingle((self.cells_per_axis, self.save_rate), dtype=float)
+        # self.save_rate = self.n_iter // Config.STRIDE
+        # self.cumul_prod = utils.my_data_structs.MyBufferSingle((self.cells_per_axis, self.save_rate), dtype=float)
+        # self.growth_rate = utils.my_data_structs.MyBufferSingle((self.cells_per_axis, self.save_rate), dtype=float)
 
         self.diffs = None
         self.curr_time = 0
 
-        lambdas = (np.arange(self.cells_per_axis, dtype=int) + 0.5) * Config.GENERATED_VALUES.LAMBDA
-        adj_lamd = lambdas - Config.ZETTA_ZERO
-        neg_ind = np.where(adj_lamd < 0)[0]
-        adj_lamd[neg_ind] = 0
-        self.active_times = adj_lamd ** 2 / Config.GENERATED_VALUES.KINETIC_KONST ** 2
-
-        self.prev_len = 0
-        self.powers = utils.physical_data.POWERS
-
-    def dissolution_zhou_wei_original(self):
-        """Implementation of original not adapted Zhou and Wei approach. Only two probabilities p for block and pn
-        are considered. Works for any oxidation nuber!"""
-
-        nz_ind = np.array(np.nonzero(self.primary_product.c3d[:, :, self.product_indexes]))
-        self.coord_buffer.copy_to_buffer(nz_ind)
-        self.coord_buffer.update_buffer_at_axis(self.product_indexes[nz_ind[2]], axis=2)
-
-        if self.coord_buffer.last_in_buffer > 0:
-            all_arounds = self.utils.calc_sur_ind_decompose(self.coord_buffer.get_buffer())
-            all_neigh = go_around_int(self.primary_product.c3d, all_arounds)
-
-            # all_neigh_pn = all_neigh[[]]
-            # all_neigh_block = all_neigh[[]]
-
-            # choose all the coordinates which have at least one full side neighbour
-            where_full = np.unique(np.where(all_neigh[:, :6].view() == self.primary_oxid_numb)[0])
-
-            to_dissol_pn_no_neigh = np.array(self.coord_buffer.get_elem_instead_ind(where_full), dtype=np.short)
-            self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(where_full))
-            # self.to_dissol_pn_buffer.append_to_buffer(self.coord_buffer.get_elem_instead_ind(where_full))
-
-            if self.coord_buffer.last_in_buffer > 0:
-                all_neigh = all_neigh[where_full]
-
-                arr_len_flat = np.array([np.sum(item[:6]) for item in all_neigh], dtype=np.ubyte)
-                index_outside = np.where((arr_len_flat < self.max_inside_neigh_number))[0]
-
-                self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(index_outside))
-                all_neigh = all_neigh[index_outside]
-
-                aggregation = np.array([[np.sum(item[step]) for step in self.aggregated_ind] for item in all_neigh],
-                                       dtype=np.ubyte)
-                ind_where_blocks = np.unique(np.where(aggregation == self.max_block_neigh_number)[0])
-
-                if len(ind_where_blocks) > 0:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_elem_instead_ind(ind_where_blocks))
-                    # all_neigh_pn = np.delete(all_neigh, ind_where_blocks, axis=0)
-
-                    self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(ind_where_blocks))
-                    # all_neigh_block = all_neigh[ind_where_blocks]
-                else:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_buffer())
-                    # all_neigh_pn = all_neigh
-
-                    self.coord_buffer.reset_buffer()
-                    # all_neigh_block = all_neigh[[]]
-
-            # probs_pn_no_neigh = self.dissol_prob.dissol_prob.values_pp[to_dissol_pn_no_neigh[2]]
-            probs_pn_no_neigh = np.full(len(to_dissol_pn_no_neigh[0]), self.disol_p)
-
-            to_dissolve_pn = self.to_dissol_pn_buffer.get_buffer()
-            # all_neigh_pn = np.array([np.sum(item[:6]) for item in all_neigh_pn])
-            # all_neigh_pn = np.zeros(len(all_neigh_pn))
-            # probs_pn = self.dissol_prob.dissol_prob.values_pp[to_dissolve_pn[2]]
-            probs_pn = np.full(len(to_dissolve_pn[0]), self.disol_p)
-
-            to_dissolve_p = self.coord_buffer.get_buffer()
-            # all_neigh_block = np.array([np.sum(item[:6]) for item in all_neigh_block])
-            # all_neigh_block = np.full(len(all_neigh_block), self.primary_oxid_numb * 3)
-            # probs_p = self.dissol_prob.get_probabilities_block(all_neigh_block, to_dissolve_p[2])
-            probs_p = np.full(len(to_dissolve_p[0]), self.disol_block_p)
-
-            randomise = np.random.random_sample(len(to_dissol_pn_no_neigh[0]))
-            temp_ind = np.where(randomise < probs_pn_no_neigh)[0]
-            to_dissol_pn_no_neigh = to_dissol_pn_no_neigh[:, temp_ind]
-
-            randomise = np.random.random_sample(len(to_dissolve_pn[0]))
-            temp_ind = np.where(randomise < probs_pn)[0]
-            to_dissolve_pn = to_dissolve_pn[:, temp_ind]
-
-            randomise = np.random.random_sample(len(to_dissolve_p[0]))
-            temp_ind = np.where(randomise < probs_p)[0]
-            to_dissolve_p = to_dissolve_p[:, temp_ind]
-
-            to_dissolve = np.concatenate((to_dissolve_pn, to_dissolve_p, to_dissol_pn_no_neigh), axis=1)
-
-            self.coord_buffer.reset_buffer()
-            self.to_dissol_pn_buffer.reset_buffer()
-
-            if len(to_dissolve[0]) > 0:
-                counts = self.primary_product.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]]
-
-                self.primary_product.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = 0
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                self.primary_active.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] += counts
-
-                to_dissolve = np.repeat(to_dissolve, counts, axis=1)
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
-
-    def dissolution_zhou_wei_with_bsf(self):
-        """Implementation of Zhou and Wei approach. Works for any oxidation nuber!"""
-        nz_ind = np.array(np.nonzero(self.primary_product.c3d[:, :, self.product_indexes]))
-        self.coord_buffer.copy_to_buffer(nz_ind)
-        self.coord_buffer.update_buffer_at_axis(self.product_indexes[nz_ind[2]], axis=2)
-
-        if self.coord_buffer.last_in_buffer > 0:
-            all_arounds = self.utils.calc_sur_ind_decompose(self.coord_buffer.get_buffer())
-            all_neigh = go_around_int(self.primary_product.c3d, all_arounds)
-
-            all_neigh_pn = all_neigh[[]]
-            all_neigh_block = all_neigh[[]]
-
-            # choose all the coordinates which have at least one full side neighbour
-            where_full = np.unique(np.where(all_neigh[:, :6].view() == self.primary_oxid_numb)[0])
-
-            to_dissol_pn_no_neigh = np.array(self.coord_buffer.get_elem_instead_ind(where_full), dtype=np.short)
-            self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(where_full))
-
-            if self.coord_buffer.last_in_buffer > 0:
-                all_neigh = all_neigh[where_full]
-
-                arr_len_flat = np.array([np.sum(item[:6]) for item in all_neigh], dtype=np.ubyte)
-                index_outside = np.where((arr_len_flat < self.max_inside_neigh_number))[0]
-
-                self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(index_outside))
-                all_neigh = all_neigh[index_outside]
-
-                aggregation = np.array([[np.sum(item[step]) for step in self.aggregated_ind] for item in all_neigh],
-                                       dtype=np.ubyte)
-                ind_where_blocks = np.unique(np.where(aggregation == self.max_block_neigh_number)[0])
-
-                if len(ind_where_blocks) > 0:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_elem_instead_ind(ind_where_blocks))
-                    all_neigh_pn = np.delete(all_neigh, ind_where_blocks, axis=0)
-
-                    self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(ind_where_blocks))
-                    all_neigh_block = all_neigh[ind_where_blocks]
-                else:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_buffer())
-                    all_neigh_pn = all_neigh
-
-                    self.coord_buffer.reset_buffer()
-                    all_neigh_block = all_neigh[[]]
-
-            probs_pn_no_neigh = self.dissol_prob.dissol_prob.values_pp[to_dissol_pn_no_neigh[2]]
-
-            to_dissolve_pn = self.to_dissol_pn_buffer.get_buffer()
-            all_neigh_pn = np.array([np.sum(item[:6]) for item in all_neigh_pn])
-            probs_pn = self.dissol_prob.get_probabilities(all_neigh_pn, to_dissolve_pn[2])
-
-            to_dissolve_p = self.coord_buffer.get_buffer()
-            all_neigh_block = np.array([np.sum(item[:6]) for item in all_neigh_block])
-            probs_p = self.dissol_prob.get_probabilities_block(all_neigh_block, to_dissolve_p[2])
-
-            randomise = np.random.random_sample(len(to_dissol_pn_no_neigh[0]))
-            temp_ind = np.where(randomise < probs_pn_no_neigh)[0]
-            to_dissol_pn_no_neigh = to_dissol_pn_no_neigh[:, temp_ind]
-
-            randomise = np.random.random_sample(len(to_dissolve_pn[0]))
-            temp_ind = np.where(randomise < probs_pn)[0]
-            to_dissolve_pn = to_dissolve_pn[:, temp_ind]
-
-            randomise = np.random.random_sample(len(to_dissolve_p[0]))
-            temp_ind = np.where(randomise < probs_p)[0]
-            to_dissolve_p = to_dissolve_p[:, temp_ind]
-
-            to_dissolve = np.concatenate((to_dissolve_pn, to_dissolve_p, to_dissol_pn_no_neigh), axis=1)
-
-            self.coord_buffer.reset_buffer()
-            self.to_dissol_pn_buffer.reset_buffer()
-
-            if len(to_dissolve[0]) > 0:
-                counts = self.primary_product.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]]
-
-                self.primary_product.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = 0
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                self.primary_active.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] += counts
-
-                to_dissolve = np.repeat(to_dissolve, counts, axis=1)
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
-
-    def dissolution_zhou_wei_with_bsf_aip(self):
-        """Implementation of Zhou and Wei approach. Works for any oxidation nuber!"""
-
-        nz_ind = np.array(np.nonzero(self.primary_product.c3d[:, :, self.comb_indexes]))
-        self.coord_buffer.copy_to_buffer(nz_ind)
-        self.coord_buffer.update_buffer_at_axis(self.comb_indexes[nz_ind[2]], axis=2)
-
-        if self.coord_buffer.last_in_buffer > 0:
-            flat_arounds = self.utils.calc_sur_ind_decompose_flat_with_zero(self.coord_buffer.get_buffer())
-            all_neigh = go_around_int(self.primary_product.c3d, flat_arounds)
-            all_neigh[:, 6] -= 1
-
-            all_neigh_block = np.array([])
-            all_neigh_no_block = np.array([])
-            numb_in_prod_block = np.array([], dtype=int)
-            numb_in_prod_no_block = np.array([], dtype=int)
-
-            where_not_null = np.unique(np.where(all_neigh > 0)[0])
-            to_dissol_no_neigh = np.array(self.coord_buffer.get_elem_instead_ind(where_not_null), dtype=np.short)
-            self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(where_not_null))
-
-            if self.coord_buffer.last_in_buffer > 0:
-                all_neigh = all_neigh[where_not_null]
-                arr_len_flat = np.sum(all_neigh[:, :6], axis=1)
-
-                index_outside = np.where((arr_len_flat < self.max_inside_neigh_number))[0]
-                self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(index_outside))
-                all_neigh = all_neigh[index_outside]
-
-                non_flat_arounds = self.utils.calc_sur_ind_decompose_no_flat(self.coord_buffer.get_buffer())
-                non_flat_neigh = go_around_int(self.primary_product.c3d, non_flat_arounds)
-                in_prod_column = np.array([all_neigh[:, 6]]).transpose()
-                all_neigh = np.concatenate((all_neigh[:, :6], non_flat_neigh, in_prod_column), axis=1)
-                numb_in_prod = all_neigh[:, -1]
-
-                all_neigh_bool = np.array(all_neigh, dtype=bool)
-
-                # aggregation = np.array([[np.sum(item[step]) for step in self.aggregated_ind] for item in all_neigh_bool],
-                #                        dtype=np.ubyte)
-                # ind_where_blocks = np.unique(np.where(aggregation == 7)[0])
-
-                ind_where_blocks = aggregate(self.aggregated_ind, all_neigh_bool)
-
-                # if len(ind_where_blocks) > 0:
-                #
-                #     begin = time.time()
-                #     aggregation = np.array(
-                #         [[np.sum(item[step]) for step in self.aggregated_ind] for item in all_neigh_bool],
-                #         dtype=np.ubyte)
-                #     ind_where_blocks = np.unique(np.where(aggregation == 7)[0])
-                #     print("list comp: ", time.time() - begin)
-                #
-                #     begin = time.time()
-                #     ind_where_blocks2 = aggregate(self.aggregated_ind, all_neigh_bool)
-                #     print("numba: ", time.time() - begin)
-
-                if len(ind_where_blocks) > 0:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_elem_instead_ind(ind_where_blocks))
-                    all_neigh_no_block = np.delete(all_neigh[:, :6], ind_where_blocks, axis=0)
-                    numb_in_prod_no_block = np.delete(numb_in_prod, ind_where_blocks, axis=0)
-                    # all_neigh_no_block = np.sum(all_neigh_no_block[:, :6], axis=1) + numb_in_prod_no_block
-                    all_neigh_no_block = np.sum(all_neigh_no_block, axis=1) + numb_in_prod_no_block
-
-                    self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(ind_where_blocks))
-                    # all_neigh_block = all_neigh[ind_where_blocks]
-                    all_neigh_block = all_neigh[ind_where_blocks, :6]
-                    numb_in_prod_block = numb_in_prod[ind_where_blocks]
-                    # all_neigh_block = np.sum(all_neigh_block[:, :6], axis=1) + numb_in_prod_block
-                    all_neigh_block = np.sum(all_neigh_block, axis=1) + numb_in_prod_block
-                else:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_buffer())
-                    all_neigh_no_block = np.sum(all_neigh[:, :6], axis=1) + numb_in_prod
-                    numb_in_prod_no_block = numb_in_prod
-
-                    self.coord_buffer.reset_buffer()
-                    all_neigh_block = np.array([])
-                    numb_in_prod_block = np.array([], dtype=int)
-
-            to_dissolve_no_block = self.to_dissol_pn_buffer.get_buffer()
-            probs_no_block = self.cur_case.dissolution_probabilities.get_probabilities(all_neigh_no_block, to_dissolve_no_block[2])
-            non_z_ind = np.where(numb_in_prod_no_block != 0)[0]
-            repeated_coords = np.repeat(to_dissolve_no_block[:, non_z_ind], numb_in_prod_no_block[non_z_ind], axis=1)
-            repeated_probs = np.repeat(probs_no_block[non_z_ind], numb_in_prod_no_block[non_z_ind])
-            to_dissolve_no_block = np.concatenate((to_dissolve_no_block, repeated_coords), axis=1)
-            probs_no_block = np.concatenate((probs_no_block, repeated_probs))
-            randomise = np.random.random_sample(len(to_dissolve_no_block[0]))
-            temp_ind = np.where(randomise < probs_no_block)[0]
-            to_dissolve_no_block = to_dissolve_no_block[:, temp_ind]
-
-            to_dissolve_block = self.coord_buffer.get_buffer()
-            probs_block = self.cur_case.dissolution_probabilities.get_probabilities_block(all_neigh_block, to_dissolve_block[2])
-            non_z_ind = np.where(numb_in_prod_block != 0)[0]
-            repeated_coords = np.repeat(to_dissolve_block[:, non_z_ind], numb_in_prod_block[non_z_ind], axis=1)
-            repeated_probs = np.repeat(probs_block[non_z_ind], numb_in_prod_block[non_z_ind])
-            to_dissolve_block = np.concatenate((to_dissolve_block, repeated_coords), axis=1)
-            probs_block = np.concatenate((probs_block, repeated_probs))
-            randomise = np.random.random_sample(len(to_dissolve_block[0]))
-            temp_ind = np.where(randomise < probs_block)[0]
-            to_dissolve_block = to_dissolve_block[:, temp_ind]
-
-            probs_no_neigh = self.cur_case.dissolution_probabilities.dissol_prob.values_pp[to_dissol_no_neigh[2]]
-            randomise = np.random.random_sample(len(to_dissol_no_neigh[0]))
-            temp_ind = np.where(randomise < probs_no_neigh)[0]
-            to_dissol_no_neigh = to_dissol_no_neigh[:, temp_ind]
-
-            to_dissolve = np.concatenate((to_dissolve_no_block, to_dissol_no_neigh, to_dissolve_block), axis=1)
-
-            self.coord_buffer.reset_buffer()
-            self.to_dissol_pn_buffer.reset_buffer()
-
-            if len(to_dissolve[0]) > 0:
-                just_decrease_counts(self.primary_product.c3d, to_dissolve)
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                insert_counts(self.primary_active.c3d, to_dissolve)
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
-
-    def dissolution_zhou_wei_with_bsf_aip_UPGRADE(self):
-        """Implementation of Zhou and Wei approach. Works for any oxidation nuber!
-        Here the problem was that the geometrical arrangement is considered properly! For higher oxidation numbers the
-         total number of neighbours does correlate with the geometrical configuration of the cluster!! 3 neighbours here
-         mean to 3 geometrical flat neighbours."""
-
-        nz_ind = np.array(np.nonzero(self.primary_product.c3d[:, :, self.comb_indexes]))
-        self.coord_buffer.copy_to_buffer(nz_ind)
-        self.coord_buffer.update_buffer_at_axis(self.comb_indexes[nz_ind[2]], axis=2)
-
-        if self.coord_buffer.last_in_buffer > 0:
-            flat_arounds = self.utils.calc_sur_ind_decompose_flat_with_zero(self.coord_buffer.get_buffer())
-            all_neigh = go_around_int(self.primary_product.c3d, flat_arounds)
-            all_neigh[:, 6] -= 1
-
-            all_neigh_block = np.array([])
-            all_neigh_no_block = np.array([])
-            numb_in_prod_block = np.array([], dtype=int)
-            numb_in_prod_no_block = np.array([], dtype=int)
-
-            where_not_null = np.unique(np.where(all_neigh > 0)[0])
-            to_dissol_no_neigh = np.array(self.coord_buffer.get_elem_instead_ind(where_not_null), dtype=np.short)
-            self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(where_not_null))
-
-            if self.coord_buffer.last_in_buffer > 0:
-                all_neigh = all_neigh[where_not_null]
-                arr_len_flat = np.sum(all_neigh[:, :6], axis=1)
-
-                index_outside = np.where((arr_len_flat < self.max_inside_neigh_number))[0]
-                self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(index_outside))
-                all_neigh = all_neigh[index_outside]
-
-                non_flat_arounds = self.utils.calc_sur_ind_decompose_no_flat(self.coord_buffer.get_buffer())
-                non_flat_neigh = go_around_int(self.primary_product.c3d, non_flat_arounds)
-                in_prod_column = np.array([all_neigh[:, 6]]).transpose()
-                all_neigh = np.concatenate((all_neigh[:, :6], non_flat_neigh, in_prod_column), axis=1)
-                numb_in_prod = all_neigh[:, -1]
-
-                all_neigh_bool = np.array(all_neigh, dtype=bool)
-
-                # aggregation = np.array([[np.sum(item[step]) for step in self.aggregated_ind] for item in all_neigh_bool],
-                #                        dtype=np.ubyte)
-                # ind_where_blocks = np.unique(np.where(aggregation == 7)[0])
-
-                ind_where_blocks = aggregate(self.aggregated_ind, all_neigh_bool)
-                # block_counts = aggregate_and_count(self.aggregated_ind, all_neigh_bool)
-                # some = np.where(block_counts > 4)[0]
-                #
-                # if len(some) > 0:
-                #     print()
-                # ind_where_blocks = np.where(block_counts)[0]
-
-                # if len(ind_where_blocks) > 0:
-                #
-                #     begin = time.time()
-                #     aggregation = np.array(
-                #         [[np.sum(item[step]) for step in self.aggregated_ind] for item in all_neigh_bool],
-                #         dtype=np.ubyte)
-                #     ind_where_blocks = np.unique(np.where(aggregation == 7)[0])
-                #     print("list comp: ", time.time() - begin)
-                #
-                #     begin = time.time()
-                #     ind_where_blocks2 = aggregate(self.aggregated_ind, all_neigh_bool)
-                #     print("numba: ", time.time() - begin)
-
-                if len(ind_where_blocks) > 0:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_elem_instead_ind(ind_where_blocks))
-                    all_neigh_no_block = np.delete(all_neigh[:, :6], ind_where_blocks, axis=0)
-
-                    all_neigh_bool = np.delete(all_neigh_bool[:, :6], ind_where_blocks, axis=0)
-                    all_neigh_bool = np.sum(all_neigh_bool, axis=1)
-                    ind_to_raise = np.where((all_neigh_bool == 3) | (all_neigh_bool == 4))[0]
-
-                    numb_in_prod_no_block = np.delete(numb_in_prod, ind_where_blocks, axis=0)
-                    # all_neigh_no_block = np.sum(all_neigh_no_block[:, :6], axis=1) + numb_in_prod_no_block
-                    all_neigh_no_block = np.sum(all_neigh_no_block, axis=1) + numb_in_prod_no_block
-
-                    all_neigh_no_block[ind_to_raise] = 0
-
-                    self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(ind_where_blocks))
-                    # all_neigh_block = all_neigh[ind_where_blocks]
-                    all_neigh_block = all_neigh[ind_where_blocks, :6]
-                    numb_in_prod_block = numb_in_prod[ind_where_blocks]
-                    # all_neigh_block = np.sum(all_neigh_block[:, :6], axis=1) + numb_in_prod_block
-                    all_neigh_block = np.sum(all_neigh_block, axis=1) + numb_in_prod_block
-                else:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_buffer())
-                    all_neigh_no_block = np.sum(all_neigh[:, :6], axis=1) + numb_in_prod
-
-                    all_neigh_bool = np.sum(all_neigh_bool[:, :6], axis=1)
-                    ind_to_raise = np.where((all_neigh_bool == 3) | (all_neigh_bool == 4))[0]
-
-                    all_neigh_no_block[ind_to_raise] = 0
-
-                    numb_in_prod_no_block = numb_in_prod
-
-                    self.coord_buffer.reset_buffer()
-                    all_neigh_block = np.array([])
-                    numb_in_prod_block = np.array([], dtype=int)
-
-            to_dissolve_no_block = self.to_dissol_pn_buffer.get_buffer()
-            probs_no_block = self.cur_case.dissolution_probabilities.get_probabilities(all_neigh_no_block,
-                                                                                       to_dissolve_no_block[2])
-            non_z_ind = np.where(numb_in_prod_no_block != 0)[0]
-            repeated_coords = np.repeat(to_dissolve_no_block[:, non_z_ind], numb_in_prod_no_block[non_z_ind], axis=1)
-            repeated_probs = np.repeat(probs_no_block[non_z_ind], numb_in_prod_no_block[non_z_ind])
-            to_dissolve_no_block = np.concatenate((to_dissolve_no_block, repeated_coords), axis=1)
-            probs_no_block = np.concatenate((probs_no_block, repeated_probs))
-            randomise = np.random.random_sample(len(to_dissolve_no_block[0]))
-            temp_ind = np.where(randomise < probs_no_block)[0]
-            to_dissolve_no_block = to_dissolve_no_block[:, temp_ind]
-
-            to_dissolve_block = self.coord_buffer.get_buffer()
-            probs_block = self.cur_case.dissolution_probabilities.get_probabilities_block(all_neigh_block,
-                                                                                          to_dissolve_block[2])
-            non_z_ind = np.where(numb_in_prod_block != 0)[0]
-            repeated_coords = np.repeat(to_dissolve_block[:, non_z_ind], numb_in_prod_block[non_z_ind], axis=1)
-            repeated_probs = np.repeat(probs_block[non_z_ind], numb_in_prod_block[non_z_ind])
-            to_dissolve_block = np.concatenate((to_dissolve_block, repeated_coords), axis=1)
-            probs_block = np.concatenate((probs_block, repeated_probs))
-            randomise = np.random.random_sample(len(to_dissolve_block[0]))
-            temp_ind = np.where(randomise < probs_block)[0]
-            to_dissolve_block = to_dissolve_block[:, temp_ind]
-
-            probs_no_neigh = self.cur_case.dissolution_probabilities.dissol_prob.values_pp[to_dissol_no_neigh[2]]
-            randomise = np.random.random_sample(len(to_dissol_no_neigh[0]))
-            temp_ind = np.where(randomise < probs_no_neigh)[0]
-            to_dissol_no_neigh = to_dissol_no_neigh[:, temp_ind]
-
-            to_dissolve = np.concatenate((to_dissolve_no_block, to_dissol_no_neigh, to_dissolve_block), axis=1)
-
-            self.coord_buffer.reset_buffer()
-            self.to_dissol_pn_buffer.reset_buffer()
-
-            if len(to_dissolve[0]) > 0:
-                just_decrease_counts(self.primary_product.c3d, to_dissolve)
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                insert_counts(self.primary_active.c3d, to_dissolve)
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
-
-    def dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL(self):
-        nz_ind = np.array(np.nonzero(self.primary_product.c3d[:, :, self.comb_indexes]))
-        self.coord_buffer.copy_to_buffer(nz_ind)
-        self.coord_buffer.update_buffer_at_axis(self.comb_indexes[nz_ind[2]], axis=2)
-
-        if self.coord_buffer.last_in_buffer > 0:
-            flat_arounds = self.utils.calc_sur_ind_decompose_flat_with_zero(self.coord_buffer.get_buffer())
-            all_neigh = go_around_int(self.primary_product.c3d, flat_arounds)
-            all_neigh[:, 6] -= 1
-
-            all_neigh_block = np.array([])
-            all_neigh_no_block = np.array([])
-            numb_in_prod_block = np.array([], dtype=int)
-            numb_in_prod_no_block = np.array([], dtype=int)
-            ind_to_raise = np.array([], dtype=int)
-
-            where_not_null = np.unique(np.where(all_neigh[:, :6] > 0)[0])
-            to_dissol_no_neigh = np.array(self.coord_buffer.get_elem_instead_ind(where_not_null), dtype=np.short)
-            self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(where_not_null))
-
-            if self.coord_buffer.last_in_buffer > 0:
-                all_neigh = all_neigh[where_not_null]
-                numb_in_prod = all_neigh[:, -1]
-
-                all_neigh_bool = np.array(all_neigh[:, :6], dtype=bool)
-
-                arr_len_flat = np.sum(all_neigh_bool, axis=1)
-
-                index_outside = np.where((arr_len_flat < 6))[0]
-                self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(index_outside))
-
-                all_neigh_bool = all_neigh_bool[index_outside]
-                arr_len_flat = arr_len_flat[index_outside]
-                numb_in_prod = numb_in_prod[index_outside]
-
-                non_flat_arounds = self.utils.calc_sur_ind_decompose_no_flat(self.coord_buffer.get_buffer())
-                non_flat_neigh = go_around_bool(self.primary_product.c3d, non_flat_arounds)
-                all_neigh_bool = np.concatenate((all_neigh_bool, non_flat_neigh), axis=1)
-
-                ind_where_blocks = aggregate(self.aggregated_ind, all_neigh_bool)
-
-                if len(ind_where_blocks) > 0:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_elem_instead_ind(ind_where_blocks))
-                    all_neigh_no_block = np.delete(arr_len_flat, ind_where_blocks)
-
-                    numb_in_prod_no_block = np.delete(numb_in_prod, ind_where_blocks, axis=0)
-                    self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(ind_where_blocks))
-                    all_neigh_block = arr_len_flat[ind_where_blocks]
-
-                    numb_in_prod_block = numb_in_prod[ind_where_blocks]
-                else:
-                    self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_buffer())
-                    all_neigh_no_block = arr_len_flat
-
-                    numb_in_prod_no_block = numb_in_prod
-
-                    self.coord_buffer.reset_buffer()
-                    all_neigh_block = np.array([])
-                    numb_in_prod_block = np.array([], dtype=int)
-
-            to_dissolve_no_block = self.to_dissol_pn_buffer.get_buffer()
-            probs_no_block = self.cur_case.dissolution_probabilities.get_probabilities(all_neigh_no_block,
-                                                                                       to_dissolve_no_block[2])
-
-            non_z_ind = np.where(numb_in_prod_no_block != 0)[0]
-            repeated_coords = np.repeat(to_dissolve_no_block[:, non_z_ind], numb_in_prod_no_block[non_z_ind], axis=1)
-            repeated_probs = np.repeat(probs_no_block[non_z_ind], numb_in_prod_no_block[non_z_ind])
-            to_dissolve_no_block = np.concatenate((to_dissolve_no_block, repeated_coords), axis=1)
-            probs_no_block = np.concatenate((probs_no_block, repeated_probs))
-            randomise = np.random.random_sample(len(to_dissolve_no_block[0]))
-            temp_ind = np.where(randomise < probs_no_block)[0]
-            to_dissolve_no_block = to_dissolve_no_block[:, temp_ind]
-
-            to_dissolve_block = self.coord_buffer.get_buffer()
-            probs_block = self.cur_case.dissolution_probabilities.get_probabilities_block(all_neigh_block,
-                                                                                          to_dissolve_block[2])
-            non_z_ind = np.where(numb_in_prod_block != 0)[0]
-            repeated_coords = np.repeat(to_dissolve_block[:, non_z_ind], numb_in_prod_block[non_z_ind], axis=1)
-            repeated_probs = np.repeat(probs_block[non_z_ind], numb_in_prod_block[non_z_ind])
-            to_dissolve_block = np.concatenate((to_dissolve_block, repeated_coords), axis=1)
-            probs_block = np.concatenate((probs_block, repeated_probs))
-            randomise = np.random.random_sample(len(to_dissolve_block[0]))
-            temp_ind = np.where(randomise < probs_block)[0]
-            to_dissolve_block = to_dissolve_block[:, temp_ind]
-
-            probs_no_neigh = self.cur_case.dissolution_probabilities.dissol_prob.values_pp[to_dissol_no_neigh[2]]
-            randomise = np.random.random_sample(len(to_dissol_no_neigh[0]))
-            temp_ind = np.where(randomise < probs_no_neigh)[0]
-            to_dissol_no_neigh = to_dissol_no_neigh[:, temp_ind]
-
-            to_dissolve = np.concatenate((to_dissolve_no_block, to_dissol_no_neigh, to_dissolve_block), axis=1)
-
-            self.coord_buffer.reset_buffer()
-            self.to_dissol_pn_buffer.reset_buffer()
-
-            if len(to_dissolve[0]) > 0:
-                just_decrease_counts(self.primary_product.c3d, to_dissolve)
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                insert_counts(self.primary_active.c3d, to_dissolve)
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
-
-    def dissolution_zhou_wei_no_bsf(self):
-        """
-        Implementation of adjusted Zhou and Wei approach. Only side neighbours are checked. No need for block scale
-        factor. Works only for any oxidation nuber!
-        """
-        nz_ind = np.array(np.nonzero(self.cur_case.product.c3d[:, :, self.comb_indexes]))
-        self.coord_buffer.copy_to_buffer(nz_ind)
-        self.coord_buffer.update_buffer_at_axis(self.comb_indexes[nz_ind[2]], axis=2)
-
-        if self.coord_buffer.last_in_buffer > 0:
-            all_arounds = self.utils.calc_sur_ind_decompose_flat(self.coord_buffer.get_buffer())
-            all_neigh = go_around_int(self.primary_product.c3d, all_arounds)
-
-            all_neigh_pn = all_neigh[[]]
-
-            # choose all the coordinates which have at least one full side neighbour
-            where_full = np.unique(np.where(all_neigh == self.primary_oxid_numb)[0])
-
-            to_dissol_pn_no_neigh = np.array(self.coord_buffer.get_elem_instead_ind(where_full), dtype=np.short)
-            self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(where_full))
-
-            if self.coord_buffer.last_in_buffer > 0:
-                all_neigh = all_neigh[where_full]
-
-                arr_len_flat = np.array([np.sum(item) for item in all_neigh], dtype=np.ubyte)
-                index_outside = np.where((arr_len_flat < self.max_inside_neigh_number))[0]
-
-                self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(index_outside))
-                all_neigh_pn = arr_len_flat[index_outside]
-            else:
-                all_neigh_pn = np.array([np.sum(item) for item in all_neigh_pn])
-
-            probs_pn_no_neigh = self.cur_case.dissolution_probabilities.dissol_prob.values_pp[to_dissol_pn_no_neigh[2]]
-
-            to_dissolve_pn = self.to_dissol_pn_buffer.get_buffer()
-            probs_pn = self.cur_case.dissolution_probabilities.get_probabilities(all_neigh_pn, to_dissolve_pn[2])
-
-            randomise = np.random.random_sample(len(to_dissol_pn_no_neigh[0]))
-            temp_ind = np.where(randomise < probs_pn_no_neigh)[0]
-            to_dissol_pn_no_neigh = to_dissol_pn_no_neigh[:, temp_ind]
-
-            randomise = np.random.random_sample(len(to_dissolve_pn[0]))
-            temp_ind = np.where(randomise < probs_pn)[0]
-            to_dissolve_pn = to_dissolve_pn[:, temp_ind]
-
-            to_dissolve = np.concatenate((to_dissolve_pn, to_dissol_pn_no_neigh), axis=1)
-
-            self.coord_buffer.reset_buffer()
-            self.to_dissol_pn_buffer.reset_buffer()
-
-            if len(to_dissolve[0]) > 0:
-                counts = self.primary_product.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]]
-                self.primary_product.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = 0
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                self.primary_active.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] += counts
-                # self.primary_active.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]+1] += counts
-                to_dissolve = np.repeat(to_dissolve, counts, axis=1)
-                # to_dissolve[2, :] -= 1
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
-
-    def dissolution_zhou_wei_no_bsf_also_partial_neigh_aip(self):
-        """
-        Implementation of adjusted Zhou and Wei approach. Only side neighbours are checked. No need for block scale
-        factor. Works for oxidation nuber > 1!
-        aip: Adjusted Inside Product!
-        Im Gegensatz zu dissolution_zhou_wei_no_bsf werden auch die parziellen Nachbarn (weniger als oxidation numb inside)
-        berücksichtigt!
-        Resolution inside a product: probability for each partial product adjusted according to a number of neighbours
-        """
-        nz_ind = np.array(np.nonzero(self.cur_case.product.c3d[:, :, self.comb_indexes]))
-        self.coord_buffer.copy_to_buffer(nz_ind)
-        self.coord_buffer.update_buffer_at_axis(self.comb_indexes[nz_ind[2]], axis=2)
-
-        if self.coord_buffer.last_in_buffer > 0:
-            all_arounds = self.utils.calc_sur_ind_decompose_flat_with_zero(self.coord_buffer.get_buffer())
-            all_neigh = go_around_int(self.primary_product.c3d, all_arounds)
-            all_neigh[:, 6] -= 1
-
-            all_neigh_pn = np.array([])
-            numb_in_prod = np.array([], dtype=int)
-
-            where_not_null = np.unique(np.where(all_neigh > 0)[0])
-            to_dissol_pn_no_neigh = np.array(self.coord_buffer.get_elem_instead_ind(where_not_null), dtype=np.short)
-            self.coord_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(where_not_null))
-
-            if self.coord_buffer.last_in_buffer > 0:
-                all_neigh = all_neigh[where_not_null]
-                numb_in_prod = all_neigh[:, 6]
-
-                arr_len_flat = np.sum(all_neigh[:, :6], axis=1)
-                index_outside = np.where((arr_len_flat < self.max_inside_neigh_number))[0]
-
-                self.to_dissol_pn_buffer.copy_to_buffer(self.coord_buffer.get_elem_at_ind(index_outside))
-                all_neigh_pn = arr_len_flat[index_outside]
-                numb_in_prod = np.array(numb_in_prod[index_outside], dtype=int)
-
-            to_dissolve_pn = self.to_dissol_pn_buffer.get_buffer()
-            probs_pn = self.cur_case.dissolution_probabilities.get_probabilities(all_neigh_pn, to_dissolve_pn[2])
-
-            non_z_ind = np.where(numb_in_prod != 0)[0]
-            repeated_coords = np.repeat(to_dissolve_pn[:, non_z_ind], numb_in_prod[non_z_ind], axis=1)
-            repeated_probs = np.repeat(probs_pn[non_z_ind], numb_in_prod[non_z_ind])
-
-            to_dissolve_pn = np.concatenate((to_dissolve_pn, repeated_coords), axis=1)
-            probs_pn = np.concatenate((probs_pn, repeated_probs))
-
-            randomise = np.random.random_sample(len(to_dissolve_pn[0]))
-            temp_ind = np.where(randomise < probs_pn)[0]
-            to_dissolve_pn = to_dissolve_pn[:, temp_ind]
-
-            probs_pn_no_neigh = self.cur_case.dissolution_probabilities.dissol_prob.values_pp[to_dissol_pn_no_neigh[2]]
-            randomise = np.random.random_sample(len(to_dissol_pn_no_neigh[0]))
-            temp_ind = np.where(randomise < probs_pn_no_neigh)[0]
-            to_dissol_pn_no_neigh = to_dissol_pn_no_neigh[:, temp_ind]
-
-            to_dissolve = np.concatenate((to_dissolve_pn, to_dissol_pn_no_neigh), axis=1)
-
-            self.coord_buffer.reset_buffer()
-            self.to_dissol_pn_buffer.reset_buffer()
-
-            if len(to_dissolve[0]) > 0:
-                just_decrease_counts(self.primary_product.c3d, to_dissolve)
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                insert_counts(self.primary_active.c3d, to_dissolve)
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
-
-    def dissolution_simple_with_pd(self):
-        """
-        Implementation of a simple dissolution approach with single pd for dissolution. No side neighbours are checked,
-        no block scale factor, no p_block.
-        Works only for any oxidation nuber!
-        """
-        nz_ind = np.array(np.nonzero(self.primary_product.c3d[:, :, self.product_indexes]))
-        self.coord_buffer.copy_to_buffer(nz_ind)
-        self.coord_buffer.update_buffer_at_axis(self.product_indexes[nz_ind[2]], axis=2)
-
-        if self.coord_buffer.last_in_buffer > 0:
-            to_dissolve = self.coord_buffer.get_buffer()
-            probs = np.full(len(to_dissolve[0]), self.disol_p)
-
-            randomise = np.random.random_sample(len(to_dissolve[0]))
-            temp_ind = np.where(randomise < probs)[0]
-            to_dissolve = to_dissolve[:, temp_ind]
-
-            self.coord_buffer.reset_buffer()
-
-            if len(to_dissolve[0]) > 0:
-                counts = self.primary_product.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]]
-                self.primary_product.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = 0
-                self.primary_product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-                self.primary_active.c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] += counts
-                to_dissolve = np.repeat(to_dissolve, counts, axis=1)
-                self.primary_oxidant.cells = np.concatenate((self.primary_oxidant.cells, to_dissolve), axis=1)
-                new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(to_dissolve[0]))
-                new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-                new_dirs -= 1
-                self.primary_oxidant.dirs = np.concatenate((self.primary_oxidant.dirs, new_dirs), axis=1)
-
-    def get_combi_ind_standard(self):
-        self.ioz_bound = self.get_cur_ioz_bound()
-        oxidant = np.array([np.sum(self.cur_case.oxidant.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.ioz_bound + 1)], dtype=np.uint32)
-
-        active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind
-                           in range(self.ioz_bound + 1)], dtype=np.uint32)
-
-        oxidant_indexes = np.where(oxidant > 0)[0]
-        active_indexes = np.where(active > 0)[0]
-
-        min_act = active_indexes.min(initial=self.cells_per_axis)
-        if min_act < self.cells_per_axis:
-            indexs = np.where(oxidant_indexes >= min_act - 1)[0]
-            self.comb_indexes = oxidant_indexes[indexs]
-        else:
-            self.comb_indexes = [self.ioz_bound]
+        # lambdas = (np.arange(self.cells_per_axis, dtype=int) + 0.5) * Config.GENERATED_VALUES.LAMBDA
+        # adj_lamd = lambdas - Config.ZETTA_ZERO
+        # neg_ind = np.where(adj_lamd < 0)[0]
+        # adj_lamd[neg_ind] = 0
+        # self.active_times = adj_lamd ** 2 / Config.GENERATED_VALUES.KINETIC_KONST ** 2
+
+        # self.prev_len = 0
+        # self.powers = utils.physical_data.POWERS
 
     def get_combi_ind_standard_v2(self):
         """
@@ -930,12 +176,10 @@ class CellularAutomata:
         """
         oxidant_3d = self.cur_case.oxidant.get_3d_grid()[0]
         active_3d = self.cur_case.active.get_3d_grid()[0]
-        n_i = oxidant_3d.shape[0]
-        n_z = oxidant_3d.shape[2]
 
         # ioz_bound = max x (i) where any oxidant or active particle exists (narrow the domain)
         flat_o = np.flatnonzero(oxidant_3d.ravel(order="F") > 0)
-        max_x_ox = int(np.max(flat_o % n_i)) if flat_o.size > 0 else -1
+        max_x_ox = int(np.max(flat_o % self.cells_per_axis)) if flat_o.size > 0 else -1
         self.ioz_bound = max(max_x_ox, 0)
 
         # Sum over (y, z) for each x in one call; result shape (n_i,)
@@ -951,38 +195,6 @@ class CellularAutomata:
             self.comb_indexes = oxidant_indexes[indexs]
         else:
             self.comb_indexes = np.array([self.ioz_bound])
-
-    def get_combi_ind_cells_around_product(self):
-        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.furthest_index + 1)], dtype=np.uint32)
-
-        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
-                           in range(self.furthest_index + 1)], dtype=np.uint32)
-
-        product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.furthest_index + 1)], dtype=np.uint32)
-
-        # self.product_indexes = np.where((product_c < self.param["phase_fraction_lim"]) & (product_c > 0))[0]
-        self.product_indexes = np.where(product > 0)[0]
-        prod_left_shift = self.product_indexes - 1
-        prod_right_shift = self.product_indexes + 1
-        self.product_indexes = np.unique(np.concatenate((self.product_indexes, prod_left_shift, prod_right_shift)))
-        temp_ind = np.where((self.product_indexes >= 0) & (self.product_indexes <= self.furthest_index))
-        self.product_indexes = self.product_indexes[temp_ind]
-
-        # some = np.where((product_c[self.product_indexes] < self.param["phase_fraction_lim"]) & (product_c[self.product_indexes] > 0))[0]
-        # some = np.where(product_c[self.product_indexes] < self.param["phase_fraction_lim"])[0]
-        # self.product_indexes = self.product_indexes[some]
-
-        oxidant_indexes = np.where(oxidant > 0)[0]
-        active_indexes = np.where(active > 0)[0]
-        min_act = active_indexes.min(initial=self.cells_per_axis)
-        if min_act < self.cells_per_axis:
-            indexs = np.where(oxidant_indexes >= min_act - 1)[0]
-            comb_indexes = oxidant_indexes[indexs]
-            self.comb_indexes = np.intersect1d(comb_indexes, self.product_indexes)
-        else:
-            self.comb_indexes = [self.furthest_index]
 
     def get_combi_ind_atomic_gamma_prime(self):
         oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
@@ -1064,45 +276,6 @@ class CellularAutomata:
 
         self.comb_indexes = self.get_active_oxidant_mutual_indexes(oxidant, active)
         self.comb_indexes = np.intersect1d(self.comb_indexes, self.product_indexes)
-
-    def get_combi_ind_atomic_no_growth(self):
-        oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.furthest_index + 1)], dtype=np.uint32)
-        oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
-
-        active = np.array([np.sum(self.primary_active.c3d[:, :, plane_ind]) for plane_ind
-                           in range(self.furthest_index + 1)], dtype=np.uint32)
-        active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
-        outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
-
-        product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.furthest_index + 1)], dtype=np.uint32)
-        product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
-        product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
-
-        matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
-
-        whole_moles = matrix_moles + oxidant_moles + active_moles + product_moles
-
-        product_c = product_moles / whole_moles
-        self.product_indexes = np.where(product_c <= Config.PHASE_FRACTION_LIMIT)[0]
-
-        oxidant_indexes = np.where(oxidant > 0)[0]
-        active_indexes = np.where(active > 0)[0]
-        min_act = active_indexes.min(initial=self.cells_per_axis)
-        if min_act < self.cells_per_axis:
-            indexs = np.where(oxidant_indexes >= min_act - 1)[0]
-            comb_indexes = oxidant_indexes[indexs]
-            self.comb_indexes = np.intersect1d(comb_indexes, self.product_indexes)
-        else:
-            self.comb_indexes = [self.furthest_index]
-
-    def get_combi_ind_two_products(self):
-        oxidant = np.array([np.sum(self.cur_case.oxidant.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.ioz_bound + 1)], dtype=np.uint32)
-        active = np.array([np.sum(self.cur_case.active.c3d[:, :, plane_ind]) for plane_ind
-                           in range(self.ioz_bound + 1)], dtype=np.uint32)
-        self.comb_indexes = self.get_active_oxidant_mutual_indexes(oxidant, active)
 
     def get_combi_ind_atomic_two_products_gamma(self):
         oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
@@ -1289,7 +462,11 @@ class CellularAutomata:
     def _jmatpro_raw_to_phase_array(self, raw_list):
         """Postprocess raw JMatPro output to (5, n) phase fraction array. raw_list: list of dicts from TdDATA.get_look_up_data.
         Each raw entry can be phase_name -> molar_fraction (float) or phase_name -> dict with 'molar_fraction', 'elements', 'composition'."""
-        mapping = getattr(Config, 'JMATPRO_PHASE_MAPPING', _DEFAULT_JMATPRO_PHASE_MAPPING)
+        mapping = getattr(Config, 'JMATPRO_PHASE_MAPPING', None)
+        if mapping is None:
+            # If the user didn't provide a phase→(5 channels) mapping, default to zeros
+            # instead of failing at import time.
+            return np.zeros((5, len(raw_list)), dtype=float)
         n = len(raw_list)
         out = np.zeros((5, n), dtype=float)
         for i, raw in enumerate(raw_list):
@@ -1303,8 +480,32 @@ class CellularAutomata:
                         break
         return out
 
+    def ensure_td_lookup(self):
+        """Ensure self.TdDATA is the KDTree-based Td lookup object."""
+        if self.TdDATA is not None:
+            return
+        # TdDATA class lives in thermodynamics.td_data and is imported via `from thermodynamics import *`.
+        self.TdDATA = TdDATA()
+        self.TdDATA.fetch_look_up_from_file()
+
+    def ensure_jmatpro_pool(self):
+        """Ensure self.jmatpro_pool is the JMatPro async worker pool from `self.worker_pools`."""
+        if self.jmatpro_pool is not None:
+            return
+        if self.worker_pools is None:
+            raise RuntimeError("worker_pools is not set; cannot create JMatPro pool.")
+
+        j_workers = int(self.worker_allocation.get("jmatpro_workers", 1))
+        self.jmatpro_pool = self.worker_pools.get_jmatpro_pool(
+            num_workers=j_workers,
+            temperature=float(Config.TEMPERATURE),
+            task_timeout=3.0,
+            max_retries=3,
+        )
+
     def get_comb_ind_jmatpro(self):
         """Single active, single oxidant only (no secondary elements)."""
+        self.ensure_jmatpro_pool()
         self.ioz_bound = self.get_cur_ioz_bound()
 
         oxidant = np.array([np.sum(self.cases.first.oxidant.c3d[:, :, plane_ind]) for plane_ind
@@ -1359,8 +560,8 @@ class CellularAutomata:
             else:
                 compositions.append([base, a_i, o_i])
 
-        task_ids = self.TdDATA.submit_tasks(compositions, elements=elements)
-        raw_list = self.TdDATA.get_results(task_ids, wait=True, timeout=100000.0)
+        task_ids = self.jmatpro_pool.submit_tasks(compositions, elements=elements)
+        raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=100000.0)
 
         # Preserve composition index: result[i] must match composition[i] (task_ids[i])
         def _m2o3_fraction(raw):
@@ -1403,7 +604,6 @@ class CellularAutomata:
         #     adj_coeff = np.concatenate((adj_coeff_neg, np.ones(len(d_ind)), np.zeros(len(primary_pos_ind))))
         #     self.cur_case_mp.dissolution_probabilities.adapt_probabilities(self.comb_indexes, adj_coeff)
         #     self.decomposition_intrinsic()
-
 
     def get_combi_ind_atomic_with_kinetic_and_KP(self):
         self.ioz_bound = self.get_cur_ioz_bound()
@@ -1535,6 +735,7 @@ class CellularAutomata:
 
     def calc_stable_products(self):
         self.ioz_bound = self.get_cur_ioz_bound()
+        self.ensure_td_lookup()
 
         oxidant = np.array([np.sum(self.primary_oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
@@ -1658,6 +859,7 @@ class CellularAutomata:
 
     def calc_stable_products_all(self):
         self.ioz_bound = self.get_cur_ioz_bound()
+        self.ensure_td_lookup()
 
         oxidant = np.array([np.sum(self.cases.first.oxidant.c3d[:, :, plane_ind]) for plane_ind
                             in range(self.ioz_bound + 1)], dtype=np.uint32)
@@ -2681,31 +1883,7 @@ class CellularAutomata:
             # self.cur_case.product.fix_full_cells(coord)  # precip on place of active!
             self.cur_case.product.fix_full_cells(seeds)  # precip on place of oxidant!
 
-    def diffusion_inward(self):
-        inward = []
-        inward.append(self.cases.first.oxidant)
-        if Config.OXIDANTS.SECONDARY_EXISTENCE and self.cases.second.oxidant is not self.cases.first.oxidant:
-            inward.append(self.cases.second.oxidant)
-        if inward:
-            self.diffusion_engine.diffuse_multiple(inward)
-        # Legacy path: per-element diffuse()
-        # self.cases.reaccumulate_products_no_exclusion()
-        # self.cur_case.oxidant.diffuse()
-        # if Config.OXIDANTS.SECONDARY_EXISTENCE:
-        #     self.cur_case.oxidant.diffuse()
-
-    def diffusion_outward(self):
-        if (self.iteration + 1) % Config.STRIDE == 0:
-            outward = []
-            outward.append(self.cases.first.active)
-            if Config.ACTIVES.SECONDARY_EXISTENCE and self.cases.second.active is not self.cases.first.active:
-                outward.append(self.cases.second.active)
-            if outward:
-                self.diffusion_engine.diffuse_multiple(outward)
-
     def diffuse_all(self):
-        # Always pass full list (oxidants + actives) so diffusion engine never recreates process pools.
-        # Skip outward diffusion when not on a STRIDE step by setting skip_diffusion_this_step on actives.
         run_outward = (self.iteration + 1) % Config.STRIDE == 0
         for e in self.cases.all_actives:
             e.skip_diffusion_this_step = not run_outward
@@ -2717,42 +1895,6 @@ class CellularAutomata:
         if run_outward:
             for elem in self.cases.all_actives:
                 elem.fill_last_page()
-
-        # Legacy path: diffusion_outward_mp (uses element.diffuse, last_in_diff_arr, etc.)
-        # if (self.iteration + 1) % Config.STRIDE == 0:
-        #     self.cur_case = self.cases.first
-        #     self.cur_case_mp = self.cases.first_mp
-        #     self.diffusion_outward_mp()
-        #     if Config.ACTIVES.SECONDARY_EXISTENCE:
-        #         self.cur_case = self.cases.second
-        #         self.cur_case_mp = self.cases.second_mp
-        #         self.diffusion_outward_mp()
-
-    def diffusion_outward_mp(self):
-        if (self.iteration + 1) % Config.STRIDE == 0:
-            self.cur_case.active.transform_to_descards()  # UNCOMMENT!!!!!!!!!!
-            chunk_size = self.cur_case.active.last_in_diff_arr // self.numb_of_proc
-            remainder = self.cur_case.active.last_in_diff_arr % self.numb_of_proc
-            indices = []
-            start = 0
-            for i in range(self.numb_of_proc):
-                end = start + chunk_size + (1 if i < remainder else 0)
-                indices.append([start, end])
-                start = end
-            tasks = [(wr, self.cur_case_mp, self.cur_case.active.p_ranges, self.cur_case.active.diffuse) for wr in indices]
-            results = list(self.pool.imap_unordered(worker, tasks))
-            to_del = np.array(np.concatenate(results))
-            self.cur_case.active.dell_cells_from_diff_arrays(to_del)
-            self.cur_case.active.fill_first_page()
-
-    def diffusion_outward_with_mult_srtide(self):
-        if self.iteration % Config.STRIDE == 0:
-            if self.iteration % self.precipitation_stride == 0 or self.iteration == 0:
-                self.primary_active.transform_to_descards()
-            self.primary_active.diffuse()
-            # if Config.ACTIVES.SECONDARY_EXISTENCE:
-            #     self.secondary_active.transform_to_descards()
-            #     self.secondary_active.diffuse()
 
     def calc_precipitation_front_only_cells(self):
         """
@@ -2850,24 +1992,6 @@ class CellularAutomata:
         final_effective_flat_counts[only_inside_product] = 7 * self.cur_case.product.oxidation_number - 1
         return final_effective_flat_counts
 
-    def generate_fetch_ind(self):
-        size = 3 + (Config.NEIGH_RANGE - 1) * 2
-        if self.cells_per_axis % size == 0:
-            length = int((self.cells_per_axis / size) ** 2)
-            self.fetch_ind = np.zeros((size**2, 2, length), dtype=np.short)
-            iter_shifts = np.array(np.where(np.ones((size, size)) == 1)).transpose()
-            dummy_grid = np.full((self.cells_per_axis, self.cells_per_axis), True)
-            all_coord = np.array(np.nonzero(dummy_grid), dtype=np.short)
-            for step, t in enumerate(iter_shifts):
-                t_ind = np.where(((all_coord[0] - t[1]) % size == 0) & ((all_coord[1] - t[0]) % size == 0))[0]
-                self.fetch_ind[step] = all_coord[:, t_ind]
-            self.fetch_ind = np.array(self.fetch_ind, dtype=np.ushort)
-        else:
-            print()
-            print("______________________________________________________________")
-            print("Number of Cells per Axis must be divisible by ", size, "!!!")
-            print("______________________________________________________________")
-            sys.exit()
 
     @staticmethod
     def generate_batch_fetch_ind_mp(ranges, size, switch=False):
@@ -2886,166 +2010,7 @@ class CellularAutomata:
                 n_fetch_batch.append(all_coord[:, t_ind])
         return n_fetch_batch
 
-    def generate_fetch_ind_mp(self):
-        size = 3 + (Config.NEIGH_RANGE - 1) * 2
-        if Config.N_CELLS_PER_AXIS % size == 0:
-            numb_of_div_per_page = Config.NUMBER_OF_DIVS_PER_PAGE
-
-            if numb_of_div_per_page > 1:
-                p_chunk_size = int((Config.N_CELLS_PER_AXIS / numb_of_div_per_page) - Config.NEIGH_RANGE * 2)
-                s_chunk_size = Config.NEIGH_RANGE * 2
-
-                p_chunk_ranges = np.zeros((numb_of_div_per_page, 2), dtype=int)
-                p_chunk_ranges[0] = [Config.NEIGH_RANGE, Config.NEIGH_RANGE + p_chunk_size]
-
-                for pos in range(1, numb_of_div_per_page):
-                    p_chunk_ranges[pos, 0] = p_chunk_ranges[pos - 1, 1] + s_chunk_size
-                    p_chunk_ranges[pos, 1] = p_chunk_ranges[pos, 0] + p_chunk_size
-                p_chunk_ranges[-1, 1] = Config.N_CELLS_PER_AXIS - Config.NEIGH_RANGE
-
-                s_chunk_ranges = np.zeros((numb_of_div_per_page + 1, 2), dtype=int)
-                s_chunk_ranges[0] = [0, Config.NEIGH_RANGE]
-
-                for pos in range(1, numb_of_div_per_page + 1):
-                    s_chunk_ranges[pos, 0] = s_chunk_ranges[pos - 1, 1] + p_chunk_size
-                    s_chunk_ranges[pos, 1] = s_chunk_ranges[pos, 0] + s_chunk_size
-
-                s_chunk_ranges[-1, 1] = Config.N_CELLS_PER_AXIS
-                s_chunk_ranges[-1, 0] = p_chunk_ranges[-1, 1]
-
-                for item in p_chunk_ranges:
-                    new_batch = self.generate_batch_fetch_ind_mp(item, size)
-                    self.primary_fetch_ind.append(new_batch)
-
-                f_and_l = self.generate_batch_fetch_ind_mp([s_chunk_ranges[0], s_chunk_ranges[-1]], size, switch=True)
-                self.secondary_fetch_ind.append(f_and_l)
-                for index, item in enumerate(s_chunk_ranges):
-                    if index == 0 or index == len(s_chunk_ranges) - 1:
-                        continue
-                    new_batch = self.generate_batch_fetch_ind_mp(item, size)
-                    self.secondary_fetch_ind.append(new_batch)
-            else:
-                p_chunk_ranges = np.array([[0, Config.N_CELLS_PER_AXIS]], dtype=int)
-
-                for item in p_chunk_ranges:
-                    new_batch = self.generate_batch_fetch_ind_mp(item, size)
-                    self.primary_fetch_ind.append(new_batch)
-
-            # dummy_grid1 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False, dtype=bool)
-            #
-            # for item in self.primary_fetch_ind:
-            #     for coord_set in item:
-            #         for ind in range(len(coord_set[0])):
-            #             z_coord = coord_set[0, ind]
-            #             y_coord = coord_set[1, ind]
-            #             if dummy_grid1[z_coord, y_coord]:
-            #                 print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
-            #             else:
-            #                 dummy_grid1[z_coord, y_coord] = True
-            # print()
-            #
-            # dummy_grid2 = np.full((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), False, dtype=bool)
-            #
-            # for item in self.secondary_fetch_ind:
-            #     for coord_set in item:
-            #         for ind in range(len(coord_set[0])):
-            #             z_coord = coord_set[0, ind]
-            #             y_coord = coord_set[1, ind]
-            #             if dummy_grid2[z_coord, y_coord]:
-            #                 print("ALLREADY TRUE AT: ", z_coord, " ", y_coord)
-            #             else:
-            #                 dummy_grid2[z_coord, y_coord] = True
-            # print()
-
-        else:
-            print()
-            print("______________________________________________________________")
-            print("Number of Cells per Axis must be divisible by ", size, "!!!")
-            print("______________________________________________________________")
-            sys.exit()
-
-    def record_prod_per_layer(self, ioz_bound, product_is, product_goal):
-        itera = np.full(ioz_bound + 1, self.iteration) // Config.STRIDE
-        indexes = np.stack((range(ioz_bound + 1), itera))
-        self.cumul_prod.set_at_ind(indexes, product_is)
-        self.growth_rate.set_at_ind(indexes, product_goal)
-
-    def simple_decompose_mp(self):
-        tasks = [(self.cur_case_mp.product_c3d_shm_mdata, chunk_range, self.comb_indexes, self.aggregated_ind,
-                  self.cur_case_mp.dissolution_probabilities, self.cur_case_mp.decomposition) for chunk_range in
-                 self.chunk_ranges]
-
-        # imap_unordered yields results as they complete (order not needed for concatenation)
-        results = list(self.pool.imap_unordered(worker, tasks))
-
-        to_dissolve = np.array(np.concatenate(results, axis=1), dtype=np.ushort)
-        if len(to_dissolve[0]) > 0:
-            just_decrease_counts(self.cur_case.product.c3d, to_dissolve)
-            self.cur_case.product.full_c3d[to_dissolve[0], to_dissolve[1], to_dissolve[2]] = False
-            if self.cur_case_mp.threshold_outward > 0:
-                insert_counts(self.cur_case.active.c3d, to_dissolve, self.cur_case_mp.threshold_outward)
-            repeated_coords = np.repeat(to_dissolve, self.cur_case_mp.threshold_inward, axis=1)
-            self.cur_case.oxidant.cells = np.concatenate((self.cur_case.oxidant.cells, repeated_coords), axis=1)
-            new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], len(repeated_coords[0]))
-            new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-            new_dirs -= 1
-            self.cur_case.oxidant.dirs = np.concatenate((self.cur_case.oxidant.dirs, new_dirs), axis=1)
-
     def dissolution_mp_subblock(self):
-        """
-        Dissolution with x-partitioned workers (like nucleation subblock). Each worker processes
-        its x-planes (plane_indexes); product and active are updated in-place in SHM; returns
-        to_dissolve so we add oxidant on the main process. Reuses the diffusion engine's
-        nucleation pool. No gaps: neighbours are read-only across boundaries.
-        """
-        dp = self.cur_case.dissolution_probabilities
-        if dp is None:
-            return
-        comb = np.asarray(self.comb_indexes, dtype=np.intp).ravel()
-        if comb.size == 0:
-            return
-        n_workers = max(1, getattr(self.diffusion_engine, "n_inward_workers", 4))
-        # Partition x-planes (comb_indexes) across workers
-        n_plane = comb.size
-        chunk_size = max(1, (n_plane + n_workers - 1) // n_workers)
-        plane_chunks = [
-            comb[i : i + chunk_size]
-            for i in range(0, n_plane, chunk_size)
-        ]
-        values_pp = np.asarray(dp.dissol_prob.values_pp, dtype=np.float64)
-        const_a_pp = np.asarray(dp.const_a_pp, dtype=np.float64)
-        const_b_pp = np.asarray(dp.const_b_pp, dtype=np.float64)
-        const_c_pp = np.asarray(dp.const_c_pp, dtype=np.float64)
-        const_d_pp = np.asarray(dp.const_d_pp, dtype=np.float64)
-        tasks = [
-            (
-                self.cur_case_mp,
-                plane_chunks[w],
-                values_pp,
-                const_a_pp,
-                const_b_pp,
-                const_c_pp,
-                const_d_pp,
-            )
-            for w in range(len(plane_chunks))
-        ]
-        pool = self.diffusion_engine.get_nucleation_pool()
-        results = pool.map(dissolution_subblock_worker, tasks)
-        to_dissolve = np.concatenate([r for r in results if r.size > 0], axis=1)
-        if to_dissolve.size == 0:
-            return
-        to_dissolve = np.asarray(to_dissolve, dtype=np.short)
-        # Kernel already did product-- and active++ per particle; add extra active if threshold_outward > 1
-        if self.cur_case_mp.threshold_outward > 1:
-            insert_counts(self.cur_case.active.c3d, to_dissolve, self.cur_case_mp.threshold_outward - 1)
-        repeated_coords = np.repeat(to_dissolve, self.cur_case_mp.threshold_inward, axis=1)
-        self.cur_case.oxidant.cells = np.concatenate((self.cur_case.oxidant.cells, repeated_coords), axis=1)
-        new_dirs = np.random.choice([22, 4, 16, 10, 14, 12], repeated_coords.shape[1])
-        new_dirs = np.array(np.unravel_index(new_dirs, (3, 3, 3)), dtype=np.byte)
-        new_dirs -= 1
-        self.cur_case.oxidant.dirs = np.concatenate((self.cur_case.oxidant.dirs, new_dirs), axis=1)
-
-    def dissolution_mp_subblock_v2(self):
         """
         Dissolution V2: product snapshot for consistent neighbour reads; workers write directly
         to oxidant write buffer (count + dirs grid) and active. No flat cells/dirs; oxidant is
@@ -3060,7 +2025,7 @@ class CellularAutomata:
         oxidant_elem = self.cur_case.oxidant
         if not hasattr(oxidant_elem, "get_current_c3d_shm_mdata"):
             return
-        n_workers = max(1, getattr(self.diffusion_engine, "n_outward_workers", 4))
+        n_workers = max(1, getattr(self.worker_pools, "n_outward_workers", getattr(self.diffusion_engine, "n_outward_workers", 4)))
         n_z = self.cur_case_mp.product_c3d_shm_mdata.shape[2]
         # Partition z into contiguous slabs (no gaps), like diffusion
         base = n_z // n_workers
@@ -3129,7 +2094,7 @@ class CellularAutomata:
             for (k_lo, k_hi) in z_ranges
         ]
 
-        pool = self.diffusion_engine.get_dissolution_pool()
+        pool = self.worker_pools.dissolution_pool
         pool.map(dissolution_subblock_worker_v2, tasks)
 
         snapshot_shm.close()
@@ -3138,69 +2103,146 @@ class CellularAutomata:
         except FileNotFoundError:
             pass
 
-    def precip_mp(self):
-        self.cur_case.fix_init_precip_func_ref(self.ioz_bound)
-        if len(self.comb_indexes) <= Config.DEPTH_PER_DIV:
-            p_tasks = [(self.cur_case_mp, self.comb_indexes, fetch_batch, self.cur_case_mp.check_intersection,
-                        self.cur_case_mp.precip_step) for fetch_batch in self.primary_fetch_ind]
-            s_tasks = [(self.cur_case_mp, self.comb_indexes, fetch_batch, self.cur_case_mp.check_intersection,
-                        self.cur_case_mp.precip_step) for fetch_batch in self.secondary_fetch_ind]
-        else:
-            ind_chunks = [self.comb_indexes[i:i + Config.DEPTH_PER_DIV]
-                          for i in range(0, len(self.comb_indexes), Config.DEPTH_PER_DIV)]
-            p_tasks = [(self.cur_case_mp, ind, fetch_batch, self.cur_case_mp.check_intersection,
-                        self.cur_case_mp.precip_step) for ind in ind_chunks for fetch_batch in self.primary_fetch_ind]
-            s_tasks = [(self.cur_case_mp, ind, fetch_batch, self.cur_case_mp.check_intersection,
-                        self.cur_case_mp.precip_step) for ind in ind_chunks for fetch_batch in self.secondary_fetch_ind]
-        self.pool.map(worker, p_tasks)
-        self.pool.map(worker, s_tasks)
+
+    def _build_precip_mirror_state(self, n_cells, z_ranges_base):
+        """Build mirrored periodic z partition (blocks + flattened ranges + gap groups)."""
+        def _periodic_groups_from_mask(mask):
+            groups = []
+            start = None
+            for kk in range(n_cells):
+                if mask[kk] and start is None:
+                    start = kk
+                elif not mask[kk] and start is not None:
+                    groups.append([start, kk - 1])
+                    start = None
+            if start is not None:
+                groups.append([start, n_cells - 1])
+            if len(groups) >= 2 and groups[0][0] == 0 and groups[-1][1] == n_cells - 1:
+                groups = [[groups[-1][0], groups[0][1]]] + groups[1:-1]
+            return groups
+
+        block_mask = np.zeros(n_cells, dtype=np.bool_)
+        for k_lo, k_hi in z_ranges_base:
+            block_mask[int(k_lo):int(k_hi) + 1] = True
+        gap_mask = ~block_mask
+
+        base_block_groups = _periodic_groups_from_mask(block_mask)
+        base_gap_groups = _periodic_groups_from_mask(gap_mask)
+        block_centers = [0.5 * (g[0] + g[1]) for g in base_block_groups]
+        gap_centers = [0.5 * (g[0] + g[1]) for g in base_gap_groups]
+
+        # Pick integer periodic shift that aligns block centers to old gap centers.
+        best_shift = 0
+        best_score = -1
+        target_half = n_cells / 2.0
+        for s in range(1, n_cells):
+            shifted = [((c + s) % n_cells) for c in block_centers]
+            score = sum(any(abs(sc - gc) < 1e-12 for gc in gap_centers) for sc in shifted)
+            if score > best_score or (score == best_score and abs(s - target_half) < abs(best_shift - target_half)):
+                best_score = score
+                best_shift = s
+
+        # Shift each base block with full periodic wrapping.
+        z_blocks_neg = []
+        z_ranges_neg = []
+        block_mask_neg = np.zeros(n_cells, dtype=np.bool_)
+        for (k_lo, k_hi) in z_ranges_base:
+            mapped = [((int(kk) + best_shift) % n_cells) for kk in range(int(k_lo), int(k_hi) + 1)]
+            mapped_sorted = sorted(mapped)
+            segs = []
+            seg_start = mapped_sorted[0]
+            seg_prev = mapped_sorted[0]
+            for kk in mapped_sorted[1:]:
+                if kk == seg_prev + 1:
+                    seg_prev = kk
+                else:
+                    segs.append((int(seg_start), int(seg_prev)))
+                    seg_start = kk
+                    seg_prev = kk
+            segs.append((int(seg_start), int(seg_prev)))
+            if len(segs) == 2 and segs[0][0] == 0 and segs[1][1] == n_cells - 1:
+                segs = [segs[1], segs[0]]
+            z_blocks_neg.append(segs)
+            for a, b in segs:
+                z_ranges_neg.append((int(a), int(b)))
+                block_mask_neg[int(a):int(b) + 1] = True
+
+        gap_z_set_neg = {k for k in range(n_cells) if not block_mask_neg[k]}
+        gap_z_groups_neg = _partition_gap_z_parallel(gap_z_set_neg, min_spacing=3, n_z=n_cells)
+        return z_blocks_neg, z_ranges_neg, gap_z_groups_neg
+
+    def _ensure_precip_z_states(self):
+        """Initialize (or rebuild) base and mirrored z states once per (n_cells, n_workers)."""
+        part_sig = (int(self.cells_per_axis), int(self.worker_pools.n_inward_workers))
+        if self._precip_partition_sig == part_sig and self._precip_z_blocks is not None and self._precip_z_blocks_neg is not None:
+            return
+
+        z_ranges, gap_z_set = _partition_domain_z(self.cells_per_axis, self.worker_pools.n_inward_workers)
+        gap_z_groups = _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=self.cells_per_axis)
+        z_blocks = [[(int(k_lo), int(k_hi))] for (k_lo, k_hi) in z_ranges]
+
+        z_blocks_neg, z_ranges_neg, gap_z_groups_neg = self._build_precip_mirror_state(self.cells_per_axis, z_ranges)
+
+        self._precip_partition_sig = part_sig
+        self._precip_z_ranges = z_ranges
+        self._precip_gap_z_groups = gap_z_groups
+        self._precip_z_blocks = z_blocks
+        self._precip_z_blocks_neg = z_blocks_neg
+        self._precip_z_ranges_neg = z_ranges_neg
+        self._precip_gap_z_groups_neg = gap_z_groups_neg
 
     def precip_mp_subblock(self):
-        """
-        Nucleation using z-subblock partition (same as diffusion): each worker owns active
-        cells in [k_lo, k_hi] and only decrements active in that range. Seed slab per worker
-        is k in [k_lo-1, k_hi+1]. Iterates over all oxidant particles per cell and respects
-        oxidation_number (product cap). Uses the diffusion engine's nucleation pool.
-        Uses current diffusion read buffers (after swap) so nucleation sees up-to-date oxidant/active.
-        """
         # Point case_mp at current read buffers (diffusion may have swapped A/B)
         self.get_combi_ind_standard_v2()
-        oxidant_elem = self.cur_case.oxidant
-        active_elem = self.cur_case.active
-        self.cur_case_mp.oxidant_c3d_shm_mdata = oxidant_elem.get_current_c3d_shm_mdata()
-        self.cur_case_mp.active_c3d_shm_mdata = active_elem.get_current_c3d_shm_mdata()
+        self.cur_case_mp.oxidant_c3d_shm_mdata = self.cur_case.oxidant.get_current_c3d_shm_mdata()
+        self.cur_case_mp.active_c3d_shm_mdata = self.cur_case.active.get_current_c3d_shm_mdata()
         self.cur_case.fix_init_precip_func_ref(self.cells_per_axis)
-        n_cells = self.cells_per_axis
-        n_workers = max(1, self.diffusion_engine.n_inward_workers)
-        if self._precip_z_ranges is None:
-            z_ranges, gap_z_set = _partition_domain_z(n_cells, n_workers)
-            gap_z_groups = _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=n_cells)
-            self._precip_z_ranges = z_ranges
-            self._precip_gap_z_groups = gap_z_groups
-        z_ranges = self._precip_z_ranges
-        gap_z_groups = self._precip_gap_z_groups
 
-        # # plane_indexes = x (i) planes; comb_indexes filled elsewhere or use all x
-        # comb = getattr(self, "comb_indexes", None)
-        # if comb is not None and len(comb) > 0:
-        #     plane_indexes = np.asarray(comb, dtype=np.intp)
-        # else:
-        #     plane_indexes = np.arange(n_cells, dtype=np.intp)
+        # Two-state strategy only: even iterations -> base, odd iterations -> mirrored.
+        if int(self.iteration) % 2 == 0:
+            z_blocks = self._precip_z_blocks
+            gap_z_groups = self._precip_gap_z_groups
+        else:
+            z_blocks = self._precip_z_blocks_neg
+            gap_z_groups = self._precip_gap_z_groups_neg
 
         plane_indexes = np.asarray(self.comb_indexes, dtype=np.intp)
-
-        max_per_cell_o = oxidant_elem.max_per_cell
-        max_per_cell_a = active_elem.max_per_cell
         ind_form = np.asarray(ind_formation, dtype=np.int8)
-        pool = self.diffusion_engine.get_nucleation_pool()
-        # Interior z-blocks (same partition as diffusion)
-        tasks = [(self.cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form) for (k_lo, k_hi) in z_ranges]
-        pool.map(precip_step_subblock_worker, tasks)
-        # Gap z-planes: process in groups (parallel within group, sequential across groups) like diffusion
-        for group in gap_z_groups:
-            gap_tasks = [(self.cur_case_mp, k, k, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form) for k in group]
-            pool.map(precip_step_subblock_worker, gap_tasks)
 
+        # Interior z-blocks:
+        tasks_std = []
+        tasks_tail_seq = []
+        for segs in z_blocks:
+            if len(segs) == 1:
+                k_lo, k_hi = segs[0]
+                tasks_std.append((self.cur_case_mp, k_lo, k_hi, plane_indexes, self.cur_case.oxidant.max_per_cell, self.cur_case.active.max_per_cell, ind_form))
+            else:
+                # Use the largest segment in the parallel pass; defer the remaining
+                # wrapped segment(s) to a short sequential tail pass.
+                segs_sorted = sorted(segs, key=lambda ab: (ab[1] - ab[0] + 1), reverse=True)
+                main_seg = segs_sorted[0]
+                tail_segs = segs_sorted[1:]
+                k_lo, k_hi = main_seg
+                tasks_std.append((self.cur_case_mp, k_lo, k_hi, plane_indexes, self.cur_case.oxidant.max_per_cell, self.cur_case.active.max_per_cell, ind_form))
+                for k_lo, k_hi in tail_segs:
+                    tasks_tail_seq.append((self.cur_case_mp, k_lo, k_hi, plane_indexes, self.cur_case.oxidant.max_per_cell, self.cur_case.active.max_per_cell, ind_form))
+        if tasks_std:
+            self.worker_pools.nucleation_pool.map(precip_step_subblock_worker, tasks_std)
+        for task in tasks_tail_seq:
+            precip_step_subblock_worker(task)
+        # Gap z-planes: run all gap indices in one worker task using explicit seed list.
+        gap_seed_slab_k = list(dict.fromkeys(int(k) for group in gap_z_groups for k in group))
+        gap_task = [(
+            self.cur_case_mp,
+            0,
+            int(self.cur_case_mp.oxidant_c3d_shm_mdata.shape[2]) - 1,
+            plane_indexes,
+            self.cur_case.oxidant.max_per_cell,
+            self.cur_case.active.max_per_cell,
+            ind_form,
+            gap_seed_slab_k,
+        )]
+        self.worker_pools.nucleation_pool.map(precip_step_subblock_worker, gap_task)
 
     def ioz_depth_from_kinetics(self):
         self.curr_time = Config.GENERATED_VALUES.TAU * (self.iteration + 1)

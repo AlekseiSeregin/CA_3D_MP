@@ -347,12 +347,12 @@ def add_dissolution_particles_to_grid(
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
-def _nucleation_subblock_apply_pbc(ii, jj, kk, n_cells, n_z):
+def _nucleation_subblock_apply_pbc(ii, jj, kk, n_cells):
     """x: no wrap (hard boundaries at 0 and n_cells-1). y,z: periodic. Returns (ii, jj, kk, valid)."""
     if ii < 0 or ii >= n_cells:
         return ii, jj, kk, False
     jj = ((jj % n_cells) + n_cells) % n_cells
-    kk = ((kk % n_z) + n_z) % n_z
+    kk = ((kk % n_cells) + n_cells) % n_cells
     return ii, jj, kk, True
 
 
@@ -377,7 +377,6 @@ def nucleation_subblock_kernel(
     const_c_pp,
     const_d_pp,
     n_cells,
-    x_max,
     seed,
 ):
     """
@@ -386,21 +385,15 @@ def nucleation_subblock_kernel(
     product_init count (7 if ox_num > 1, includes center). product/full_3d/product_x_nzs written to SHM.
     """
     np.random.seed(seed)
-    n_i, n_j, n_z = oxidant.shape
     n2 = n_cells * n_cells
     n_active = active_check_offsets.shape[0]
-    n_flat = flat_neigh_offsets.shape[0]
 
-    for idx_k in range(seed_slab_k.shape[0]):
-        k = seed_slab_k[idx_k]
-        for idx_i in range(plane_indexes.shape[0]):
-            i = int(plane_indexes[idx_i])
-            if i < 0 or i >= n_i or (x_max >= 0 and i > x_max):
-                continue
-            for j in range(n_j):
-                if full_3d[i, j, k] or oxidant[i, j, k] <= 0:
-                    continue
+    for k in seed_slab_k:
+        for i in plane_indexes:
+            for j in range(n_cells):
                 c_max = int(oxidant[i, j, k])
+                if full_3d[i, j, k] or c_max <= 0:
+                    continue
                 for _ in range(c_max):
                     if product[i, j, k] >= ox_num:
                         break
@@ -411,7 +404,7 @@ def nucleation_subblock_kernel(
                     for row in active_check_offsets:
                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                            i + di, j + dj, k + dk, n_cells, n_z
+                            i + di, j + dj, k + dk, n_cells
                         )
                         if valid and active[ii, jj, kk] > 0:
                             _ni[valid_count] = ii
@@ -424,7 +417,7 @@ def nucleation_subblock_kernel(
                     for row in flat_neigh_offsets:
                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                            i + di, j + dj, k + dk, n_cells, n_z
+                            i + di, j + dj, k + dk, n_cells
                         )
                         if valid and product_init[ii, jj, kk] > 0:
                             flat_count += 1
@@ -472,7 +465,6 @@ def nucleation_subblock_kernel_simple(
     plane_indexes,
     active_check_offsets,
     n_cells,
-    x_max,
     seed,
 ):
     """
@@ -481,17 +473,12 @@ def nucleation_subblock_kernel_simple(
     Same in-place updates to oxidant/active/product/full_3d/product_x_nzs.
     """
     np.random.seed(seed)
-    n_i, n_j, n_z = oxidant.shape
     n2 = n_cells * n_cells
     n_active = active_check_offsets.shape[0]
 
-    for idx_k in range(seed_slab_k.shape[0]):
-        k = seed_slab_k[idx_k]
-        for idx_i in range(plane_indexes.shape[0]):
-            i = int(plane_indexes[idx_i])
-            if i < 0 or i >= n_i or (x_max >= 0 and i > x_max):
-                continue
-            for j in range(n_j):
+    for k in seed_slab_k:
+        for i in plane_indexes:
+            for j in range(n_cells):
                 if full_3d[i, j, k] or oxidant[i, j, k] <= 0:
                     continue
                 c_max = int(oxidant[i, j, k])
@@ -505,7 +492,7 @@ def nucleation_subblock_kernel_simple(
                     for row in active_check_offsets:
                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                            i + di, j + dj, k + dk, n_cells, n_z
+                            i + di, j + dj, k + dk, n_cells
                         )
                         if valid and active[ii, jj, kk] > 0:
                             _ni[valid_count] = ii
@@ -531,84 +518,6 @@ def nucleation_subblock_kernel_simple(
                     if product[i, j, k] >= ox_num:
                         full_3d[i, j, k] = True
                     product_x_nzs[k] = True
-
-
-# ---------------------------------------------------------------------------
-# Dissolution subblock (x-partitioned, in-place product/active, return to_dissolve for oxidant)
-# ---------------------------------------------------------------------------
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def dissolution_subblock_kernel(
-    product,
-    full_3d,
-    active,
-    plane_indexes,
-    face_offsets_6,
-    values_pp,
-    const_a_pp,
-    const_b_pp,
-    const_c_pp,
-    const_d_pp,
-    n_cells,
-    n_z,
-    seed,
-    to_dissolve_out,
-):
-    """
-    Dissolution subblock: process only x-planes in plane_indexes. For each product cell,
-    flat_count = sum of product at 6 face neighbours. No neighbours -> prob = values_pp[k];
-    else prob = const_a*exp(const_b*flat_count+const_c)+const_d. Per-particle random draw;
-    if dissolve: decrement product, update full_3d, increment active, append (i,j,k) to output.
-    to_dissolve_out: (3, max_count) int32 buffer; returns n_dissolved (number of columns filled).
-    """
-    np.random.seed(seed)
-    n_i, n_j, _ = product.shape
-    out_idx = 0
-    max_out = to_dissolve_out.shape[1]
-
-    for idx_i in range(plane_indexes.shape[0]):
-        i = int(plane_indexes[idx_i])
-        if i < 0 or i >= n_i:
-            continue
-        for j in range(n_j):
-            for k in range(n_z):
-                n_p = int(product[i, j, k])
-                if n_p <= 0:
-                    continue
-                flat_count = 0
-                for row in face_offsets_6:
-                    di, dj, dk = int(row[0]), int(row[1]), int(row[2])
-                    ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                        i + di, j + dj, k + dk, n_cells, n_z
-                    )
-                    if valid:
-                        flat_count += int(product[ii, jj, kk])
-                if flat_count == 0:
-                    prob = values_pp[k]
-                else:
-                    prob = (
-                        const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
-                        + const_d_pp[k]
-                    )
-                for _ in range(n_p):
-                    if out_idx >= max_out:
-                        break
-                    if np.random.random() < prob:
-                        to_dissolve_out[0, out_idx] = i
-                        to_dissolve_out[1, out_idx] = j
-                        to_dissolve_out[2, out_idx] = k
-                        out_idx += 1
-                        product[i, j, k] -= 1
-                        active[i, j, k] += 1
-                if product[i, j, k] <= 0 and k < full_3d.shape[2]:
-                    full_3d[i, j, k] = False
-    return out_idx
-
-
-# ---------------------------------------------------------------------------
-# Dissolution subblock with product snapshot (read neighbour counts from snapshot only)
-# ---------------------------------------------------------------------------
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -686,8 +595,6 @@ def dissolution_subblock_kernel_snapshot(
     for k in range(k_lo, k_hi + 1):
         for idx_i in range(plane_indexes.shape[0]):
             i = int(plane_indexes[idx_i])
-            if i < 0 or i >= n_i:
-                continue
             for j in range(n_j):
                 n_p = int(product[i, j, k])
                 if n_p <= 0:
@@ -698,7 +605,7 @@ def dissolution_subblock_kernel_snapshot(
                     dj = int(offsets_26[ni, 1])
                     dk = int(offsets_26[ni, 2])
                     ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                        i + di, j + dj, k + dk, n_cells, n_z
+                        i + di, j + dj, k + dk, n_cells
                     )
                     if valid:
                         flat_count += int(product_read[ii, jj, kk])
@@ -752,7 +659,7 @@ def _dissolution_is_block_cell(neigh26_bool, block_patterns):
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
-def _dissolution_fill_neigh_26(neigh26, offsets_26, i, j, k, n_cells, n_z, product_read):
+def _dissolution_fill_neigh_26(neigh26, offsets_26, i, j, k, n_cells, product_read):
     """Fill all 26 entries of neigh26 from offsets_26 in one pass; return flat_count (sum of product_read for first 6)."""
     flat_count = 0
     for ni in range(26):
@@ -760,7 +667,7 @@ def _dissolution_fill_neigh_26(neigh26, offsets_26, i, j, k, n_cells, n_z, produ
         dj = int(offsets_26[ni, 1])
         dk = int(offsets_26[ni, 2])
         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-            i + di, j + dj, k + dk, n_cells, n_z
+            i + di, j + dj, k + dk, n_cells
         )
         has_neigh = valid and product_read[ii, jj, kk] > 0
         neigh26[ni] = has_neigh
@@ -809,15 +716,13 @@ def dissolution_subblock_kernel_snapshot_with_blocks(
     for k in range(k_lo, k_hi + 1):
         for idx_i in range(plane_indexes.shape[0]):
             i = int(plane_indexes[idx_i])
-            if i < 0 or i >= n_i:
-                continue
             for j in range(n_j):
                 n_p = int(product[i, j, k])
                 if n_p <= 0:
                     continue
                 neigh26 = np.zeros(26, dtype=np.bool_)
                 flat_count = _dissolution_fill_neigh_26(
-                    neigh26, offsets_26, i, j, k, n_cells, n_z, product_read
+                    neigh26, offsets_26, i, j, k, n_cells, product_read
                 )
                 is_block = block_patterns.shape[0] > 0 and _dissolution_is_block_cell(neigh26, block_patterns)
                 if flat_count == 0:
