@@ -82,7 +82,7 @@ if __name__ == '__main__':
             self.save_function = self.save_results_only_prod_prime
             # self.c_automata.cases.first.active.diffuse = elementsdgm.diffuse_bulk_mp_numba
 
-            self.c_automata.decomposition = self.c_automata.dissolution_mp_subblock_v2
+            self.c_automata.decomposition = self.c_automata.dissolution_mp_subblock
 
     source_code = inspect.getsource(NewSystem)
     Config.INITIAL_SCRIPT += source_code

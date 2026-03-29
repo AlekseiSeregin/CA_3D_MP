@@ -39,8 +39,8 @@ class Config:
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
     # OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.1
-    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 5
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.001
+    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 3
 
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
@@ -51,7 +51,7 @@ class Config:
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
     ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.07
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.3
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.1
     ACTIVES.PRIMARY.CONC_PRECISION = "rand"
     ACTIVES.PRIMARY.SPACE_FILL = "full"
     ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 6
@@ -106,7 +106,7 @@ class Config:
     FULL_CELLS = False
     SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
-    USE_SIMPLE_NUCLEATION = True # True: nucleation with no probabilities involved
+    USE_SIMPLE_NUCLEATION = False # True: nucleation with no probabilities involved
 
     # Execution___________________________________________________________________
     # MULTIPROCESSING = False
@@ -117,7 +117,7 @@ class Config:
     #   JMATPRO_WORKER_RATIO = 0.4  # 40% JMatPro, 60% CA (recommended for balanced workload)
     #   JMATPRO_WORKER_RATIO = 0.5  # 50/50 split
     #   JMATPRO_WORKER_RATIO = None  # Auto: 40% JMatPro, 60% CA
-    JMATPRO_WORKER_RATIO = 0.1  # None = auto allocation
+    JMATPRO_WORKER_RATIO = 0.3  # None = auto allocation
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
     # Worker recycling: long-lived workers can grow RAM (NumPy/Python allocator fragmentation).

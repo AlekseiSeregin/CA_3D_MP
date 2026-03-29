@@ -1,13 +1,10 @@
 import os
-import sys
-import threading
 import numpy as np
 import utils
 from multiprocessing import shared_memory
 from .nes_for_mp import *
 from .dissolution_functions import (
-    dissolution_subblock_worker_v2,
-    dissolution_zhou_wei_with_bsf_aip_UPGRADE_BOOL,
+    dissolution_subblock_worker,
     get_block_patterns_from_aggregated,
 )
 from utils.numba_functions import (
@@ -76,7 +73,6 @@ class CellularAutomata:
         self.primary_fetch_ind = []
         self.secondary_fetch_ind = []
         self.fetch_ind = None
-        self.generate_fetch_ind_mp()
 
         self.aggregated_ind = np.array([[7, 0, 1, 2, 19, 16, 14],
                                         [6, 0, 1, 5, 18, 15, 14],
@@ -508,17 +504,17 @@ class CellularAutomata:
         self.ensure_jmatpro_pool()
         self.ioz_bound = self.get_cur_ioz_bound()
 
-        oxidant = np.array([np.sum(self.cases.first.oxidant.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.ioz_bound + 1)], dtype=np.uint32)
+        # Inward/outward now come from diffusion read grids.
+        oxidant_3d = self.cases.first.oxidant.get_3d_grid()[0]
+        oxidant = np.sum(oxidant_3d[:self.ioz_bound + 1, :, :], axis=(1, 2)).astype(np.uint32)
         oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
 
-        active = np.array([np.sum(self.cases.first.active.c3d[:, :, plane_ind]) for plane_ind
-                           in range(self.ioz_bound + 1)], dtype=np.uint32)
+        active_3d = self.cases.first.active.get_3d_grid()[0]
+        active = np.sum(active_3d[:self.ioz_bound + 1, :, :], axis=(1, 2)).astype(np.uint32)
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.cases.first.product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.ioz_bound + 1)], dtype=np.uint32)
+        product = np.sum(self.cases.first.product.c3d[:self.ioz_bound + 1, :, :], axis=(1, 2)).astype(np.uint32)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL * \
                                Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
@@ -531,7 +527,6 @@ class CellularAutomata:
         oxidant_pure_moles = (oxidant_moles + (product_moles * 3/5))
         active_pure_moles = active_moles + (product_moles * 2/5)
         active_pure_eq_mat_moles = active_pure_moles * Config.ACTIVES.PRIMARY.T
-
 
         matrix_moles_pure = self.matrix_moles_per_page - active_pure_eq_mat_moles
         whole_moles_pure = matrix_moles_pure + oxidant_pure_moles + active_pure_moles
@@ -2095,7 +2090,7 @@ class CellularAutomata:
         ]
 
         pool = self.worker_pools.dissolution_pool
-        pool.map(dissolution_subblock_worker_v2, tasks)
+        pool.map(dissolution_subblock_worker, tasks)
 
         snapshot_shm.close()
         try:
@@ -2193,7 +2188,7 @@ class CellularAutomata:
 
     def precip_mp_subblock(self):
         # Point case_mp at current read buffers (diffusion may have swapped A/B)
-        self.get_combi_ind_standard_v2()
+        self.get_combi_ind()
         self.cur_case_mp.oxidant_c3d_shm_mdata = self.cur_case.oxidant.get_current_c3d_shm_mdata()
         self.cur_case_mp.active_c3d_shm_mdata = self.cur_case.active.get_current_c3d_shm_mdata()
         self.cur_case.fix_init_precip_func_ref(self.cells_per_axis)
@@ -2250,7 +2245,12 @@ class CellularAutomata:
         return min(np.amax(active_ind), self.furthest_index)
 
     def ioz_depth_furthest_inward(self):
-        return self.furthest_index
+        oxidant_3d = self.cur_case.oxidant.get_3d_grid()[0]
+        # ioz_bound = max x (i) where any oxidant or active particle exists (narrow the domain)
+        flat_o = np.flatnonzero(oxidant_3d.ravel(order="F") > 0)
+        max_x_ox = int(np.max(flat_o % self.cells_per_axis)) if flat_o.size > 0 else -1
+        self.ioz_bound = max(max_x_ox, 0)
+        return self.ioz_bound
 
     def ioz_dissolution_where_prod(self):
         return np.where(self.cur_case.prod_indexes)[0]
