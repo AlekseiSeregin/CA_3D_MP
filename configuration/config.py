@@ -12,12 +12,12 @@ class Config:
 
     PRODUCTS = ProdGroups()
     PRODUCTS.PRIMARY = ProdInput()
-    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 1
-    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 1
+    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 3
+    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 2
 
     PRODUCTS.SECONDARY = ProdInput()
-    # PRODUCTS.SECONDARY.THRESHOLD_INWARD = 3
-    # PRODUCTS.SECONDARY.THRESHOLD_OUTWARD = 2
+    PRODUCTS.SECONDARY.THRESHOLD_INWARD = 2
+    PRODUCTS.SECONDARY.THRESHOLD_OUTWARD = 4
 
     PRODUCTS.TERNARY = ProdInput()
     # PRODUCTS.TERNARY.THRESHOLD_INWARD = 4
@@ -39,8 +39,8 @@ class Config:
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
     # OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.001
-    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 3
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.5
+    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 10
 
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
@@ -51,10 +51,10 @@ class Config:
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
     ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.07
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.1
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.5
     ACTIVES.PRIMARY.CONC_PRECISION = "rand"
     ACTIVES.PRIMARY.SPACE_FILL = "full"
-    ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 6
+    ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 10
 
     # secondary actives
     # ACTIVES.SECONDARY.ELEMENT = "Al"
@@ -106,7 +106,15 @@ class Config:
     FULL_CELLS = False
     SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
-    USE_SIMPLE_NUCLEATION = False # True: nucleation with no probabilities involved
+    USE_SIMPLE_NUCLEATION = False # Legacy switch (kept for backward compatibility)
+    # Nucleation kernel mode:
+    #   legacy_prob   -> existing probabilistic 1:1 inward/outward
+    #   legacy_simple -> existing simplified 1:1 inward/outward
+    #   stoich_prob   -> threshold-based probabilistic nucleation
+    #   stoich_simple -> threshold-based simplified nucleation
+    #   stoich_prob_owner   -> threshold-based probabilistic nucleation with owner-phase exclusion
+    #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
+    NUCLEATION_MODE = "legacy_simple"
 
     # Execution___________________________________________________________________
     # MULTIPROCESSING = False

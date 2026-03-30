@@ -3,6 +3,8 @@ import numpy as np
 from utils.numba_functions import (
     dissolution_subblock_kernel_snapshot,
     dissolution_subblock_kernel_snapshot_with_blocks,
+    dissolution_subblock_kernel_snapshot_owner,
+    dissolution_subblock_kernel_snapshot_with_blocks_owner,
 
 )
 from .neigh_indexes import (
@@ -91,6 +93,13 @@ def dissolution_subblock_worker(task):
     n_ox = oxidant_write_shm_mdata.shape[0]
     oxidant_count, oxidant_dirs = _views_from_segment_dissol(shm_ox_w, n_ox, max_per_cell_oxidant)
     packed_dirs = np.asarray(packed_dirs_oxidant, dtype=np.uint8).ravel()
+    shm_owner = shared_memory.SharedMemory(name=cur_case_mp.product_owner_shm_mdata.name)
+    owner_phase = np.ndarray(
+        cur_case_mp.product_owner_shm_mdata.shape,
+        dtype=cur_case_mp.product_owner_shm_mdata.dtype,
+        buffer=shm_owner.buf,
+    )
+    phase_id = int(getattr(cur_case_mp, "product_phase_id", 0))
 
     n_cells = n_i
     offsets_26 = np.asarray(OFFSETS_26, dtype=np.int8)
@@ -118,10 +127,12 @@ def dissolution_subblock_worker(task):
     )
     if use_blocks:
         block_pat = np.asarray(block_patterns, dtype=np.int8)
-        dissolution_subblock_kernel_snapshot_with_blocks(
+        dissolution_subblock_kernel_snapshot_with_blocks_owner(
             product_read,
             product,
             full_3d,
+            owner_phase,
+            phase_id,
             oxidant_count,
             oxidant_dirs,
             active_count,
@@ -146,10 +157,12 @@ def dissolution_subblock_worker(task):
             packed_dirs,
         )
     else:
-        dissolution_subblock_kernel_snapshot(
+        dissolution_subblock_kernel_snapshot_owner(
             product_read,
             product,
             full_3d,
+            owner_phase,
+            phase_id,
             oxidant_count,
             oxidant_dirs,
             active_count,
@@ -177,4 +190,5 @@ def dissolution_subblock_worker(task):
     shm_full.close()
     shm_a.close()
     shm_ox_w.close()
+    shm_owner.close()
     return None

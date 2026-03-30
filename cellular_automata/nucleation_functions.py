@@ -1,8 +1,326 @@
 from utils.numba_functions import *
-from utils.numba_functions import nucleation_subblock_kernel, nucleation_subblock_kernel_simple
+from utils.numba_functions import (
+    nucleation_subblock_kernel,
+    nucleation_subblock_kernel_simple,
+    nucleation_subblock_kernel_stoich,
+    nucleation_subblock_kernel_simple_stoich,
+    nucleation_subblock_kernel_stoich_owner,
+    nucleation_subblock_kernel_simple_stoich_owner,
+)
 from multiprocessing import shared_memory
 from .neigh_indexes import *
 
+
+def _run_nucleation_legacy_simple(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    owner_phase,
+    phase_id,
+):
+    nucleation_subblock_kernel_simple(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product,
+        full_3d,
+        product_x_nzs,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_legacy_prob(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    owner_phase,
+    phase_id,
+):
+    nucleation_subblock_kernel(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product,
+        full_3d,
+        product_init,
+        product_x_nzs,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_stoich_simple(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    owner_phase,
+    phase_id,
+):
+    nucleation_subblock_kernel_simple_stoich(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product,
+        full_3d,
+        product_x_nzs,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_stoich_prob(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    owner_phase,
+    phase_id,
+):
+    nucleation_subblock_kernel_stoich(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product,
+        full_3d,
+        product_init,
+        product_x_nzs,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_stoich_simple_owner(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    owner_phase,
+    phase_id,
+):
+    nucleation_subblock_kernel_simple_stoich_owner(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product,
+        full_3d,
+        product_x_nzs,
+        owner_phase,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_stoich_prob_owner(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    owner_phase,
+    phase_id,
+):
+    nucleation_subblock_kernel_stoich_owner(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product,
+        full_3d,
+        product_init,
+        product_x_nzs,
+        owner_phase,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+    )
+
+
+_NUCLEATION_KERNEL_RUNNERS = {
+    "legacy_simple": _run_nucleation_legacy_simple,
+    "legacy_prob": _run_nucleation_legacy_prob,
+    "stoich_simple": _run_nucleation_stoich_simple,
+    "stoich_prob": _run_nucleation_stoich_prob,
+    "stoich_simple_owner": _run_nucleation_stoich_simple_owner,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner,
+}
+
+def resolve_nucleation_mode(mode, use_simple_nucleation):
+    if mode is None:
+        mode = "legacy_simple" if bool(use_simple_nucleation) else "legacy_prob"
+    if mode not in _NUCLEATION_KERNEL_RUNNERS:
+        raise ValueError(f"Unknown nucleation_mode '{mode}'")
+    return mode
+
+
+def get_nucleation_kernel_runner(mode):
+    return _NUCLEATION_KERNEL_RUNNERS[mode]
 
 def precip_step_subblock_worker(task):
     """
@@ -69,6 +387,8 @@ def precip_step_subblock_worker(task):
     product_init = np.ndarray(cur_case_mp.precip_3d_init_shm_mdata.shape, dtype=cur_case_mp.precip_3d_init_shm_mdata.dtype, buffer=shm_product_init.buf)
     shm_product_x_nzs = shared_memory.SharedMemory(name=cur_case_mp.prod_indexes_shm_mdata.name)
     product_x_nzs = np.ndarray(cur_case_mp.prod_indexes_shm_mdata.shape, dtype=cur_case_mp.prod_indexes_shm_mdata.dtype, buffer=shm_product_x_nzs.buf)
+    shm_owner = shared_memory.SharedMemory(name=cur_case_mp.product_owner_shm_mdata.name)
+    owner_phase = np.ndarray(cur_case_mp.product_owner_shm_mdata.shape, dtype=cur_case_mp.product_owner_shm_mdata.dtype, buffer=shm_owner.buf)
 
     if seed_slab_k_prepared is None:
         k_seed_lo = max(0, k_lo)
@@ -105,46 +425,43 @@ def precip_step_subblock_worker(task):
     const_d_pp = np.asarray(nucl_prob.const_d_pp, dtype=np.float64)
     seed = np.random.randint(0, 2**31)
 
-    use_simple_nucleation = bool(getattr(cur_case_mp, "use_simple_nucleation", False))
-    if use_simple_nucleation:
-        nucleation_subblock_kernel_simple(
-            oxidant,
-            oxidant_dirs,
-            active,
-            active_dirs,
-            product,
-            full_3d,
-            product_x_nzs,
-            ox_num,
-            seed_slab_k,
-            plane_indexes,
-            active_check_offsets,
-            n_cells,
-            seed,
+    threshold_inward = int(getattr(cur_case_mp, "threshold_inward", 1))
+    threshold_outward = int(getattr(cur_case_mp, "threshold_outward", 1))
+    phase_id = int(getattr(cur_case_mp, "product_phase_id", 0))
+    kernel_runner = getattr(cur_case_mp, "nucleation_kernel_runner", None)
+    if kernel_runner is None:
+        mode = resolve_nucleation_mode(
+            getattr(cur_case_mp, "nucleation_mode", None),
+            getattr(cur_case_mp, "use_simple_nucleation", False),
         )
-    else:
-        nucleation_subblock_kernel(
-            oxidant,
-            oxidant_dirs,
-            active,
-            active_dirs,
-            product,
-            full_3d,
-            product_init,
-            product_x_nzs,
-            ox_num,
-            seed_slab_k,
-            plane_indexes,
-            active_check_offsets,
-            flat_neigh_offsets,
-            values_pp,
-            const_a_pp,
-            const_b_pp,
-            const_c_pp,
-            const_d_pp,
-            n_cells,
-            seed,
-        )
+        kernel_runner = get_nucleation_kernel_runner(mode)
+
+    kernel_runner(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product,
+        full_3d,
+        product_init,
+        product_x_nzs,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        owner_phase,
+        phase_id,
+    )
 
     shm_o.close()
     shm_a.close()
@@ -152,6 +469,7 @@ def precip_step_subblock_worker(task):
     shm_full.close()
     shm_product_init.close()
     shm_product_x_nzs.close()
+    shm_owner.close()
 
 
 def go_around_mult_oxid_n_also_partial_neigh_aip_MP(array_3d, around_coords):

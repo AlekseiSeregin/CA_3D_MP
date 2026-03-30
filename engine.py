@@ -459,32 +459,46 @@ class SimulationConfigurator:
         self.cases.precip_3d_init_shm_mdata = SharedMetaData(self.cases.precip_3d_init_shm.name, tmp.shape, tmp.dtype)
 
         # accumulated products
-        tmp = np.zeros((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), dtype=np.ubyte)
-        self.cases.accumulated_products_shm = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
-        self.cases.accumulated_products = np.ndarray(tmp.shape, dtype=tmp.dtype,
-                                                     buffer=self.cases.accumulated_products_shm.buf)
-        np.copyto(self.cases.accumulated_products, tmp)
-        self.cases.accumulated_products_shm_mdata = SharedMetaData(self.cases.accumulated_products_shm.name, tmp.shape,
-                                                                   tmp.dtype)
+        # tmp = np.zeros((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), dtype=np.ubyte)
+        # self.cases.accumulated_products_shm = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
+        # self.cases.accumulated_products = np.ndarray(tmp.shape, dtype=tmp.dtype,
+        #                                              buffer=self.cases.accumulated_products_shm.buf)
+        # np.copyto(self.cases.accumulated_products, tmp)
+        # self.cases.accumulated_products_shm_mdata = SharedMetaData(self.cases.accumulated_products_shm.name, tmp.shape,
+        #                                                            tmp.dtype)
+        # product owner phase id map (0 = empty, 1..255 = phase id)
+        owner_tmp = np.zeros((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), dtype=np.uint8)
+        self.cases.product_owner_shm = shared_memory.SharedMemory(create=True, size=owner_tmp.nbytes)
+        self.cases.product_owner = np.ndarray(owner_tmp.shape, dtype=owner_tmp.dtype, buffer=self.cases.product_owner_shm.buf)
+        np.copyto(self.cases.product_owner, owner_tmp)
+        self.cases.product_owner_shm_mdata = SharedMetaData(self.cases.product_owner_shm.name, owner_tmp.shape, owner_tmp.dtype)
 
         if Config.ACTIVES.SECONDARY_EXISTENCE and Config.OXIDANTS.SECONDARY_EXISTENCE:
             print("no implementation")
 
         elif Config.ACTIVES.SECONDARY_EXISTENCE and not Config.OXIDANTS.SECONDARY_EXISTENCE:
-            self.init_case(self.cases.first, self.cases.first_mp, Config.PRODUCTS.PRIMARY)
-            self.init_case(self.cases.second, self.cases.second_mp, Config.PRODUCTS.SECONDARY)
-            self.init_case(self.cases.third, self.cases.third_mp, Config.PRODUCTS.TERNARY)
-            self.init_case(self.cases.fourth, self.cases.fourth_mp, Config.PRODUCTS.QUATERNARY)
-            self.init_case(self.cases.fifth, self.cases.fifth_mp, Config.PRODUCTS.QUINT)
+            self.init_case(self.cases.first, self.cases.first_mp, Config.PRODUCTS.PRIMARY, phase_id=1)
+            self.init_case(self.cases.second, self.cases.second_mp, Config.PRODUCTS.SECONDARY, phase_id=2)
+            self.init_case(self.cases.third, self.cases.third_mp, Config.PRODUCTS.TERNARY, phase_id=3)
+            self.init_case(self.cases.fourth, self.cases.fourth_mp, Config.PRODUCTS.QUATERNARY, phase_id=4)
+            self.init_case(self.cases.fifth, self.cases.fifth_mp, Config.PRODUCTS.QUINT, phase_id=5)
         else:
-            self.init_case(self.cases.first, self.cases.first_mp, Config.PRODUCTS.PRIMARY)
+            self.init_case(self.cases.first, self.cases.first_mp, Config.PRODUCTS.PRIMARY, phase_id=1)
 
-    def init_case(self, case, case_mp, product_config):
+    def init_case(self, case, case_mp, product_config, phase_id=1):
         # prod init
         case.product = elements.Product(product_config)
         case_mp.oxidation_number = case.product.oxidation_number
         case_mp.threshold_inward = product_config.THRESHOLD_INWARD
         case_mp.threshold_outward = product_config.THRESHOLD_OUTWARD
+        case_mp.product_phase_id = int(phase_id)
+        case_mp.product_owner_shm_mdata = self.cases.product_owner_shm_mdata
+        mode = resolve_nucleation_mode(
+            getattr(Config, "NUCLEATION_MODE", None),
+            getattr(Config, "USE_SIMPLE_NUCLEATION", False),
+        )
+        case_mp.nucleation_mode = mode
+        case_mp.nucleation_kernel_runner = get_nucleation_kernel_runner(mode)
 
         # to check with
         case_mp.to_check_with_shm_mdata = self.cases.accumulated_products_shm_mdata

@@ -51,6 +51,8 @@ class CaseSetUpMP:
         self.to_check_with_shm_mdata = None
         self.prod_indexes_shm_mdata = None
         self.prod_indexes_not_stab_shm_mdata = None
+        self.product_owner_shm_mdata = None
+        self.product_phase_id = 0
 
         self.go_around_func_ref = None
         self.precip_3d_init_shm_mdata = None
@@ -70,6 +72,8 @@ class CaseSetUpMP:
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
 
         self.use_simple_nucleation = Config.USE_SIMPLE_NUCLEATION
+        self.nucleation_mode = Config.NUCLEATION_MODE
+        self.nucleation_kernel_runner = None
 
 
 class CaseRef:
@@ -88,6 +92,9 @@ class CaseRef:
         self.accumulated_products = None
         self.accumulated_products_shm = None
         self.accumulated_products_shm_mdata = None
+        self.product_owner = None
+        self.product_owner_shm = None
+        self.product_owner_shm_mdata = None
 
         self.precip_3d_init = None
         self.precip_3d_init_shm = None
@@ -110,6 +117,9 @@ class CaseRef:
         if self.accumulated_products_shm is not None:
             self.accumulated_products_shm.close()
             self.accumulated_products_shm.unlink()
+        if self.product_owner_shm is not None:
+            self.product_owner_shm.close()
+            self.product_owner_shm.unlink()
 
         if self.precip_3d_init_shm is not None:
             self.precip_3d_init_shm.close()
