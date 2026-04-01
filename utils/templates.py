@@ -7,15 +7,10 @@ class CaseSetUp:
         self.is_active = False
         self.oxidant = None
         self.active = None
-        self.product = None
         self.microstructure = None
         self.prod_indexes = None
         self.product_ind_not_stab = None
         self.dissolution_probabilities = None
-
-        self.fix_init_precip_func_ref = None
-        self.precip_3d_init = None
-
         self.shm_pool = {"product_indexes": None,
                          "product_ind_not_stab": None,
                          "precip_3d_init": None}
@@ -32,9 +27,6 @@ class CaseSetUp:
         if self.active is not None:
             self.active.close_and_unlink_shm()
 
-        if self.product is not None:
-            self.product.close_and_unlink_shm()
-
 
 class CaseSetUpMP:
     def __init__(self):
@@ -44,14 +36,12 @@ class CaseSetUpMP:
         self.active_dirs_shm_mdata = None
 
         self.oxidant_c3d_shm_mdata = None
-
         self.product_c3d_shm_mdata = None
         self.oxidation_number = None
-        self.full_shm_mdata = None
-        self.to_check_with_shm_mdata = None
+  
         self.prod_indexes_shm_mdata = None
         self.prod_indexes_not_stab_shm_mdata = None
-        self.product_owner_shm_mdata = None
+        self.product_state_shm_mdata = None
         self.product_phase_id = 0
 
         self.go_around_func_ref = None
@@ -74,27 +64,21 @@ class CaseSetUpMP:
         self.use_simple_nucleation = Config.USE_SIMPLE_NUCLEATION
         self.nucleation_mode = Config.NUCLEATION_MODE
         self.nucleation_kernel_runner = None
+        self.product_key = None
+        self.product_element = None
+        self.product_components = ()
+        self.stage_priority = 0
 
 
 class CaseRef:
     def __init__(self):
-        self.first = CaseSetUp()
-        self.first_mp = CaseSetUpMP()
-        self.second = CaseSetUp()
-        self.second_mp = CaseSetUpMP()
-        self.third = CaseSetUp()
-        self.third_mp = CaseSetUpMP()
-        self.fourth = CaseSetUp()
-        self.fourth_mp = CaseSetUpMP()
-        self.fifth = CaseSetUp()
-        self.fifth_mp = CaseSetUpMP()
+        # Canonical product-stage containers (legacy first/second/... names remain aliases).
+        self.product_cases = []
+        self.product_cases_mp = []
 
-        self.accumulated_products = None
-        self.accumulated_products_shm = None
-        self.accumulated_products_shm_mdata = None
-        self.product_owner = None
-        self.product_owner_shm = None
-        self.product_owner_shm_mdata = None
+        self.product_state = None
+        self.product_state_shm = None
+        self.product_state_shm_mdata = None
 
         self.precip_3d_init = None
         self.precip_3d_init_shm = None
@@ -104,41 +88,48 @@ class CaseRef:
         self.all_actives = []
         self.all_products = []
 
-        self.all_cases = [self.first, self.second, self.third, self.fourth, self.fifth]
-        self.all_cases_mp = [self.first_mp, self.second_mp, self.third_mp, self.fourth_mp, self.fifth_mp]
+        self.all_cases = self.product_cases
+        self.all_cases_mp = self.product_cases_mp
+        self.product_case_pairs = list(zip(self.product_cases, self.product_cases_mp))
+        self.product_cases_by_key = {}
+        self.product_cases_by_phase_id = {}
 
     def close_shms(self):
-        self.first.close_and_unlink_shared_memory()
-        self.second.close_and_unlink_shared_memory()
-        self.third.close_and_unlink_shared_memory()
-        self.fourth.close_and_unlink_shared_memory()
-        self.fifth.close_and_unlink_shared_memory()
+        for case in self.product_cases:
+            case.close_and_unlink_shared_memory()
 
         if self.accumulated_products_shm is not None:
             self.accumulated_products_shm.close()
             self.accumulated_products_shm.unlink()
-        if self.product_owner_shm is not None:
-            self.product_owner_shm.close()
-            self.product_owner_shm.unlink()
+        if self.product_state_shm is not None:
+            self.product_state_shm.close()
+            self.product_state_shm.unlink()
 
         if self.precip_3d_init_shm is not None:
             self.precip_3d_init_shm.close()
             self.precip_3d_init_shm.unlink()
-
-    def reaccumulate_products(self, exclude_case):
-        np.add(self.first.product.c3d, self.second.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-        np.add(self.accumulated_products, self.third.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-        np.add(self.accumulated_products, self.fourth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-        np.add(self.accumulated_products, self.fifth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-        np.subtract(self.accumulated_products, exclude_case.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-
-    def reaccumulate_products_no_exclusion(self):
-        np.add(self.first.product.c3d, self.second.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-        np.add(self.accumulated_products, self.third.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-        np.add(self.accumulated_products, self.fourth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
-        np.add(self.accumulated_products, self.fifth.product.c3d, out=self.accumulated_products, dtype=np.ubyte)
     
+    def add_case(self) -> tuple[CaseSetUp, CaseSetUpMP]:
+        new_case = CaseSetUp()
+        new_case_mp = CaseSetUpMP()
+        new_case.is_active = True
+        new_case_mp.is_active = True
+        self.product_cases.append(new_case)
+        self.product_cases_mp.append(new_case_mp)
+        self.product_case_pairs = list(zip(self.product_cases, self.product_cases_mp))
+
+    def add_oxidant(self, oxidant):
+        if oxidant not in self.all_oxidants:
+            self.all_oxidants.append(oxidant)
     
+    def add_active(self, active):
+        if active not in self.all_actives:
+            self.all_actives.append(active)
+    
+    def add_product(self, product):
+        if product not in self.all_products:
+            self.all_products.append(product)
+
     def get_all_oxidants(self):
         self.all_oxidants = []
         for case in self.all_cases:
@@ -156,95 +147,3 @@ class CaseRef:
         for case in self.all_cases:
             if case.product is not None and case.is_active:
                 self.all_products.append(case.product)
-
-
-DEFAULT_PARAM = {
-    "oxidant": {"primary": {"elem": "N",
-                            "diffusion_condition": "N in Ni20Cr2Ti Krupp",
-                            "cells_concentration": 0.01},
-                "secondary": {"elem": "None",
-                              "diffusion_condition": "Test",
-                              "cells_concentration": 0.1}},
-
-    "active_element": {"primary": {"elem": "Ti",
-                                   "diffusion_condition": "Ti in Ni Krupp",
-                                   "mass_concentration": 0.02,
-                                   "cells_concentration": 0.04},
-                       "secondary": {"elem": "None",
-                                     "diffusion_condition": "Test",
-                                     "mass_concentration": 0.02,
-                                     "cells_concentration": 0.02}
-                       },
-    "matrix_elem": {"elem": "Ni",
-                    "diffusion_condition": "not_used",
-                    "concentration": 0},
-
-    "full_cells": False,
-    "diff_in_precipitation": 3.05 * 10 ** -14,
-    "diff_out_precipitation": 3.05 * 10 ** -14,
-    "temperature": 1000,
-    "n_cells_per_axis": 102,
-    "n_iterations": 1000,
-    "stride": 1,
-    "sim_time": 720000,
-    "size": 0.0005,
-
-    "threshold_inward": 1,
-    "threshold_outward": 1,
-    "sol_prod": 5.621 * 10 ** -10,
-
-    "nucleation_probability": 1,
-    "het_factor": 300,
-
-    "dissolution_p": 0.1,
-    "dissolution_n": 2,
-    "exponent_power": 3,
-    "block_scale_factor": 2,
-
-    "inward_diffusion": True,
-    "outward_diffusion": True,
-    "compute_precipitations": True,
-    "diffusion_in_precipitation": None,
-
-    "save_whole": False,
-    "save_path": 'W:/SIMCA/test_runs_data/',
-
-    "neigh_range": 1,
-    "decompose_precip": False,
-
-    "phase_fraction_lim": 0.123456789,
-    "hf_deg_lim": 0.123456789,
-
-    "lowest_neigh_numb": 0.123456789,
-    "final_nucl_prob": 0.123456789,
-
-    "min_dissol_prob": 0.123456789,
-    "het_factor_dissolution": 0.123456789,
-
-    "final_dissol_prob": 0.123456789,
-    "final_het_factor_dissol": 0.123456789,
-
-    "final_min_dissol_prob": 0.123456789,
-
-    "max_neigh_numb": 0.123456789,
-
-    "product_kinetic_const": 0.123456789,
-
-    "error_prod_conc": 0.123456789,
-
-    "init_P1": 0.123456789,
-    "final_P1": 0.123456789,
-    "b_const_P1": 0.123456789,
-
-    "nucl_adapt_function": 0.123456789,
-    "dissol_adapt_function": 0.123456789,
-
-    "init_P1_diss": 0.123456789,
-    "final_P1_diss": 0.123456789,
-    "b_const_P1_diss": 0.123456789,
-
-    "b_const_P0_nucl": 0.123456789,
-
-    "bend_b_init":  0.123456789,
-    "bend_b_final":  0.123456789,
-}

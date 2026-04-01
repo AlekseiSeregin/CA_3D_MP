@@ -12,12 +12,18 @@ class Config:
 
     PRODUCTS = ProdGroups()
     PRODUCTS.PRIMARY = ProdInput()
-    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 3
-    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 2
+    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 1
+    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 1
+    PRODUCTS.PRIMARY.ELEMENT = "Cr2O3"
+    PRODUCTS.PRIMARY.COMPONENTS = ["Cr", "O"]
+    PRODUCTS.PRIMARY.PRIORITY = 1
 
     PRODUCTS.SECONDARY = ProdInput()
     PRODUCTS.SECONDARY.THRESHOLD_INWARD = 2
     PRODUCTS.SECONDARY.THRESHOLD_OUTWARD = 4
+    PRODUCTS.SECONDARY.ELEMENT = "NiCr2O4"
+    PRODUCTS.SECONDARY.COMPONENTS = ["Cr", "O"]
+    PRODUCTS.SECONDARY.PRIORITY = 2
 
     PRODUCTS.TERNARY = ProdInput()
     # PRODUCTS.TERNARY.THRESHOLD_INWARD = 4
@@ -110,11 +116,16 @@ class Config:
     # Nucleation kernel mode:
     #   legacy_prob   -> existing probabilistic 1:1 inward/outward
     #   legacy_simple -> existing simplified 1:1 inward/outward
+    #   legacy_prob_owner   -> legacy probabilistic with owner-phase exclusion
+    #   legacy_simple_owner -> legacy simplified with owner-phase exclusion
     #   stoich_prob   -> threshold-based probabilistic nucleation
     #   stoich_simple -> threshold-based simplified nucleation
     #   stoich_prob_owner   -> threshold-based probabilistic nucleation with owner-phase exclusion
     #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
-    NUCLEATION_MODE = "legacy_simple"
+    NUCLEATION_MODE = "legacy_simple_owner"
+    # If True, precipitation stages are executed sequentially by product PRIORITY
+    # using PRODUCTS.* configuration (ELEMENT/COMPONENTS).
+    USE_PRODUCT_STAGE_SEQUENCE = True
 
     # Execution___________________________________________________________________
     # MULTIPROCESSING = False

@@ -7,218 +7,39 @@ _CACHE = False
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
-def go_around_bool(array_3d, arounds):
-    all_neighbours = []
-    # trick to initialize an empty list with known type
-    single_neighbours = [np.ubyte(x) for x in range(0)]
-    for seed_arounds in arounds:
-        for point in seed_arounds:
-            single_neighbours.append(array_3d[point[0], point[1], point[2]])
-        all_neighbours.append(single_neighbours)
-        single_neighbours = [np.ubyte(x) for x in range(0)]
-    return np.array(all_neighbours, dtype=np.bool_)
+def product_counts_upto_bound_from_state(owner_phase, state_count, phase_id, u_bound):
+    """Per-x-page product counts from unified state for k in [0, u_bound]."""
+    pid = np.uint8(phase_id)
+    ub = int(u_bound)
+    out = np.zeros(ub + 1, dtype=np.uint32)
+    n_i = owner_phase.shape[0]
+    n_j = owner_phase.shape[1]
+    for k in range(ub + 1):
+        s = 0
+        for i in range(n_i):
+            for j in range(n_j):
+                if owner_phase[i, j, k] == pid:
+                    s += int(state_count[i, j, k])
+        out[k] = s
+    return out
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
-def separate_in_interface(scale, arounds):
-    out_int = [np.uint32(x) for x in range(0)]
-    in_int = [np.uint32(x) for x in range(0)]
-    blocked = [np.uint32(x) for x in range(0)]
-    single_neighbours = [bool(x) for x in range(0)]
-    for index, seed_arounds in enumerate(arounds):
-        if scale[seed_arounds[-1][0], seed_arounds[-1][1], seed_arounds[-1][2]]:
-            for point in seed_arounds[:-1]:
-                single_neighbours.append(bool(scale[point[0], point[1], point[2]]))
-            if 0 < sum(single_neighbours) < 4:
-                in_int.append(np.uint32(index))
-            else:
-                blocked.append(np.uint32(index))
-        else:
-            out_int.append(np.uint32(index))
-        single_neighbours = [bool(x) for x in range(0)]
-    return np.array(in_int, dtype=np.uint32), np.array(blocked, dtype=np.uint32), np.array(out_int, dtype=np.uint32)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def go_around_int(array_3d, arounds):
-    all_neighbours = []
-    # trick to initialize an empty list with known type
-    single_neighbours = [np.ubyte(x) for x in range(0)]
-    for seed_arounds in arounds:
-        for point in seed_arounds:
-            single_neighbours.append(array_3d[point[0], point[1], point[2]])
-        all_neighbours.append(single_neighbours)
-        single_neighbours = [np.ubyte(x) for x in range(0)]
-    return np.array(all_neighbours, dtype=np.ubyte)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def go_around_int_and_summ(array_3d, arounds):
-    all_neighbours = []
-    # trick to initialize an empty list with known type
-    single_neighbours = [np.ubyte(x) for x in range(0)]
-    for seed_arounds in arounds:
-        for point in seed_arounds:
-            single_neighbours.append(array_3d[point[0], point[1], point[2]])
-        all_neighbours.append(single_neighbours)
-        single_neighbours = [np.ubyte(x) for x in range(0)]
-    return np.array(all_neighbours, dtype=np.ubyte)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def go_around_bool_dissol(array_3d, arounds):
-    all_neigh = []
-    # trick to initialize an empty list with known type
-    single_neigh = [np.bool_(x) for x in range(0)]
-    for seed_arounds in arounds:
-        for point in seed_arounds:
-            single_neigh.append(array_3d[point[0], point[1], point[2]])
-        all_neigh.append(single_neigh)
-        single_neigh = [np.bool_(x) for x in range(0)]
-    return np.array(all_neigh, dtype=np.bool_)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def check_at_coord_dissol(array_3d, coords):
-    # trick to initialize an empty list with known type
-    result_coords = [np.uint32(x) for x in range(0)]
-    for coordinate in coords.transpose():
-        result_coords.append(array_3d[coordinate[0], coordinate[1], coordinate[2]])
-        # where_full.append(np.uint32(index))
-    return np.array(result_coords, dtype=np.uint32)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def check_at_coord(array_3d, coordinates):
-    # trick to initialize an empty list with known type
-    result_coords = [np.bool_(x) for x in range(0)]
-    for single_coordinate in coordinates:
-        result_coords.append(array_3d[single_coordinate[0], single_coordinate[1], single_coordinate[2]])
-    return np.array(result_coords, dtype=np.bool_)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def check_at_coord_new(array_3d, coordinates):
-    # trick to initialize an empty list with known type
-    result_ind = [np.uint32(x) for x in range(0)]
-    counts = [np.ubyte(x) for x in range(0)]
-    for index, coord in enumerate(coordinates):
-        array_val = array_3d[coord[0], coord[1], coord[2]]
-        if array_val:
-            result_ind.append(np.uint32(index))
-            counts.append(np.ubyte(array_val))
-    return np.array(result_ind, dtype=np.uint32), np.array(counts, dtype=np.ubyte)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def insert_counts(array_3d, points, threshold):
-    for point in points.transpose():
-        array_3d[point[0], point[1], point[2]] += threshold
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def decrease_counts(array_3d, points):
-    zero_positions = []
-    for ind, point in enumerate(points.transpose()):
-        if array_3d[point[0], point[1], point[2]] > 0:
-            array_3d[point[0], point[1], point[2]] -= 1
-        else:
-            zero_positions.append(ind)
-    return zero_positions
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def just_decrease_counts(array_3d, points):
-    for point in points.transpose():
-        array_3d[point[0], point[1], point[2]] -= 1
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def check_in_scale(scale, cells, dirs):
-    # trick to initialize an empty list with known type
-    out_scale = [np.uint32(x) for x in range(0)]
-    for index, coordinate in enumerate(cells.transpose()):
-        if not scale[coordinate[0], coordinate[1], coordinate[2]]:
-            out_scale.append(np.uint32(index))
-        else:
-            dirs[:, index] *= -1
-    return np.array(out_scale, dtype=np.uint32)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def check_in_scale_adj(scale, cells):
-    # trick to initialize an empty list with known type
-    out_scale = [np.uint32(x) for x in range(0)]
-    in_scale = [np.uint32(x) for x in range(0)]
-    for index, coordinate in enumerate(cells.transpose()):
-        if not scale[coordinate[0], coordinate[1], coordinate[2]]:
-            out_scale.append(np.uint32(index))
-        else:
-            in_scale.append(np.uint32(index))
-    return np.array(out_scale, dtype=np.uint32), np.array(in_scale, dtype=np.uint32)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def check_in_scale_mp(scale, cells, dirs, working_range):
-    # trick to initialize an empty list with known type
-    out_scale = [np.uint32(x) for x in range(0)]
-    for index, coordinate in enumerate(cells[:, working_range].transpose()):
-        if not scale[coordinate[0], coordinate[1], coordinate[2]]:
-            out_scale.append(np.uint32(index))
-        else:
-            dirs[:, working_range[index]] *= -1
-    return np.array(out_scale, dtype=np.uint32)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def check_in_scale_mp_adj(scale, cells, working_range):
-    # trick to initialize an empty list with known type
-    out_scale = [np.uint32(x) for x in range(0)]
-    in_scale = [np.uint32(x) for x in range(0)]
-    for index, coordinate in enumerate(cells[:, working_range].transpose()):
-        if not scale[coordinate[0], coordinate[1], coordinate[2]]:
-            out_scale.append(np.uint32(index))
-        else:
-            in_scale.append(np.uint32(index))
-    return np.array(out_scale, dtype=np.uint32), np.array(in_scale, dtype=np.uint32)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def separate_in_gb(bool_arr):
-    # trick to initialize an empty list with known type
-    out_gb = [np.uint32(x) for x in range(0)]
-    in_gb = [np.uint32(x) for x in range(0)]
-    for index, bool_item in enumerate(bool_arr):
-        if bool_item:
-            in_gb.append(np.uint32(index))
-        else:
-            out_gb.append(np.uint32(index))
-    return np.array(in_gb, dtype=np.uint32), np.array(out_gb, dtype=np.uint32)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def aggregate(aggregated_ind, all_neigh_bool):
-    # trick to initialize an empty list with known type
-    where_blocks = [np.uint32(x) for x in range(0)]
-    for index, item in enumerate(all_neigh_bool):
-        for step in aggregated_ind:
-            if np.sum(item[step]) == 7:
-                where_blocks.append(np.uint32(index))
-                break
-    return np.array(where_blocks, dtype=np.uint32)
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def aggregate_and_count(aggregated_ind, all_neigh_bool):
-    # trick to initialize an empty list with known type
-    block_counts = [np.uint32(x) for x in range(0)]
-    for item in all_neigh_bool:
-        curr_count = 0
-        for step in aggregated_ind:
-            if np.sum(item[step]) == 7:
-                curr_count += 1
-        block_counts.append(np.uint32(curr_count))
-    return np.array(block_counts, dtype=np.uint32)
+def product_counts_at_indexes_from_state(owner_phase, state_count, phase_id, page_indexes):
+    """Per-x-page product counts from unified state for explicit page indexes."""
+    pid = np.uint8(phase_id)
+    n_i = owner_phase.shape[0]
+    n_j = owner_phase.shape[1]
+    out = np.zeros(page_indexes.shape[0], dtype=np.uint32)
+    for p in range(page_indexes.shape[0]):
+        k = int(page_indexes[p])
+        s = 0
+        for i in range(n_i):
+            for j in range(n_j):
+                if owner_phase[i, j, k] == pid:
+                    s += int(state_count[i, j, k])
+        out[p] = s
+    return out
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -356,16 +177,175 @@ def _nucleation_subblock_apply_pbc(ii, jj, kk, n_cells):
     return ii, jj, kk, True
 
 
+# @numba.njit(fastmath=True, cache=_CACHE)
+# def nucleation_subblock_kernel(
+#     oxidant,
+#     oxidant_dirs,
+#     active,
+#     active_dirs,
+#     product,
+#     full_3d,
+#     product_init,
+#     product_x_nzs,
+#     ox_num,
+#     seed_slab_k,
+#     plane_indexes,
+#     active_check_offsets,
+#     flat_neigh_offsets,
+#     values_pp,
+#     const_a_pp,
+#     const_b_pp,
+#     const_c_pp,
+#     const_d_pp,
+#     n_cells,
+#     seed,
+# ):
+#     """
+#     Numba kernel for subblock nucleation. active_check_offsets = (9, 3) yz-plane offsets including
+#     center for checking actives. flat_neigh_offsets = (6, 3) or (7, 3) face neighbours for
+#     product_init count (7 if ox_num > 1, includes center). product/full_3d/product_x_nzs written to SHM.
+#     """
+#     np.random.seed(seed)
+#     n2 = n_cells * n_cells
+#     n_active = active_check_offsets.shape[0]
+
+#     for k in seed_slab_k:
+#         for i in plane_indexes:
+#             for j in range(n_cells):
+#                 c_max = int(oxidant[i, j, k])
+#                 if full_3d[i, j, k] or c_max <= 0:
+#                     continue
+#                 for _ in range(c_max):
+#                     if product[i, j, k] >= ox_num:
+#                         break
+#                     valid_count = 0
+#                     _ni = np.empty(n_active, dtype=np.intp)
+#                     _nj = np.empty(n_active, dtype=np.intp)
+#                     _nk = np.empty(n_active, dtype=np.intp)
+#                     for row in active_check_offsets:
+#                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+#                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+#                             i + di, j + dj, k + dk, n_cells
+#                         )
+#                         if valid and active[ii, jj, kk] > 0:
+#                             _ni[valid_count] = ii
+#                             _nj[valid_count] = jj
+#                             _nk[valid_count] = kk
+#                             valid_count += 1
+#                     if valid_count == 0:
+#                         continue
+#                     flat_count = 0
+#                     for row in flat_neigh_offsets:
+#                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+#                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+#                             i + di, j + dj, k + dk, n_cells
+#                         )
+#                         if valid and product_init[ii, jj, kk] > 0:
+#                             flat_count += 1
+#                     # Probability
+#                     if flat_count == 0:
+#                         prob = values_pp[k]
+#                     else:
+#                         prob = (
+#                             const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
+#                             + const_d_pp[k]
+#                         )
+#                     if np.random.random() >= prob:
+#                         continue
+#                     # Pick one valid neighbour
+#                     pick = np.random.randint(0, valid_count)
+#                     ni, nj, nk = _ni[pick], _nj[pick], _nk[pick]
+#                     # Decrement counts and zero the freed dir slot (diffusion segment [count|dirs])
+#                     idx_a = ni + n_cells * nj + n2 * nk
+#                     slot_a = active[ni, nj, nk] - 1
+#                     active_dirs[idx_a, slot_a] = 0
+#                     active[ni, nj, nk] -= 1
+#                     idx_o = i + n_cells * j + n2 * k
+#                     slot_o = oxidant[i, j, k] - 1
+#                     oxidant_dirs[idx_o, slot_o] = 0
+#                     oxidant[i, j, k] -= 1
+#                     product[i, j, k] += 1
+#                     if product[i, j, k] >= ox_num:
+#                         full_3d[i, j, k] = True
+#                     product_x_nzs[k] = True
+
+
+# @numba.njit(fastmath=True, cache=_CACHE)
+# def nucleation_subblock_kernel_simple(
+#     oxidant,
+#     oxidant_dirs,
+#     active,
+#     active_dirs,
+#     product,
+#     full_3d,
+#     product_x_nzs,
+#     ox_num,
+#     seed_slab_k,
+#     plane_indexes,
+#     active_check_offsets,
+#     n_cells,
+#     seed,
+# ):
+#     """
+#     Simplified nucleation: if an inward particle (oxidant) has at least one outward active
+#     neighbour, nucleation happens (pick one at random). No flat-neighbour count, no probabilities.
+#     Same in-place updates to oxidant/active/product/full_3d/product_x_nzs.
+#     """
+#     np.random.seed(seed)
+#     n2 = n_cells * n_cells
+#     n_active = active_check_offsets.shape[0]
+
+#     for k in seed_slab_k:
+#         for i in plane_indexes:
+#             for j in range(n_cells):
+#                 if full_3d[i, j, k] or oxidant[i, j, k] <= 0:
+#                     continue
+#                 c_max = int(oxidant[i, j, k])
+#                 for _ in range(c_max):
+#                     if product[i, j, k] >= ox_num:
+#                         break
+#                     valid_count = 0
+#                     _ni = np.empty(n_active, dtype=np.intp)
+#                     _nj = np.empty(n_active, dtype=np.intp)
+#                     _nk = np.empty(n_active, dtype=np.intp)
+#                     for row in active_check_offsets:
+#                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+#                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+#                             i + di, j + dj, k + dk, n_cells
+#                         )
+#                         if valid and active[ii, jj, kk] > 0:
+#                             _ni[valid_count] = ii
+#                             _nj[valid_count] = jj
+#                             _nk[valid_count] = kk
+#                             valid_count += 1
+#                     if valid_count == 0:
+#                         continue
+#                     # No probability: pick one valid neighbour and nucleate
+#                     pick = np.random.randint(0, valid_count)
+#                     ni, nj, nk = _ni[pick], _nj[pick], _nk[pick]
+#                     idx_a = ni + n_cells * nj + n2 * nk
+#                     slot_a = active[ni, nj, nk] - 1
+#                     active_dirs[idx_a, slot_a] = 0
+#                     active[ni, nj, nk] -= 1
+#                     idx_o = i + n_cells * j + n2 * k
+#                     slot_o = oxidant[i, j, k] - 1
+#                     oxidant_dirs[idx_o, slot_o] = 0
+#                     oxidant[i, j, k] -= 1
+#                     product[i, j, k] += 1
+#                     if product[i, j, k] >= ox_num:
+#                         full_3d[i, j, k] = True
+#                     product_x_nzs[k] = True
+
+
 @numba.njit(fastmath=True, cache=_CACHE)
-def nucleation_subblock_kernel(
+def nucleation_subblock_kernel_owner(
     oxidant,
     oxidant_dirs,
     active,
     active_dirs,
-    product,
-    full_3d,
     product_init,
-    product_x_nzs,
+    product_state,
+    phase_id,
     ox_num,
     seed_slab_k,
     plane_indexes,
@@ -377,25 +357,30 @@ def nucleation_subblock_kernel(
     const_c_pp,
     const_d_pp,
     n_cells,
-    seed,
+    seed
 ):
-    """
-    Numba kernel for subblock nucleation. active_check_offsets = (9, 3) yz-plane offsets including
-    center for checking actives. flat_neigh_offsets = (6, 3) or (7, 3) face neighbours for
-    product_init count (7 if ox_num > 1, includes center). product/full_3d/product_x_nzs written to SHM.
-    """
+    """Owner-aware legacy probabilistic nucleation (1 inward : 1 outward)."""
     np.random.seed(seed)
     n2 = n_cells * n_cells
     n_active = active_check_offsets.shape[0]
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
 
     for k in seed_slab_k:
         for i in plane_indexes:
             for j in range(n_cells):
-                c_max = int(oxidant[i, j, k])
-                if full_3d[i, j, k] or c_max <= 0:
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
                     continue
+                c_max = int(oxidant[i, j, k])
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
                 for _ in range(c_max):
-                    if product[i, j, k] >= ox_num:
+                    if int(state_count[i, j, k]) >= ox_num or oxidant[i, j, k] <= 0:
+                        break
+                    if owner != 0 and owner != pid:
                         break
                     valid_count = 0
                     _ni = np.empty(n_active, dtype=np.intp)
@@ -413,6 +398,7 @@ def nucleation_subblock_kernel(
                             valid_count += 1
                     if valid_count == 0:
                         continue
+
                     flat_count = 0
                     for row in flat_neigh_offsets:
                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
@@ -421,7 +407,6 @@ def nucleation_subblock_kernel(
                         )
                         if valid and product_init[ii, jj, kk] > 0:
                             flat_count += 1
-                    # Probability
                     if flat_count == 0:
                         prob = values_pp[k]
                     else:
@@ -431,33 +416,32 @@ def nucleation_subblock_kernel(
                         )
                     if np.random.random() >= prob:
                         continue
-                    # Pick one valid neighbour
+
                     pick = np.random.randint(0, valid_count)
                     ni, nj, nk = _ni[pick], _nj[pick], _nk[pick]
-                    # Decrement counts and zero the freed dir slot (diffusion segment [count|dirs])
                     idx_a = ni + n_cells * nj + n2 * nk
                     slot_a = active[ni, nj, nk] - 1
                     active_dirs[idx_a, slot_a] = 0
                     active[ni, nj, nk] -= 1
-                    idx_o = i + n_cells * j + n2 * k
+
                     slot_o = oxidant[i, j, k] - 1
                     oxidant_dirs[idx_o, slot_o] = 0
                     oxidant[i, j, k] -= 1
-                    product[i, j, k] += 1
-                    if product[i, j, k] >= ox_num:
-                        full_3d[i, j, k] = True
-                    product_x_nzs[k] = True
+
+                    if owner == 0:
+                        owner_phase[i, j, k] = pid
+                    state_count[i, j, k] = np.uint8(int(state_count[i, j, k]) + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
-def nucleation_subblock_kernel_simple(
+def nucleation_subblock_kernel_simple_owner(
     oxidant,
     oxidant_dirs,
     active,
     active_dirs,
-    product,
-    full_3d,
-    product_x_nzs,
+    product_init,
+    product_state,
+    phase_id,
     ox_num,
     seed_slab_k,
     plane_indexes,
@@ -465,23 +449,28 @@ def nucleation_subblock_kernel_simple(
     n_cells,
     seed,
 ):
-    """
-    Simplified nucleation: if an inward particle (oxidant) has at least one outward active
-    neighbour, nucleation happens (pick one at random). No flat-neighbour count, no probabilities.
-    Same in-place updates to oxidant/active/product/full_3d/product_x_nzs.
-    """
+    """Owner-aware legacy simplified nucleation (1 inward : 1 outward, no probability)."""
     np.random.seed(seed)
     n2 = n_cells * n_cells
     n_active = active_check_offsets.shape[0]
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
 
     for k in seed_slab_k:
         for i in plane_indexes:
             for j in range(n_cells):
-                if full_3d[i, j, k] or oxidant[i, j, k] <= 0:
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
                     continue
                 c_max = int(oxidant[i, j, k])
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
                 for _ in range(c_max):
-                    if product[i, j, k] >= ox_num:
+                    if int(state_count[i, j, k]) >= ox_num or oxidant[i, j, k] <= 0:
+                        break
+                    if owner != 0 and owner != pid:
                         break
                     valid_count = 0
                     _ni = np.empty(n_active, dtype=np.intp)
@@ -499,238 +488,231 @@ def nucleation_subblock_kernel_simple(
                             valid_count += 1
                     if valid_count == 0:
                         continue
-                    # No probability: pick one valid neighbour and nucleate
+
                     pick = np.random.randint(0, valid_count)
                     ni, nj, nk = _ni[pick], _nj[pick], _nk[pick]
                     idx_a = ni + n_cells * nj + n2 * nk
                     slot_a = active[ni, nj, nk] - 1
                     active_dirs[idx_a, slot_a] = 0
                     active[ni, nj, nk] -= 1
-                    idx_o = i + n_cells * j + n2 * k
+
                     slot_o = oxidant[i, j, k] - 1
                     oxidant_dirs[idx_o, slot_o] = 0
                     oxidant[i, j, k] -= 1
-                    product[i, j, k] += 1
-                    if product[i, j, k] >= ox_num:
-                        full_3d[i, j, k] = True
-                    product_x_nzs[k] = True
+
+                    if owner == 0:
+                        owner_phase[i, j, k] = pid
+                    state_count[i, j, k] = np.uint8(int(state_count[i, j, k]) + 1)
 
 
-@numba.njit(fastmath=True, cache=_CACHE)
-def nucleation_subblock_kernel_stoich(
-    oxidant,
-    oxidant_dirs,
-    active,
-    active_dirs,
-    product,
-    full_3d,
-    product_init,
-    product_x_nzs,
-    ox_num,
-    threshold_inward,
-    threshold_outward,
-    seed_slab_k,
-    plane_indexes,
-    active_check_offsets,
-    flat_neigh_offsets,
-    values_pp,
-    const_a_pp,
-    const_b_pp,
-    const_c_pp,
-    const_d_pp,
-    n_cells,
-    seed,
-):
-    """
-    Stoichiometric probabilistic nucleation.
-    One successful event consumes threshold_inward oxidants from (i,j,k) and
-    threshold_outward active particles from local valid neighbours, then adds one product.
-    """
-    np.random.seed(seed)
-    n2 = n_cells * n_cells
-    n_active = active_check_offsets.shape[0]
-    thr_in = int(threshold_inward)
-    thr_out = int(threshold_outward)
-    if thr_in <= 0:
-        thr_in = 1
-    if thr_out < 0:
-        thr_out = 0
+# @numba.njit(fastmath=True, cache=_CACHE)
+# def nucleation_subblock_kernel_stoich(
+#     oxidant,
+#     oxidant_dirs,
+#     active,
+#     active_dirs,
+#     product_init,
+#     ox_num,
+#     threshold_inward,
+#     threshold_outward,
+#     seed_slab_k,
+#     plane_indexes,
+#     active_check_offsets,
+#     flat_neigh_offsets,
+#     values_pp,
+#     const_a_pp,
+#     const_b_pp,
+#     const_c_pp,
+#     const_d_pp,
+#     n_cells,
+#     seed,
+# ):
+#     """
+#     Stoichiometric probabilistic nucleation.
+#     One successful event consumes threshold_inward oxidants from (i,j,k) and
+#     threshold_outward active particles from local valid neighbours, then adds one product.
+#     """
+#     np.random.seed(seed)
+#     n2 = n_cells * n_cells
+#     n_active = active_check_offsets.shape[0]
+#     thr_in = int(threshold_inward)
+#     thr_out = int(threshold_outward)
 
-    for k in seed_slab_k:
-        for i in plane_indexes:
-            for j in range(n_cells):
-                if full_3d[i, j, k]:
-                    continue
-                c_max = int(oxidant[i, j, k] // thr_in)
-                if c_max <= 0:
-                    continue
-                idx_o = i + n_cells * j + n2 * k
-                for _ in range(c_max):
-                    if product[i, j, k] >= ox_num:
-                        break
-                    if oxidant[i, j, k] < thr_in:
-                        break
+#     for k in seed_slab_k:
+#         for i in plane_indexes:
+#             for j in range(n_cells):
+#                 if full_3d[i, j, k]:
+#                     continue
+#                 c_max = int(oxidant[i, j, k] // thr_in)
+#                 if c_max <= 0:
+#                     continue
+#                 idx_o = i + n_cells * j + n2 * k
+#                 for _ in range(c_max):
+#                     if product[i, j, k] >= ox_num:
+#                         break
+#                     if oxidant[i, j, k] < thr_in:
+#                         break
 
-                    valid_count = 0
-                    total_active = 0
-                    _ni = np.empty(n_active, dtype=np.intp)
-                    _nj = np.empty(n_active, dtype=np.intp)
-                    _nk = np.empty(n_active, dtype=np.intp)
-                    _nidx = np.empty(n_active, dtype=np.intp)
-                    _ac = np.empty(n_active, dtype=np.int32)
-                    for row in active_check_offsets:
-                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
-                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                            i + di, j + dj, k + dk, n_cells
-                        )
-                        if valid and active[ii, jj, kk] > 0:
-                            cnt = int(active[ii, jj, kk])
-                            _ni[valid_count] = ii
-                            _nj[valid_count] = jj
-                            _nk[valid_count] = kk
-                            _nidx[valid_count] = ii + n_cells * jj + n2 * kk
-                            _ac[valid_count] = cnt
-                            total_active += cnt
-                            valid_count += 1
+#                     valid_count = 0
+#                     total_active = 0
+#                     _ni = np.empty(n_active, dtype=np.intp)
+#                     _nj = np.empty(n_active, dtype=np.intp)
+#                     _nk = np.empty(n_active, dtype=np.intp)
+#                     _nidx = np.empty(n_active, dtype=np.intp)
+#                     _ac = np.empty(n_active, dtype=np.int32)
+#                     for row in active_check_offsets:
+#                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+#                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+#                             i + di, j + dj, k + dk, n_cells
+#                         )
+#                         if valid and active[ii, jj, kk] > 0:
+#                             cnt = int(active[ii, jj, kk])
+#                             _ni[valid_count] = ii
+#                             _nj[valid_count] = jj
+#                             _nk[valid_count] = kk
+#                             _nidx[valid_count] = ii + n_cells * jj + n2 * kk
+#                             _ac[valid_count] = cnt
+#                             total_active += cnt
+#                             valid_count += 1
 
-                    if thr_out > 0 and total_active < thr_out:
-                        continue
+#                     if thr_out > 0 and total_active < thr_out:
+#                         continue
 
-                    flat_count = 0
-                    for row in flat_neigh_offsets:
-                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
-                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                            i + di, j + dj, k + dk, n_cells
-                        )
-                        if valid and product_init[ii, jj, kk] > 0:
-                            flat_count += 1
+#                     flat_count = 0
+#                     for row in flat_neigh_offsets:
+#                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+#                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+#                             i + di, j + dj, k + dk, n_cells
+#                         )
+#                         if valid and product_init[ii, jj, kk] > 0:
+#                             flat_count += 1
 
-                    if flat_count == 0:
-                        prob = values_pp[k]
-                    else:
-                        prob = (
-                            const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
-                            + const_d_pp[k]
-                        )
-                    if np.random.random() >= prob:
-                        continue
+#                     if flat_count == 0:
+#                         prob = values_pp[k]
+#                     else:
+#                         prob = (
+#                             const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
+#                             + const_d_pp[k]
+#                         )
+#                     if np.random.random() >= prob:
+#                         continue
 
-                    for _ in range(thr_out):
-                        picked_idx = 0
-                        while _ac[picked_idx] <= 0:
-                            picked_idx += 1
+#                     for _ in range(thr_out):
+#                         picked_idx = 0
+#                         while _ac[picked_idx] <= 0:
+#                             picked_idx += 1
 
-                        ni = _ni[picked_idx]
-                        nj = _nj[picked_idx]
-                        nk = _nk[picked_idx]
-                        nidx = _nidx[picked_idx]
-                        slot_a = active[ni, nj, nk] - 1
-                        active_dirs[nidx, slot_a] = 0
-                        active[ni, nj, nk] -= 1
-                        _ac[picked_idx] -= 1
+#                         ni = _ni[picked_idx]
+#                         nj = _nj[picked_idx]
+#                         nk = _nk[picked_idx]
+#                         nidx = _nidx[picked_idx]
+#                         slot_a = active[ni, nj, nk] - 1
+#                         active_dirs[nidx, slot_a] = 0
+#                         active[ni, nj, nk] -= 1
+#                         _ac[picked_idx] -= 1
 
-                    old_o = int(oxidant[i, j, k])
-                    new_o = old_o - thr_in
-                    oxidant_dirs[idx_o, new_o:old_o] = 0
-                    oxidant[i, j, k] = new_o
+#                     old_o = int(oxidant[i, j, k])
+#                     new_o = old_o - thr_in
+#                     oxidant_dirs[idx_o, new_o:old_o] = 0
+#                     oxidant[i, j, k] = new_o
 
-                    product[i, j, k] += 1
-                    if product[i, j, k] >= ox_num:
-                        full_3d[i, j, k] = True
-                    product_x_nzs[k] = True
+#                     product[i, j, k] += 1
+#                     if product[i, j, k] >= ox_num:
+#                         full_3d[i, j, k] = True
+#                     product_x_nzs[k] = True
 
 
-@numba.njit(fastmath=True, cache=_CACHE)
-def nucleation_subblock_kernel_simple_stoich(
-    oxidant,
-    oxidant_dirs,
-    active,
-    active_dirs,
-    product,
-    full_3d,
-    product_x_nzs,
-    ox_num,
-    threshold_inward,
-    threshold_outward,
-    seed_slab_k,
-    plane_indexes,
-    active_check_offsets,
-    n_cells,
-    seed,
-):
-    """
-    Stoichiometric simplified nucleation (no probability term).
-    One successful event consumes threshold_inward oxidants from (i,j,k) and
-    threshold_outward active particles from local valid neighbours, then adds one product.
-    """
-    np.random.seed(seed)
-    n2 = n_cells * n_cells
-    n_active = active_check_offsets.shape[0]
-    thr_in = int(threshold_inward)
-    thr_out = int(threshold_outward)
+# @numba.njit(fastmath=True, cache=_CACHE)
+# def nucleation_subblock_kernel_simple_stoich(
+#     oxidant,
+#     oxidant_dirs,
+#     active,
+#     active_dirs,
+#     product,
+#     full_3d,
+#     product_x_nzs,
+#     ox_num,
+#     threshold_inward,
+#     threshold_outward,
+#     seed_slab_k,
+#     plane_indexes,
+#     active_check_offsets,
+#     n_cells,
+#     seed,
+# ):
+#     """
+#     Stoichiometric simplified nucleation (no probability term).
+#     One successful event consumes threshold_inward oxidants from (i,j,k) and
+#     threshold_outward active particles from local valid neighbours, then adds one product.
+#     """
+#     np.random.seed(seed)
+#     n2 = n_cells * n_cells
+#     n_active = active_check_offsets.shape[0]
+#     thr_in = int(threshold_inward)
+#     thr_out = int(threshold_outward)
 
-    for k in seed_slab_k:
-        for i in plane_indexes:
-            for j in range(n_cells):
-                if full_3d[i, j, k]:
-                    continue
-                c_max = int(oxidant[i, j, k] // thr_in)
-                if c_max <= 0:
-                    continue
-                idx_o = i + n_cells * j + n2 * k
-                for _ in range(c_max):
-                    if product[i, j, k] >= ox_num:
-                        break
-                    if oxidant[i, j, k] < thr_in:
-                        break
+#     for k in seed_slab_k:
+#         for i in plane_indexes:
+#             for j in range(n_cells):
+#                 if full_3d[i, j, k]:
+#                     continue
+#                 c_max = int(oxidant[i, j, k] // thr_in)
+#                 if c_max <= 0:
+#                     continue
+#                 idx_o = i + n_cells * j + n2 * k
+#                 for _ in range(c_max):
+#                     if product[i, j, k] >= ox_num:
+#                         break
+#                     if oxidant[i, j, k] < thr_in:
+#                         break
 
-                    valid_count = 0
-                    total_active = 0
-                    _ni = np.empty(n_active, dtype=np.intp)
-                    _nj = np.empty(n_active, dtype=np.intp)
-                    _nk = np.empty(n_active, dtype=np.intp)
-                    _nidx = np.empty(n_active, dtype=np.intp)
-                    _ac = np.empty(n_active, dtype=np.int32)
-                    for row in active_check_offsets:
-                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
-                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                            i + di, j + dj, k + dk, n_cells
-                        )
-                        if valid and active[ii, jj, kk] > 0:
-                            cnt = int(active[ii, jj, kk])
-                            _ni[valid_count] = ii
-                            _nj[valid_count] = jj
-                            _nk[valid_count] = kk
-                            _nidx[valid_count] = ii + n_cells * jj + n2 * kk
-                            _ac[valid_count] = cnt
-                            total_active += cnt
-                            valid_count += 1
+#                     valid_count = 0
+#                     total_active = 0
+#                     _ni = np.empty(n_active, dtype=np.intp)
+#                     _nj = np.empty(n_active, dtype=np.intp)
+#                     _nk = np.empty(n_active, dtype=np.intp)
+#                     _nidx = np.empty(n_active, dtype=np.intp)
+#                     _ac = np.empty(n_active, dtype=np.int32)
+#                     for row in active_check_offsets:
+#                         di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+#                         ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+#                             i + di, j + dj, k + dk, n_cells
+#                         )
+#                         if valid and active[ii, jj, kk] > 0:
+#                             cnt = int(active[ii, jj, kk])
+#                             _ni[valid_count] = ii
+#                             _nj[valid_count] = jj
+#                             _nk[valid_count] = kk
+#                             _nidx[valid_count] = ii + n_cells * jj + n2 * kk
+#                             _ac[valid_count] = cnt
+#                             total_active += cnt
+#                             valid_count += 1
 
-                    if total_active < thr_out:
-                        continue
-                    for _ in range(thr_out):
-                        picked_idx = 0
-                        while _ac[picked_idx] <= 0:
-                            picked_idx += 1
+#                     if total_active < thr_out:
+#                         continue
+#                     for _ in range(thr_out):
+#                         picked_idx = 0
+#                         while _ac[picked_idx] <= 0:
+#                             picked_idx += 1
 
-                        ni = _ni[picked_idx]
-                        nj = _nj[picked_idx]
-                        nk = _nk[picked_idx]
-                        nidx = _nidx[picked_idx]
-                        slot_a = active[ni, nj, nk] - 1
-                        active_dirs[nidx, slot_a] = 0
-                        active[ni, nj, nk] -= 1
-                        _ac[picked_idx] -= 1
+#                         ni = _ni[picked_idx]
+#                         nj = _nj[picked_idx]
+#                         nk = _nk[picked_idx]
+#                         nidx = _nidx[picked_idx]
+#                         slot_a = active[ni, nj, nk] - 1
+#                         active_dirs[nidx, slot_a] = 0
+#                         active[ni, nj, nk] -= 1
+#                         _ac[picked_idx] -= 1
 
-                    old_o = int(oxidant[i, j, k])
-                    new_o = old_o - thr_in
-                    oxidant_dirs[idx_o, new_o:old_o] = 0
-                    oxidant[i, j, k] = new_o
+#                     old_o = int(oxidant[i, j, k])
+#                     new_o = old_o - thr_in
+#                     oxidant_dirs[idx_o, new_o:old_o] = 0
+#                     oxidant[i, j, k] = new_o
 
-                    product[i, j, k] += 1
-                    if product[i, j, k] >= ox_num:
-                        full_3d[i, j, k] = True
-                    product_x_nzs[k] = True
+#                     product[i, j, k] += 1
+#                     if product[i, j, k] >= ox_num:
+#                         full_3d[i, j, k] = True
+#                     product_x_nzs[k] = True
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -739,11 +721,8 @@ def nucleation_subblock_kernel_stoich_owner(
     oxidant_dirs,
     active,
     active_dirs,
-    product,
-    full_3d,
     product_init,
-    product_x_nzs,
-    owner_phase,
+    product_state,
     phase_id,
     ox_num,
     threshold_inward,
@@ -763,28 +742,26 @@ def nucleation_subblock_kernel_stoich_owner(
     np.random.seed(seed)
     n2 = n_cells * n_cells
     n_active = active_check_offsets.shape[0]
+    owner_phase = product_state[0]
+    state_count = product_state[1]
     thr_in = int(threshold_inward)
     thr_out = int(threshold_outward)
     pid = np.uint8(phase_id)
-    if thr_in <= 0:
-        thr_in = 1
-    if thr_out < 0:
-        thr_out = 0
 
     for k in seed_slab_k:
         for i in plane_indexes:
             for j in range(n_cells):
                 owner = owner_phase[i, j, k]
-                if (owner != 0 and owner != pid) or full_3d[i, j, k]:
+                if owner != 0 and owner != pid:
                     continue
                 c_max = int(oxidant[i, j, k] // thr_in)
                 if c_max <= 0:
                     continue
                 idx_o = i + n_cells * j + n2 * k
                 for _ in range(c_max):
-                    if product[i, j, k] >= ox_num or oxidant[i, j, k] < thr_in:
+                    cnt_here = int(state_count[i, j, k])
+                    if cnt_here >= ox_num or oxidant[i, j, k] < thr_in:
                         break
-                    owner = owner_phase[i, j, k]
                     if owner != 0 and owner != pid:
                         break
 
@@ -847,11 +824,9 @@ def nucleation_subblock_kernel_stoich_owner(
                     new_o = old_o - thr_in
                     oxidant_dirs[idx_o, new_o:old_o] = 0
                     oxidant[i, j, k] = new_o
-                    product[i, j, k] += 1
-                    owner_phase[i, j, k] = pid
-                    if product[i, j, k] >= ox_num:
-                        full_3d[i, j, k] = True
-                    product_x_nzs[k] = True
+                    if owner == 0:
+                        owner_phase[i, j, k] = pid
+                    state_count[i, j, k] = np.uint8(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -860,10 +835,8 @@ def nucleation_subblock_kernel_simple_stoich_owner(
     oxidant_dirs,
     active,
     active_dirs,
-    product,
-    full_3d,
-    product_x_nzs,
-    owner_phase,
+    product_init,
+    product_state,
     phase_id,
     ox_num,
     threshold_inward,
@@ -877,28 +850,26 @@ def nucleation_subblock_kernel_simple_stoich_owner(
     np.random.seed(seed)
     n2 = n_cells * n_cells
     n_active = active_check_offsets.shape[0]
+    owner_phase = product_state[0]
+    state_count = product_state[1]
     thr_in = int(threshold_inward)
     thr_out = int(threshold_outward)
     pid = np.uint8(phase_id)
-    if thr_in <= 0:
-        thr_in = 1
-    if thr_out < 0:
-        thr_out = 0
 
     for k in seed_slab_k:
         for i in plane_indexes:
             for j in range(n_cells):
                 owner = owner_phase[i, j, k]
-                if (owner != 0 and owner != pid) or full_3d[i, j, k]:
+                if owner != 0 and owner != pid:
                     continue
                 c_max = int(oxidant[i, j, k] // thr_in)
                 if c_max <= 0:
                     continue
                 idx_o = i + n_cells * j + n2 * k
                 for _ in range(c_max):
-                    if product[i, j, k] >= ox_num or oxidant[i, j, k] < thr_in:
+                    cnt_here = int(state_count[i, j, k])
+                    if cnt_here >= ox_num or oxidant[i, j, k] < thr_in:
                         break
-                    owner = owner_phase[i, j, k]
                     if owner != 0 and owner != pid:
                         break
 
@@ -943,11 +914,9 @@ def nucleation_subblock_kernel_simple_stoich_owner(
                     new_o = old_o - thr_in
                     oxidant_dirs[idx_o, new_o:old_o] = 0
                     oxidant[i, j, k] = new_o
-                    product[i, j, k] += 1
-                    owner_phase[i, j, k] = pid
-                    if product[i, j, k] >= ox_num:
-                        full_3d[i, j, k] = True
-                    product_x_nzs[k] = True
+                    if owner == 0:
+                        owner_phase[i, j, k] = pid
+                    state_count[i, j, k] = np.uint8(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -972,18 +941,20 @@ def _dissolution_add_particles_at_cell(
         nidx = i + n_cells * j + n2 * k
         slot_ox = int(oxidant_count[nidx])
         slot_act = int(active_count[nidx])
-        for _ in range(threshold_inward):
-            if slot_ox >= max_per_cell_ox:
-                break
-            r = np.random.randint(0, 6)
-            oxidant_dirs[nidx, slot_ox] = packed_dirs[r]
-            slot_ox += 1
-        for _ in range(threshold_outward):
-            if slot_act >= max_per_cell_active:
-                break
-            r = np.random.randint(0, 6)
-            active_dirs[nidx, slot_act] = packed_dirs[r]
-            slot_act += 1
+        cap_ox = max_per_cell_ox - slot_ox
+        if cap_ox > 0:
+            add_ox = threshold_inward if threshold_inward < cap_ox else cap_ox
+            for _ in range(add_ox):
+                r = np.random.randint(0, 6)
+                oxidant_dirs[nidx, slot_ox] = packed_dirs[r]
+                slot_ox += 1
+        cap_act = max_per_cell_active - slot_act
+        if cap_act > 0:
+            add_act = threshold_outward if threshold_outward < cap_act else cap_act
+            for _ in range(add_act):
+                r = np.random.randint(0, 6)
+                active_dirs[nidx, slot_act] = packed_dirs[r]
+                slot_act += 1
         oxidant_count[nidx] = slot_ox
         active_count[nidx] = slot_act
 
@@ -991,7 +962,6 @@ def _dissolution_add_particles_at_cell(
 @numba.njit(fastmath=True, cache=_CACHE)
 def dissolution_subblock_kernel_snapshot(
     product_read,
-    product,
     full_3d,
     oxidant_count,
     oxidant_dirs,
@@ -1037,8 +1007,8 @@ def dissolution_subblock_kernel_snapshot(
                     ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
                         i + di, j + dj, k + dk, n_cells
                     )
-                    if valid:
-                        flat_count += int(product_read[ii, jj, kk])
+                    if valid and product_read[ii, jj, kk] > 0:
+                        flat_count += 1
                 if flat_count == 0:
                     prob = values_pp[k]
                 else:
@@ -1102,7 +1072,7 @@ def _dissolution_fill_neigh_26(neigh26, offsets_26, i, j, k, n_cells, product_re
         has_neigh = valid and product_read[ii, jj, kk] > 0
         neigh26[ni] = has_neigh
         if ni < 6 and has_neigh:
-            flat_count += int(product_read[ii, jj, kk])
+            flat_count += 1
     return flat_count
 
 
@@ -1189,10 +1159,7 @@ def dissolution_subblock_kernel_snapshot_with_blocks(
 
 @numba.njit(fastmath=True, cache=_CACHE)
 def dissolution_subblock_kernel_snapshot_owner(
-    product_read,
-    product,
-    full_3d,
-    owner_phase,
+    product_state,
     phase_id,
     oxidant_count,
     oxidant_dirs,
@@ -1208,7 +1175,6 @@ def dissolution_subblock_kernel_snapshot_owner(
     const_c_pp,
     const_d_pp,
     n_cells,
-    n_z,
     seed,
     dissolution_thresholds,
     max_per_cell_ox,
@@ -1216,7 +1182,9 @@ def dissolution_subblock_kernel_snapshot_owner(
     packed_dirs,
 ):
     np.random.seed(seed)
-    n_i, n_j, _ = product.shape
+    n_i, n_j, _ = n_cells
+    owner_phase = product_state[0]
+    state_count = product_state[1]
     pid = np.uint8(phase_id)
     coords_list = [(0, 0, 0) for _ in range(0)]
 
@@ -1224,7 +1192,9 @@ def dissolution_subblock_kernel_snapshot_owner(
         for idx_i in range(plane_indexes.shape[0]):
             i = int(plane_indexes[idx_i])
             for j in range(n_j):
-                n_p = int(product[i, j, k])
+                if owner_phase[i, j, k] != pid:
+                    continue
+                n_p = int(state_count[i, j, k])
                 if n_p <= 0:
                     continue
                 flat_count = 0
@@ -1233,8 +1203,8 @@ def dissolution_subblock_kernel_snapshot_owner(
                     dj = int(offsets_26[ni, 1])
                     dk = int(offsets_26[ni, 2])
                     ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
-                    if valid:
-                        flat_count += int(product_read[ii, jj, kk])
+                    if valid and owner_phase[ii, jj, kk] > 0:
+                        flat_count += 1
                 if flat_count == 0:
                     prob = values_pp[k]
                 else:
@@ -1244,12 +1214,10 @@ def dissolution_subblock_kernel_snapshot_owner(
                     )
                 for _ in range(n_p):
                     if np.random.random() < prob:
-                        product[i, j, k] -= 1
+                        state_count[i, j, k] -= 1
                         coords_list.append((i, j, k))
-                if product[i, j, k] <= 0 and k < full_3d.shape[2]:
-                    full_3d[i, j, k] = False
-                    if owner_phase[i, j, k] == pid:
-                        owner_phase[i, j, k] = np.uint8(0)
+                if state_count[i, j, k] <= 0 and owner_phase[i, j, k] == pid:
+                    owner_phase[i, j, k] = np.uint8(0)
 
     if len(coords_list) == 0:
         return
@@ -1269,10 +1237,7 @@ def dissolution_subblock_kernel_snapshot_owner(
 
 @numba.njit(fastmath=True, cache=_CACHE)
 def dissolution_subblock_kernel_snapshot_with_blocks_owner(
-    product_read,
-    product,
-    full_3d,
-    owner_phase,
+    product_state,
     phase_id,
     oxidant_count,
     oxidant_dirs,
@@ -1290,7 +1255,6 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner(
     const_c_pp,
     const_d_pp,
     n_cells,
-    n_z,
     seed,
     dissolution_thresholds,
     max_per_cell_ox,
@@ -1298,7 +1262,9 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner(
     packed_dirs,
 ):
     np.random.seed(seed)
-    n_i, n_j, _ = product.shape
+    n_i, n_j, _ = n_cells, n_cells, n_cells
+    owner_phase = product_state[0]
+    state_count = product_state[1]
     pid = np.uint8(phase_id)
     bsf_inv = 1.0 / bsf if bsf > 0.0 else 1.0
     coords_list = [(0, 0, 0) for _ in range(0)]
@@ -1307,13 +1273,22 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner(
         for idx_i in range(plane_indexes.shape[0]):
             i = int(plane_indexes[idx_i])
             for j in range(n_j):
-                n_p = int(product[i, j, k])
+                if owner_phase[i, j, k] != pid:
+                    continue
+                n_p = int(state_count[i, j, k])
                 if n_p <= 0:
                     continue
                 neigh26 = np.zeros(26, dtype=np.bool_)
-                flat_count = _dissolution_fill_neigh_26(
-                    neigh26, offsets_26, i, j, k, n_cells, product_read
-                )
+                flat_count = 0
+                for ni in range(26):
+                    di = int(offsets_26[ni, 0])
+                    dj = int(offsets_26[ni, 1])
+                    dk = int(offsets_26[ni, 2])
+                    ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                    has_neigh = valid and owner_phase[ii, jj, kk] > 0
+                    neigh26[ni] = has_neigh
+                    if ni < 6 and has_neigh:
+                        flat_count += 1
                 is_block = block_patterns.shape[0] > 0 and _dissolution_is_block_cell(neigh26, block_patterns)
                 if flat_count == 0:
                     prob = values_pp[k]
@@ -1326,12 +1301,10 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner(
                     prob *= bsf_inv
                 for _ in range(n_p):
                     if np.random.random() < prob:
-                        product[i, j, k] -= 1
+                        state_count[i, j, k] -= 1
                         coords_list.append((i, j, k))
-                if product[i, j, k] <= 0 and k < full_3d.shape[2]:
-                    full_3d[i, j, k] = False
-                    if owner_phase[i, j, k] == pid:
-                        owner_phase[i, j, k] = np.uint8(0)
+                if state_count[i, j, k] <= 0 and owner_phase[i, j, k] == pid:
+                    owner_phase[i, j, k] = np.uint8(0)
 
     if len(coords_list) == 0:
         return

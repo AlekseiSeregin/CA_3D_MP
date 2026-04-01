@@ -59,26 +59,26 @@ if __name__ == '__main__':
     class NewSystem(SimulationConfigurator):
         def __init__(self):
             super().__init__()
-            self.c_automata.cases.first.is_active = True
+            # self.c_automata.cases.first.is_active = True
 
             self.c_automata.precip_func = self.c_automata.precip_mp_subblock
 
-            self.c_automata.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(
-                Config.PROBABILITIES.PRIMARY,
-                Config.PRODUCTS.PRIMARY)
+            # self.c_automata.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(
+            #     Config.PROBABILITIES.PRIMARY,
+            #     Config.PRODUCTS.PRIMARY)
             # self.c_automata.cases.first_mp.dissolution_probabilities = utils.DissolutionProbabilities(
             #     Config.PROBABILITIES.PRIMARY)
 
-            self.c_automata.cases.first.dissolution_probabilities = utils.DissolutionProbabilities(
-        Config.PROBABILITIES.PRIMARY)
+        #     self.c_automata.cases.first.dissolution_probabilities = utils.DissolutionProbabilities(
+        # Config.PROBABILITIES.PRIMARY)
 
             self.c_automata.get_cur_ioz_bound = self.c_automata.ioz_depth_furthest_inward
 
             self.c_automata.get_combi_ind = self.c_automata.get_comb_ind_jmatpro
 
-            self.cases.get_all_oxidants()
-            self.cases.get_all_actives()
-            self.cases.get_all_products()
+            # self.cases.get_all_oxidants()
+            # self.cases.get_all_actives()
+            # self.cases.get_all_products()
             self.save_function = self.save_results_only_prod_prime
             # self.c_automata.cases.first.active.diffuse = elementsdgm.diffuse_bulk_mp_numba
 

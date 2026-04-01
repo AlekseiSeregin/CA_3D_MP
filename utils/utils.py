@@ -143,6 +143,11 @@ class Utils:
         else:
             Config.PRODUCTS.PRIMARY.LIND_FLAT_ARRAY = 7
 
+# #########################################################
+        Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = \
+            round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
+# #########################################################
+
         if Config.ACTIVES.SECONDARY_EXISTENCE and Config.OXIDANTS.SECONDARY_EXISTENCE:
             Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = \
                 round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2))

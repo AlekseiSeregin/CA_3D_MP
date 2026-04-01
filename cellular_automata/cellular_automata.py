@@ -12,6 +12,8 @@ from utils.numba_functions import (
     go_around_int,
     insert_counts,
     just_decrease_counts,
+    product_counts_upto_bound_from_state,
+    product_counts_at_indexes_from_state,
 )
 from thermodynamics import *
 from configuration import Config
@@ -62,6 +64,8 @@ class CellularAutomata:
         self.check_intersection = None  # must be defined elsewhere
         self.decomposition = None  # must be defined elsewhere
         self.decomposition_intrinsic = None  # must be defined elsewhere
+        # Ordered (case, case_mp) list built from PRODUCTS config.
+        self.product_stage_sequence = []
 
         self.coord_buffer = None
         self.to_dissol_pn_buffer = None
@@ -256,8 +260,7 @@ class CellularAutomata:
                            in range(self.ioz_bound + 1)], dtype=np.uint32)
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
-        product = np.array([np.sum(self.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.ioz_bound + 1)], dtype=np.uint32)
+        product = self._get_product_counts_upto_bound_for_case(self.cur_case, self.cur_case_mp, self.ioz_bound)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
@@ -431,8 +434,7 @@ class CellularAutomata:
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.cases.first.product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.ioz_bound + 1)], dtype=np.uint32)
+        product = self._get_product_counts_upto_bound_for_case(self.cases.first, self.cases.first_mp, self.ioz_bound)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL * \
                                Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
@@ -499,22 +501,40 @@ class CellularAutomata:
             max_retries=3,
         )
 
+    def _get_product_counts_upto_bound_for_case(self, case, case_mp, u_bound):
+        ub = int(u_bound)
+        pid = int(case_mp.product_phase_id)
+        state = self.cases.product_state
+        owner = state[0]
+        counts = state[1]
+        return product_counts_upto_bound_from_state(owner, counts, pid, ub)
+
+    def _get_product_counts_at_indexes_for_case(self, case, case_mp, page_indexes):
+        idx = np.asarray(page_indexes, dtype=np.intp).ravel()
+        if idx.size == 0:
+            return np.zeros(0, dtype=np.uint32)
+        pid = int(case_mp.product_phase_id)
+        state = self.cases.product_state
+        owner = state[0]
+        counts = state[1]
+        return product_counts_at_indexes_from_state(owner, counts, pid, idx)
+
     def get_comb_ind_jmatpro(self):
         """Single active, single oxidant only (no secondary elements)."""
         self.ensure_jmatpro_pool()
         self.ioz_bound = self.get_cur_ioz_bound()
 
         # Inward/outward now come from diffusion read grids.
-        oxidant_3d = self.cases.first.oxidant.get_3d_grid()[0]
+        oxidant_3d = self.cur_case.oxidant.get_3d_grid()[0]
         oxidant = np.sum(oxidant_3d[:self.ioz_bound + 1, :, :], axis=(1, 2)).astype(np.uint32)
         oxidant_moles = oxidant * Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
 
-        active_3d = self.cases.first.active.get_3d_grid()[0]
+        active_3d = self.cur_case.active.get_3d_grid()[0]
         active = np.sum(active_3d[:self.ioz_bound + 1, :, :], axis=(1, 2)).astype(np.uint32)
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.sum(self.cases.first.product.c3d[:self.ioz_bound + 1, :, :], axis=(1, 2)).astype(np.uint32)
+        product = self._get_product_counts_upto_bound_for_case(self.cur_case, self.cur_case_mp, self.ioz_bound)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL * \
                                Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
@@ -536,8 +556,8 @@ class CellularAutomata:
 
         elements = [
             getattr(Config.MATRIX, "ELEMENT", "Ni"),
-            self.cases.first.active.elem_name,
-            self.cases.first.oxidant.elem_name,
+            self.cur_case.active.elem_name,
+            self.cur_case.oxidant.elem_name,
         ]
         compositions = []
         for i in range(len(active_pure_c)):
@@ -578,8 +598,6 @@ class CellularAutomata:
         adj_coeff_neg = primary_error[coef_ind] * -1
         d_ind = t_ind_z[np.where(product_c[t_ind_z] > 0)[0]]
 
-        self.cur_case = self.cases.first
-        self.cur_case_mp = self.cases.first_mp
         if len(primary_pos_ind) > 0:
             oxidant_indexes = np.where(oxidant > 0)[0]
             active_indexes = np.where(active > 0)[0]
@@ -647,8 +665,7 @@ class CellularAutomata:
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.furthest_index + 1)], dtype=np.uint32)
+        product = self._get_product_counts_upto_bound_for_case(self.cur_case, self.cur_case_mp, self.furthest_index)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *\
                                Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
@@ -870,32 +887,27 @@ class CellularAutomata:
         secondary_active_moles = secondary_active * Config.ACTIVES.SECONDARY.MOLES_PER_CELL
         secondary_outward_eq_mat_moles = secondary_active * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.cases.first.product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.ioz_bound + 1)], dtype=np.uint32)
+        product = self._get_product_counts_upto_bound_for_case(self.cases.first, self.cases.first_mp, self.ioz_bound)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL * \
                                Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
 
-        secondary_product = np.array([np.sum(self.cases.second.product.c3d[:, :, plane_ind]) for plane_ind
-                                      in range(self.ioz_bound + 1)], dtype=np.uint32)
+        secondary_product = self._get_product_counts_upto_bound_for_case(self.cases.second, self.cases.second_mp, self.ioz_bound)
         secondary_product_moles = secondary_product * Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC
         secondary_product_eq_mat_moles = secondary_product * Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL * \
                                          Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD
 
-        ternary_product = np.array([np.sum(self.cases.third.product.c3d[:, :, plane_ind]) for plane_ind
-                                    in range(self.ioz_bound + 1)], dtype=np.uint32)
+        ternary_product = self._get_product_counts_upto_bound_for_case(self.cases.third, self.cases.third_mp, self.ioz_bound)
         ternary_product_moles = ternary_product * Config.PRODUCTS.TERNARY.MOLES_PER_CELL_TC
         ternary_product_eq_mat_moles = (ternary_product * ((Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *
                                                             Config.PRODUCTS.TERNARY.THRESHOLD_OUTWARD) + Config.PRODUCTS.TERNARY.MOLES_PER_CELL))
 
-        quaternary_product = np.array([np.sum(self.cases.fourth.product.c3d[:, :, plane_ind]) for plane_ind
-                                       in range(self.ioz_bound + 1)], dtype=np.uint32)
+        quaternary_product = self._get_product_counts_upto_bound_for_case(self.cases.fourth, self.cases.fourth_mp, self.ioz_bound)
         quaternary_product_moles = quaternary_product * Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC
         quaternary_product_eq_mat_moles = (quaternary_product * ((Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *
                                                                   Config.PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD) + Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL))
 
-        quint_product = np.array([np.sum(self.cases.fifth.product.c3d[:, :, plane_ind]) for plane_ind
-                                  in range(self.ioz_bound + 1)], dtype=np.uint32)
+        quint_product = self._get_product_counts_upto_bound_for_case(self.cases.fifth, self.cases.fifth_mp, self.ioz_bound)
         quint_eq_mat_moles = quint_product * Config.PRODUCTS.QUINT.MOLES_PER_CELL
         quint_product_moles = quint_product * Config.PRODUCTS.QUINT.MOLES_PER_CELL_TC
 
@@ -1277,8 +1289,7 @@ class CellularAutomata:
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
-                            in self.product_indexes], dtype=np.uint32)
+        product = self._get_product_counts_at_indexes_for_case(self.cur_case, self.cur_case_mp, self.product_indexes)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
@@ -1602,8 +1613,7 @@ class CellularAutomata:
         active_moles = active * Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         outward_eq_mat_moles = active * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
-        product = np.array([np.sum(self.cur_case.product.c3d[:, :, plane_ind]) for plane_ind
-                            in self.product_indexes], dtype=np.uint32)
+        product = self._get_product_counts_at_indexes_for_case(self.cur_case, self.cur_case_mp, self.product_indexes)
         product_moles = product * Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
         product_eq_mat_moles = product * Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL * \
                                Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
@@ -1919,8 +1929,9 @@ class CellularAutomata:
     def fix_init_precip_int(self, u_bound):
         if u_bound == self.cells_per_axis - 1:
             u_bound = self.cells_per_axis - 2
-        self.cur_case.precip_3d_init[:, :, 0:u_bound + 2] = 0
-        self.cur_case.precip_3d_init[:, :, 0:u_bound + 2] = self.cur_case.product.c3d[:, :, 0:u_bound + 2]
+        z_hi = u_bound + 2
+        self.cases.precip_3d_init[:, :, 0:z_hi] = 0
+        self.cases.precip_3d_init[:, :, 0:z_hi] = self.cases.product_state[1, :, :, 0:z_hi]
 
     def fix_init_precip_dummy(self, u_bound, l_bound=0):
         pass
@@ -2188,6 +2199,7 @@ class CellularAutomata:
 
     def precip_mp_subblock(self):
         # Point case_mp at current read buffers (diffusion may have swapped A/B)
+        self.cur_case = self.cases.product_cases[0]
         self.get_combi_ind()
         self.cur_case_mp.oxidant_c3d_shm_mdata = self.cur_case.oxidant.get_current_c3d_shm_mdata()
         self.cur_case_mp.active_c3d_shm_mdata = self.cur_case.active.get_current_c3d_shm_mdata()

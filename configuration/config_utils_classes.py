@@ -77,6 +77,9 @@ class ProdInput:
         self.PHASE_FRACTION_LIMIT = 0
         self.THRESHOLD_INWARD = 0
         self.THRESHOLD_OUTWARD = 0
+        self.ELEMENT = "None"
+        self.COMPONENTS = []
+        self.PRIORITY = None
 
 
 class GeneratedValues:

@@ -53,7 +53,7 @@ def dissolution_subblock_worker(task):
         const_b_pp,
         const_c_pp,
         const_d_pp,
-        product_snapshot_shm_mdata,
+        _product_snapshot_shm_mdata,
         oxidant_write_shm_mdata,
         max_per_cell_oxidant,
         max_per_cell_active,
@@ -68,23 +68,11 @@ def dissolution_subblock_worker(task):
     threshold_outward = int(getattr(cur_case_mp, "threshold_outward", 1))
     dissolution_thresholds = np.array([threshold_inward, threshold_outward], dtype=np.int32)
 
-    shm_snap = shared_memory.SharedMemory(name=product_snapshot_shm_mdata.name)
-    product_read = np.ndarray(
-        product_snapshot_shm_mdata.shape,
-        dtype=product_snapshot_shm_mdata.dtype,
-        buffer=shm_snap.buf,
-    )
     shm_p = shared_memory.SharedMemory(name=cur_case_mp.product_c3d_shm_mdata.name)
     product = np.ndarray(
         cur_case_mp.product_c3d_shm_mdata.shape,
         dtype=cur_case_mp.product_c3d_shm_mdata.dtype,
         buffer=shm_p.buf,
-    )
-    shm_full = shared_memory.SharedMemory(name=cur_case_mp.full_shm_mdata.name)
-    full_3d = np.ndarray(
-        cur_case_mp.full_shm_mdata.shape,
-        dtype=cur_case_mp.full_shm_mdata.dtype,
-        buffer=shm_full.buf,
     )
     shm_a = shared_memory.SharedMemory(name=cur_case_mp.active_c3d_shm_mdata.name)
     n_i, n_j, n_z = cur_case_mp.active_c3d_shm_mdata.shape
@@ -93,11 +81,11 @@ def dissolution_subblock_worker(task):
     n_ox = oxidant_write_shm_mdata.shape[0]
     oxidant_count, oxidant_dirs = _views_from_segment_dissol(shm_ox_w, n_ox, max_per_cell_oxidant)
     packed_dirs = np.asarray(packed_dirs_oxidant, dtype=np.uint8).ravel()
-    shm_owner = shared_memory.SharedMemory(name=cur_case_mp.product_owner_shm_mdata.name)
-    owner_phase = np.ndarray(
-        cur_case_mp.product_owner_shm_mdata.shape,
-        dtype=cur_case_mp.product_owner_shm_mdata.dtype,
-        buffer=shm_owner.buf,
+    shm_state = shared_memory.SharedMemory(name=cur_case_mp.product_state_shm_mdata.name)
+    product_state = np.ndarray(
+        cur_case_mp.product_state_shm_mdata.shape,
+        dtype=cur_case_mp.product_state_shm_mdata.dtype,
+        buffer=shm_state.buf,
     )
     phase_id = int(getattr(cur_case_mp, "product_phase_id", 0))
 
@@ -128,10 +116,8 @@ def dissolution_subblock_worker(task):
     if use_blocks:
         block_pat = np.asarray(block_patterns, dtype=np.int8)
         dissolution_subblock_kernel_snapshot_with_blocks_owner(
-            product_read,
             product,
-            full_3d,
-            owner_phase,
+            product_state,
             phase_id,
             oxidant_count,
             oxidant_dirs,
@@ -149,7 +135,6 @@ def dissolution_subblock_worker(task):
             const_c_pp,
             const_d_pp,
             n_cells,
-            n_z,
             seed,
             dissolution_thresholds,
             max_per_cell_oxidant,
@@ -158,10 +143,8 @@ def dissolution_subblock_worker(task):
         )
     else:
         dissolution_subblock_kernel_snapshot_owner(
-            product_read,
             product,
-            full_3d,
-            owner_phase,
+            product_state,
             phase_id,
             oxidant_count,
             oxidant_dirs,
@@ -177,7 +160,6 @@ def dissolution_subblock_worker(task):
             const_c_pp,
             const_d_pp,
             n_cells,
-            n_z,
             seed,
             dissolution_thresholds,
             max_per_cell_oxidant,
@@ -185,10 +167,8 @@ def dissolution_subblock_worker(task):
             packed_dirs,
         )
 
-    shm_snap.close()
     shm_p.close()
-    shm_full.close()
     shm_a.close()
     shm_ox_w.close()
-    shm_owner.close()
+    shm_state.close()
     return None
