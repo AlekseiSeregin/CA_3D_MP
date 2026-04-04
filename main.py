@@ -79,7 +79,7 @@ if __name__ == '__main__':
             # self.cases.get_all_oxidants()
             # self.cases.get_all_actives()
             # self.cases.get_all_products()
-            self.save_function = self.save_results_only_prod_prime
+            self.save_function = self.save_results_product_only
             # self.c_automata.cases.first.active.diffuse = elementsdgm.diffuse_bulk_mp_numba
 
             self.c_automata.decomposition = self.c_automata.dissolution_mp_subblock

@@ -90,10 +90,11 @@ class Utils:
         self.calc_active_data()
         self.calc_oxidant_data()
 
-        if Config.MAP_PRODUCTS_TO_ELEMENTS:
-            self.calc_product_data()
-        else:
-            self.calc_product_data_custom()
+        # if Config.MAP_PRODUCTS_TO_ELEMENTS:
+        #     self.calc_product_data()
+        # else:
+        #     self.calc_product_data_custom()
+        self.calc_product_data()
 
         self.calc_initial_conc_and_moles()
 
@@ -181,6 +182,44 @@ class Utils:
                 Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 6
             else:
                 Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 7
+
+    def for_jmatpro(self):
+        # Primary
+        Config.PRODUCTS.PRIMARY.MASS_PER_CELL = (Config.OXIDANTS.PRIMARY.MASS_PER_CELL * Config.PRODUCTS.PRIMARY.THRESHOLD_INWARD
+                                                 + Config.ACTIVES.PRIMARY.MASS_PER_CELL * Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD)
+        Config.PRODUCTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL * Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD / 2
+        Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC = Config.PRODUCTS.PRIMARY.MOLES_PER_CELL * 5
+        Config.PRODUCTS.PRIMARY.CONSTITUTION = Config.ACTIVES.PRIMARY.ELEMENT + "+" + Config.OXIDANTS.PRIMARY.ELEMENT
+
+        # Secondary
+        active_moles_needed = Config.ACTIVES.PRIMARY.MOLES_PER_CELL * Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD
+        active_mass_needed = active_moles_needed * Config.ACTIVES.PRIMARY.MOLAR_MASS
+
+        matrix_moles_needed = active_moles_needed / 2
+        matrix_mas_needed = matrix_moles_needed * Config.MATRIX.MOLAR_MASS
+
+        oxidant_moles_needed = active_moles_needed * 2
+        oxidant_mass_needed = oxidant_moles_needed * Config.OXIDANTS.PRIMARY.MOLAR_MASS
+
+        Config.PRODUCTS.SECONDARY.MOLES_PER_CELL = active_moles_needed / 2
+        Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC = Config.PRODUCTS.SECONDARY.MOLES_PER_CELL * 7
+
+        Config.PRODUCTS.SECONDARY.MASS_PER_CELL = oxidant_mass_needed + active_mass_needed + matrix_mas_needed
+
+        Config.PRODUCTS.SECONDARY.CONSTITUTION = Config.MATRIX.ELEMENT + Config.ACTIVES.PRIMARY.ELEMENT + "2" + Config.OXIDANTS.PRIMARY.ELEMENT + "4"
+
+        t_1 = Config.ACTIVES.PRIMARY.MOLAR_MASS * Config.MATRIX.DENSITY / (
+                    Config.ACTIVES.PRIMARY.DENSITY * Config.MATRIX.MOLAR_MASS)
+
+        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER = \
+            math.floor((Config.MATRIX.MOLES_PER_CELL / (
+                    Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1)) / Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD)
+
+        Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = math.floor((Config.MATRIX.MOLES_PER_CELL /
+                                                                       ((Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1) +
+                                                                        Config.PRODUCTS.SECONDARY.MOLES_PER_CELL)) / \
+                                                                      Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD)
+        print()
 
     @staticmethod
     def calc_product_data_custom():

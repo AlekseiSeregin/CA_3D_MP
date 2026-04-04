@@ -276,7 +276,6 @@ class SimulationConfigurator:
         )
 
     def save_results(self):
-        # With USE_NEW_DIFFUSION_ENGINE, oxidant.cells and active.get_cells_coords() read from the 3D diffusion grid (same DB format).
         if Config.INWARD_DIFFUSION:
             for oxidant in self.cases.all_oxidants:
                 self.db.insert_particle_data(str(oxidant.elem_name), self.c_automata.iteration, oxidant.cells)
@@ -291,6 +290,15 @@ class SimulationConfigurator:
                         self.c_automata.iteration,
                         self._get_product_save_coords(case, case_mp),
                     )
+
+    def save_results_product_only(self):
+        for case, case_mp in self.cases.product_case_pairs:
+            if case_mp.product_phase_id > 0:
+                self.db.insert_particle_data(
+                    str(case_mp.product_element),
+                    self.c_automata.iteration,
+                    self._get_product_save_coords(case, case_mp),
+                )
 
     def _get_product_save_coords(self, case, case_mp):
         """

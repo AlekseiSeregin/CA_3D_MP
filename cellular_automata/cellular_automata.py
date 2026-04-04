@@ -561,8 +561,8 @@ class CellularAutomata:
             if vv > 0:
                 stoich[str(k)] = vv
 
-        outward = set(str(e) for e in product_cfg.OUTWARD_ELEMENTS)
-        inward = set(str(e) for e in product_cfg.INWARD_ELEMENTS)
+        outward = product_cfg.OUTWARD_ELEMENT
+        inward = product_cfg.INWARD_ELEMENT
         if len(outward) == 0 and len(inward) == 0:
             out_elem = str(getattr(getattr(case, "active", None), "elem_name", ""))
             in_elem = str(getattr(getattr(case, "oxidant", None), "elem_name", ""))
@@ -668,7 +668,6 @@ class CellularAutomata:
         for case, case_mp in self.cases.product_case_pairs:
             p_cfg = self._get_product_cfg_for_case_mp(case_mp)
             case_mp.plane_indexes = []
-            out_elem = p_cfg.OUTWARD_ELEMENTS[0]
             jm_plane0 = 0.0
             for tid in task_ids:
                 phases = raw_list.get(tid, {})
@@ -678,20 +677,19 @@ class CellularAutomata:
                 sum_non_ox = phased["sum_non_ox"]
                 plane_idx = task_to_plane[tid]
                 for jm_elem, jm_comp in zip(phased["elements"], phased["composition"]):
-                    if jm_elem == out_elem:
+                    if jm_elem == p_cfg.OUTWARD_ELEMENT:
                         product_c_jm = (jm_comp / sum_non_ox) * phased["molar_fraction"]
                         if plane_idx == 0:
                             jm_plane0 = float(product_c_jm)
                         if product_c_jm > product_c_by_identifier[p_cfg.ELEMENT][plane_idx]:
                             case_mp.plane_indexes.append(plane_idx)
-            if self.iteration is not None:
-                existing_plane0 = float(product_c_by_identifier[p_cfg.ELEMENT][0])
-                diff_plane0 = jm_plane0 - existing_plane0
-                self.product_plane0_tracking[(int(self.iteration), str(p_cfg.ELEMENT))] = (
-                    jm_plane0,
-                    existing_plane0,
-                    diff_plane0,
-                )
+            existing_plane0 = float(product_c_by_identifier[p_cfg.ELEMENT][0])
+            diff_plane0 = jm_plane0 - existing_plane0
+            self.product_plane0_tracking[(int(self.iteration), str(p_cfg.ELEMENT))] = (
+                jm_plane0,
+                existing_plane0,
+                diff_plane0,
+            )
 
     def get_comb_ind_jmatpro(self):
         """Single active, single oxidant only (no secondary elements)."""

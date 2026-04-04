@@ -12,26 +12,26 @@ class Config:
 
     PRODUCTS = ProdGroups()
     PRODUCTS.PRIMARY = ProdInput()
-    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 2
-    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 3
+    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 1
+    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 1
     PRODUCTS.PRIMARY.ELEMENT = "Cr2O3"
     PRODUCTS.PRIMARY.JM_IDENTIFIER = "M2O3"
     PRODUCTS.PRIMARY.COMPONENTS = ["Cr", "O"]
     PRODUCTS.PRIMARY.STOICH = {"Cr": 2, "O": 3}
-    PRODUCTS.PRIMARY.OUTWARD_ELEMENTS = ["Cr"]
-    PRODUCTS.PRIMARY.INWARD_ELEMENTS = ["O"]
+    PRODUCTS.PRIMARY.OUTWARD_ELEMENT = "Cr"
+    PRODUCTS.PRIMARY.INWARD_ELEMENT = "O"
     PRODUCTS.PRIMARY.PRIORITY = 1
 
     PRODUCTS.SECONDARY = ProdInput()
-    PRODUCTS.SECONDARY.THRESHOLD_INWARD = 2
-    PRODUCTS.SECONDARY.THRESHOLD_OUTWARD = 4
-    PRODUCTS.SECONDARY.ELEMENT = "NiCr2O4"
-    PRODUCTS.SECONDARY.JM_IDENTIFIER = "SPINEL_AB2O4"
-    PRODUCTS.SECONDARY.COMPONENTS = ["Cr", "O"]
-    PRODUCTS.SECONDARY.STOICH = {"Cr": 2, "O": 4}
-    PRODUCTS.SECONDARY.OUTWARD_ELEMENTS = ["Cr"]
-    PRODUCTS.SECONDARY.INWARD_ELEMENTS = ["O"]
-    PRODUCTS.SECONDARY.PRIORITY = 2
+    # PRODUCTS.SECONDARY.THRESHOLD_INWARD = 4
+    # PRODUCTS.SECONDARY.THRESHOLD_OUTWARD = 2
+    # PRODUCTS.SECONDARY.ELEMENT = "NiCr2O4"
+    # PRODUCTS.SECONDARY.JM_IDENTIFIER = "SPINEL_AB2O4"
+    # PRODUCTS.SECONDARY.COMPONENTS = ["Cr", "O"]
+    # PRODUCTS.SECONDARY.STOICH = {"Cr": 2, "O": 4}
+    # PRODUCTS.SECONDARY.OUTWARD_ELEMENT = "Cr"
+    # PRODUCTS.SECONDARY.INWARD_ELEMENT = "O"
+    # PRODUCTS.SECONDARY.PRIORITY = 2
 
     PRODUCTS.TERNARY = ProdInput()
     # PRODUCTS.TERNARY.THRESHOLD_INWARD = 4
@@ -45,7 +45,7 @@ class Config:
     # PRODUCTS.QUINT.THRESHOLD_INWARD = 1
     # PRODUCTS.QUINT.THRESHOLD_OUTWARD = 0
 
-    MAP_PRODUCTS_TO_ELEMENTS = True
+    MAP_PRODUCTS_TO_ELEMENTS = False
 
     MATRIX = ElemInput()
 
@@ -53,8 +53,8 @@ class Config:
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
     # OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 1
-    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 10
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.01
+    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 3
 
     # secondary oxidants
     # OXIDANTS.SECONDARY.ELEMENT = "N"
@@ -65,7 +65,7 @@ class Config:
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
     ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.07
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 5
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 3
     ACTIVES.PRIMARY.CONC_PRECISION = "rand"
     ACTIVES.PRIMARY.SPACE_FILL = "full"
     ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 10
@@ -107,8 +107,8 @@ class Config:
     # 3D Chopard–Droz diffusion (shared-memory MP): workers per element type
     # max_per_cell is per element: set ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL, OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL, etc.
     # Fallback only when an element's DIFFUSION_MAX_PER_CELL is not set.
-    OUTWARD_DIFFUSION_WORKERS = 8
-    INWARD_DIFFUSION_WORKERS = 4
+    OUTWARD_DIFFUSION_WORKERS = 6
+    INWARD_DIFFUSION_WORKERS = 1
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
     DIFFUSION_BOUNDARY_X_OUTWARD_RIGHT = "reflection"
@@ -122,15 +122,11 @@ class Config:
     SAVE_POST_PROCESSED_INPUT = True
     USE_SIMPLE_NUCLEATION = False # Legacy switch (kept for backward compatibility)
     # Nucleation kernel mode:
-    #   legacy_prob   -> existing probabilistic 1:1 inward/outward
-    #   legacy_simple -> existing simplified 1:1 inward/outward
     #   legacy_prob_owner   -> legacy probabilistic with owner-phase exclusion
     #   legacy_simple_owner -> legacy simplified with owner-phase exclusion
-    #   stoich_prob   -> threshold-based probabilistic nucleation
-    #   stoich_simple -> threshold-based simplified nucleation
     #   stoich_prob_owner   -> threshold-based probabilistic nucleation with owner-phase exclusion
     #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
-    NUCLEATION_MODE = "stoich_simple_owner"
+    NUCLEATION_MODE = "legacy_simple_owner"
     # If True, precipitation stages are executed sequentially by product PRIORITY
     # using PRODUCTS.* configuration (ELEMENT/COMPONENTS).
     USE_PRODUCT_STAGE_SEQUENCE = True
@@ -166,7 +162,7 @@ class Config:
     PROBABILITIES.PRIMARY.p0_f = 1
     PROBABILITIES.PRIMARY.p0_A_const = 1
     PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.2
+    PROBABILITIES.PRIMARY.p1 = 0.3
     PROBABILITIES.PRIMARY.p1_f = 1
     PROBABILITIES.PRIMARY.p1_A_const = 1
     PROBABILITIES.PRIMARY.p1_B_const = 1
