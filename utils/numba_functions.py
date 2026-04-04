@@ -380,8 +380,6 @@ def nucleation_subblock_kernel_owner(
                 for _ in range(c_max):
                     if int(state_count[i, j, k]) >= ox_num or oxidant[i, j, k] <= 0:
                         break
-                    if owner != 0 and owner != pid:
-                        break
                     valid_count = 0
                     _ni = np.empty(n_active, dtype=np.intp)
                     _nj = np.empty(n_active, dtype=np.intp)
@@ -469,8 +467,6 @@ def nucleation_subblock_kernel_simple_owner(
                 idx_o = i + n_cells * j + n2 * k
                 for _ in range(c_max):
                     if int(state_count[i, j, k]) >= ox_num or oxidant[i, j, k] <= 0:
-                        break
-                    if owner != 0 and owner != pid:
                         break
                     valid_count = 0
                     _ni = np.empty(n_active, dtype=np.intp)
@@ -762,9 +758,6 @@ def nucleation_subblock_kernel_stoich_owner(
                     cnt_here = int(state_count[i, j, k])
                     if cnt_here >= ox_num or oxidant[i, j, k] < thr_in:
                         break
-                    if owner != 0 and owner != pid:
-                        break
-
                     valid_count = 0
                     total_active = 0
                     _ni = np.empty(n_active, dtype=np.intp)
@@ -869,8 +862,6 @@ def nucleation_subblock_kernel_simple_stoich_owner(
                 for _ in range(c_max):
                     cnt_here = int(state_count[i, j, k])
                     if cnt_here >= ox_num or oxidant[i, j, k] < thr_in:
-                        break
-                    if owner != 0 and owner != pid:
                         break
 
                     valid_count = 0

@@ -69,6 +69,8 @@ class CaseSetUpMP:
         self.product_components = ()
         self.stage_priority = 0
 
+        self.plane_indexes = []
+
 
 class CaseRef:
     def __init__(self):
@@ -87,6 +89,7 @@ class CaseRef:
         self.all_oxidants = []
         self.all_actives = []
         self.all_products = []
+        self.all_elements = []
 
         self.all_cases = self.product_cases
         self.all_cases_mp = self.product_cases_mp
@@ -121,29 +124,13 @@ class CaseRef:
     def add_oxidant(self, oxidant):
         if oxidant not in self.all_oxidants:
             self.all_oxidants.append(oxidant)
+            self.all_elements.append(oxidant.elem_name)
     
     def add_active(self, active):
         if active not in self.all_actives:
             self.all_actives.append(active)
+            self.all_elements.append(active.elem_name)
     
     def add_product(self, product):
         if product not in self.all_products:
             self.all_products.append(product)
-
-    def get_all_oxidants(self):
-        self.all_oxidants = []
-        for case in self.all_cases:
-            if case.oxidant is not None and case.is_active:
-                self.all_oxidants.append(case.oxidant)
-    
-    def get_all_actives(self):
-        self.all_actives = []
-        for case in self.all_cases:
-            if case.active is not None and case.is_active:
-                self.all_actives.append(case.active)
-    
-    def get_all_products(self):
-        self.all_products = []
-        for case in self.all_cases:
-            if case.product is not None and case.is_active:
-                self.all_products.append(case.product)

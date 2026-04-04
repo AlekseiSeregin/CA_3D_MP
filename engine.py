@@ -65,6 +65,7 @@ class SimulationConfigurator:
             # Standalone worker pools for CA + diffusion; pools are not hosted inside DiffusionEngine.
             self.worker_pools = WorkerPools(n_outward_workers=n_out, n_inward_workers=n_in)
             self.c_automata.worker_pools = self.worker_pools
+            self.c_automata.ensure_jmatpro_pool()
             self.c_automata._ensure_precip_z_states()
 
             self._diffusion_engine = _DiffusionEngine(n_out, n_in, rng, worker_pools=self.worker_pools)
@@ -89,6 +90,7 @@ class SimulationConfigurator:
                 self.worker_pools = None
             self.save_results()
             self.insert_last_it()
+            self.db.insert_product_plane0_tracking(self.c_automata.product_plane0_tracking)
             self.db.conn.commit()
             print()
             print("____________________________________________________________")
@@ -114,55 +116,8 @@ class SimulationConfigurator:
     def init_inward(self):
         self.cases.add_oxidant(elements.OxidantElem(Config.OXIDANTS.PRIMARY, self.utils))
 
-        # self.cases.first.oxidant = elements.OxidantElem(Config.OXIDANTS.PRIMARY, self.utils)
-        # self.cases.second.oxidant = self.cases.first.oxidant
-
-        # self.cases.first_mp.oxidant_c3d_shm_mdata = getattr(self.cases.first.oxidant, 'c3d_shm_mdata', None)
-        # self.cases.second_mp.oxidant_c3d_shm_mdata = self.cases.first_mp.oxidant_c3d_shm_mdata
-
-        # self.cases.third.oxidant = self.cases.first.oxidant
-        # self.cases.fourth.oxidant = self.cases.first.oxidant
-        # self.cases.fifth.oxidant = self.cases.first.oxidant
-
-        # self.cases.third_mp.oxidant_c3d_shm_mdata = self.cases.first_mp.oxidant_c3d_shm_mdata
-        # self.cases.fourth_mp.oxidant_c3d_shm_mdata = self.cases.first_mp.oxidant_c3d_shm_mdata
-        # self.cases.fifth_mp.oxidant_c3d_shm_mdata = self.cases.first_mp.oxidant_c3d_shm_mdata
-
-        # # ---------------------------------------------------
-        # if Config.OXIDANTS.SECONDARY_EXISTENCE:
-        #     self.cases.third.oxidant = elements.OxidantElem(Config.OXIDANTS.SECONDARY, self.utils)
-        #     self.cases.fourth.oxidant = self.cases.third.oxidant
-        #     self.cases.third_mp.oxidant_c3d_shm_mdata = getattr(self.cases.third.oxidant, 'c3d_shm_mdata', None)
-        #     self.cases.fourth_mp.oxidant_c3d_shm_mdata = self.cases.third_mp.oxidant_c3d_shm_mdata
-
     def init_outward(self):
         self.cases.add_active(elements.ActiveElem(Config.ACTIVES.PRIMARY))
-
-        # self.cases.first.active = elements.ActiveElem(Config.ACTIVES.PRIMARY)
-        # self.cases.third.active = self.cases.first.active
-
-        # # ---------------------------------------------------
-        # # c3d (with new diffusion, active exposes count buffer as c3d_shm_mdata for nucleation)
-        # self.cases.first_mp.active_c3d_shm_mdata = getattr(self.cases.first.active, 'c3d_shm_mdata', None)
-        # self.cases.third_mp.active_c3d_shm_mdata = self.cases.first_mp.active_c3d_shm_mdata
-        # self.cases.fifth_mp.active_c3d_shm_mdata = self.cases.first_mp.active_c3d_shm_mdata  # JUST FOR SHAPE!!!
-        # # cells/dirs (legacy flat arrays; None when using USE_NEW_DIFFUSION_ENGINE)
-        # self.cases.first_mp.active_cells_shm_mdata = getattr(self.cases.first.active, 'cells_shm_mdata', None)
-        # self.cases.third_mp.active_cells_shm_mdata = self.cases.first_mp.active_cells_shm_mdata
-        # self.cases.first_mp.active_dirs_shm_mdata = getattr(self.cases.first.active, 'dirs_shm_mdata', None)
-        # self.cases.third_mp.active_dirs_shm_mdata = self.cases.first_mp.active_dirs_shm_mdata
-
-        # # ---------------------------------------------------
-        # if Config.ACTIVES.SECONDARY_EXISTENCE:
-        #     self.cases.second.active = elements.ActiveElem(Config.ACTIVES.SECONDARY)
-        #     self.cases.fourth.active = self.cases.second.active
-        #     # ---------------------------------------------------
-        #     self.cases.second_mp.active_c3d_shm_mdata = getattr(self.cases.second.active, 'c3d_shm_mdata', None)
-        #     self.cases.fourth_mp.active_c3d_shm_mdata = self.cases.second_mp.active_c3d_shm_mdata
-        #     self.cases.second_mp.active_cells_shm_mdata = getattr(self.cases.second.active, 'cells_shm_mdata', None)
-        #     self.cases.fourth_mp.active_cells_shm_mdata = self.cases.second_mp.active_cells_shm_mdata
-        #     self.cases.second_mp.active_dirs_shm_mdata = getattr(self.cases.second.active, 'dirs_shm_mdata', None)
-        #     self.cases.fourth_mp.active_dirs_shm_mdata = self.cases.second_mp.active_dirs_shm_mdata
 
     @staticmethod
     def _normalize_component_names(components):
@@ -247,17 +202,6 @@ class SimulationConfigurator:
         np.copyto(self.cases.precip_3d_init, tmp)
         self.cases.precip_3d_init_shm_mdata = SharedMetaData(self.cases.precip_3d_init_shm.name, tmp.shape, tmp.dtype)
 
-        # accumulated products
-        # tmp = np.zeros((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), dtype=np.ubyte)
-        # self.cases.accumulated_products_shm = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
-        # self.cases.accumulated_products = np.ndarray(tmp.shape, dtype=tmp.dtype,
-        #                                              buffer=self.cases.accumulated_products_shm.buf)
-        # np.copyto(self.cases.accumulated_products, tmp)
-        # self.cases.accumulated_products_shm_mdata = SharedMetaData(self.cases.accumulated_products_shm.name, tmp.shape,
-        #                                                            tmp.dtype)
-        # Unified product state map: [owner_id, count] in one shared array.
-        # state[0]: owner id (0 empty, 1..255 phase id)
-        # state[1]: occupancy count in the owned phase cell (0..oxidation_number)
         state_tmp = np.zeros((2, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), dtype=np.uint8)
         self.cases.product_state_shm = shared_memory.SharedMemory(create=True, size=state_tmp.nbytes)
         self.cases.product_state = np.ndarray(state_tmp.shape, dtype=state_tmp.dtype, buffer=self.cases.product_state_shm.buf)
@@ -325,34 +269,28 @@ class SimulationConfigurator:
         case_mp.product_components = tuple(components)
         case_mp.stage_priority = int(stage_priority)
         case.fix_init_precip_func_ref = self.c_automata.fix_init_precip_int
-
+        case_mp.precip_3d_init_shm_mdata = self.cases.precip_3d_init_shm_mdata
+        case_mp.nucleation_probabilities = utils.NucleationProbabilities(
+            Config.PROBABILITIES.PRIMARY,
+            Config.PRODUCTS.PRIMARY
+        )
 
     def save_results(self):
         # With USE_NEW_DIFFUSION_ENGINE, oxidant.cells and active.get_cells_coords() read from the 3D diffusion grid (same DB format).
-        if Config.STRIDE > Config.N_ITERATIONS:
-            self.cases.first.active.transform_to_descards()
-            if Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.cases.second.active.transform_to_descards()
         if Config.INWARD_DIFFUSION:
-            self.db.insert_particle_data("primary_oxidant", self.c_automata.iteration, self.cases.first.oxidant.cells)
-            if Config.OXIDANTS.SECONDARY_EXISTENCE:
-                self.db.insert_particle_data("secondary_oxidant", self.c_automata.iteration, self.cases.second.oxidant.cells)
+            for oxidant in self.cases.all_oxidants:
+                self.db.insert_particle_data(str(oxidant.elem_name), self.c_automata.iteration, oxidant.cells)
         if Config.OUTWARD_DIFFUSION:
-            self.db.insert_particle_data("primary_active", self.c_automata.iteration, self.cases.first.active.get_cells_coords())
-            if Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.db.insert_particle_data("secondary_active", self.c_automata.iteration, self.cases.second.active.get_cells_coords())
+            for active in self.cases.all_actives:
+                self.db.insert_particle_data(str(active.elem_name), self.c_automata.iteration, active.get_cells_coords())
         if Config.COMPUTE_PRECIPITATION:
-            self.db.insert_particle_data("primary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.first, self.cases.first_mp))
-            if Config.ACTIVES.SECONDARY_EXISTENCE and Config.OXIDANTS.SECONDARY_EXISTENCE:
-                self.db.insert_particle_data("secondary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.second, self.cases.second_mp))
-                self.db.insert_particle_data("ternary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.third, self.cases.third_mp))
-                self.db.insert_particle_data("quaternary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.fourth, self.cases.fourth_mp))
-            elif Config.ACTIVES.SECONDARY_EXISTENCE and not Config.OXIDANTS.SECONDARY_EXISTENCE:
-                self.db.insert_particle_data("secondary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.second, self.cases.second_mp))
-        if Config.STRIDE > Config.N_ITERATIONS:
-            self.cases.first.active.transform_to_3d(self.c_automata.curr_max_furthest)
-            if Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.cases.second.active.transform_to_3d(self.c_automata.curr_max_furthest)
+            for case, case_mp in self.cases.product_case_pairs:
+                if case_mp.product_phase_id > 0:
+                    self.db.insert_particle_data(
+                        str(case_mp.product_element),
+                        self.c_automata.iteration,
+                        self._get_product_save_coords(case, case_mp),
+                    )
 
     def _get_product_save_coords(self, case, case_mp):
         """
@@ -377,11 +315,6 @@ class SimulationConfigurator:
         self.db.save_pickled_microstructure(microstructure)
 
     def save_results_custom(self):
-        if Config.STRIDE > Config.N_ITERATIONS:
-            self.cases.first.active.transform_to_descards()
-            if Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.cases.second.active.transform_to_descards()
-
         self.db.insert_particle_data("primary_oxidant", self.c_automata.iteration, self.cases.first.oxidant.cells)
 
         self.db.insert_particle_data("primary_active", self.c_automata.iteration, self.cases.first.active.get_cells_coords())
@@ -392,11 +325,6 @@ class SimulationConfigurator:
         self.db.insert_particle_data("ternary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.third, self.cases.third_mp))
         self.db.insert_particle_data("quaternary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.fourth, self.cases.fourth_mp))
         self.db.insert_particle_data("quint_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.fifth, self.cases.fifth_mp))
-
-        if Config.STRIDE > Config.N_ITERATIONS:
-            self.cases.first.active.transform_to_3d(self.c_automata.curr_max_furthest)
-            if Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.cases.second.active.transform_to_3d(self.c_automata.curr_max_furthest)
 
     def calc_precipitation_front_only_cells(self):
         """

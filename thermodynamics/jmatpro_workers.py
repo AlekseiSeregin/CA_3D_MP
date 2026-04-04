@@ -215,12 +215,17 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
                 for p in found_phases:
                     frac = get_phase_fraction(p)
                     elements_phase, composition_phase = get_phase_composition(p)
+                    sum_non_ox = 0.0
+                    for elem, comp in zip(elements_phase, composition_phase):
+                        sum_non_ox += comp if elem not in ["O", "N", "Ni", "H", "Fe"] else 0.0
+
                     result[p] = {
                         "molar_fraction": frac,
                         "elements": elements_phase,
                         "composition": composition_phase,
+                        "sum_non_ox": sum_non_ox,
                     }
-
+ 
                 _cache[cache_key] = result
                 result_queue.put({
                     'worker_id': worker_id,

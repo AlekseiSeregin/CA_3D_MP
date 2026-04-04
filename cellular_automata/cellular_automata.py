@@ -8,10 +8,6 @@ from .dissolution_functions import (
     get_block_patterns_from_aggregated,
 )
 from utils.numba_functions import (
-    go_around_bool,
-    go_around_int,
-    insert_counts,
-    just_decrease_counts,
     product_counts_upto_bound_from_state,
     product_counts_at_indexes_from_state,
 )
@@ -147,6 +143,9 @@ class CellularAutomata:
         self.curr_look_up = None
 
         self.prev_stab_count = 0
+        # Tracks plane-0 concentrations per product and iteration:
+        # key=(iteration, product_name), value=(jmatpro_conc, existing_conc, diff)
+        self.product_plane0_tracking = {}
 
         self.precipitation_stride = Config.STRIDE * Config.STRIDE_MULTIPLIER
 
@@ -518,6 +517,181 @@ class CellularAutomata:
         owner = state[0]
         counts = state[1]
         return product_counts_at_indexes_from_state(owner, counts, pid, idx)
+
+    @staticmethod
+    def _cfg_elem_map(group):
+        out = {}
+        for key in ("PRIMARY", "SECONDARY"):
+            cfg = getattr(group, key, None)
+            if cfg is None:
+                continue
+            elem = str(getattr(cfg, "ELEMENT", "None"))
+            if elem and elem.lower() != "none":
+                out[elem] = cfg
+        return out
+
+    def _get_product_cfg_for_case_mp(self, case_mp):
+        key = str(getattr(case_mp, "product_key", "PRIMARY"))
+        return getattr(Config.PRODUCTS, key, Config.PRODUCTS.PRIMARY)
+
+    def _gather_species_counts_by_element(self, u_bound, species_objs):
+        ub = int(u_bound)
+        out = {}
+        for obj in species_objs:
+            elem = str(getattr(obj, "elem_name", ""))
+            if not elem:
+                continue
+            grid = obj.get_3d_grid()[0]
+            counts = np.sum(grid[:ub + 1, :, :], axis=(1, 2)).astype(np.float64)
+            prev = out.get(elem)
+            if prev is None:
+                out[elem] = counts
+            else:
+                out[elem] = prev + counts
+        return out
+
+    def _resolve_product_stoich_roles(self, case, case_mp, product_cfg):
+        stoich_cfg = product_cfg.STOICH
+        stoich = {}
+        for k, v in stoich_cfg.items():
+            try:
+                vv = int(v)
+            except (TypeError, ValueError):
+                continue
+            if vv > 0:
+                stoich[str(k)] = vv
+
+        outward = set(str(e) for e in product_cfg.OUTWARD_ELEMENTS)
+        inward = set(str(e) for e in product_cfg.INWARD_ELEMENTS)
+        if len(outward) == 0 and len(inward) == 0:
+            out_elem = str(getattr(getattr(case, "active", None), "elem_name", ""))
+            in_elem = str(getattr(getattr(case, "oxidant", None), "elem_name", ""))
+            if out_elem:
+                outward.add(out_elem)
+            if in_elem:
+                inward.add(in_elem)
+        if len(outward) == 0 and len(inward) > 0:
+            outward = set(stoich.keys()) - inward
+        if len(inward) == 0 and len(outward) > 0:
+            inward = set(stoich.keys()) - outward
+        return stoich, outward, inward
+
+    def get_comb_ind_jmatpro_generic(self):
+        self.ioz_bound = self.get_cur_ioz_bound()
+        ub = int(self.ioz_bound)
+
+        oxid_cfg = self._cfg_elem_map(Config.OXIDANTS)
+        act_cfg = self._cfg_elem_map(Config.ACTIVES)
+        oxid_counts = self._gather_species_counts_by_element(ub, self.cases.all_oxidants)
+        act_counts = self._gather_species_counts_by_element(ub, self.cases.all_actives)
+        total_oxid_counts = np.zeros(ub + 1, dtype=np.float64)
+        for v in oxid_counts.values():
+            total_oxid_counts += v
+        total_act_counts = np.zeros(ub + 1, dtype=np.float64)
+        for v in act_counts.values():
+            total_act_counts += v
+
+        elem_free_moles = {}
+        for elem, counts in oxid_counts.items():
+            cfg = oxid_cfg.get(elem)
+            elem_free_moles[elem] = counts * cfg.MOLES_PER_CELL
+        for elem, counts in act_counts.items():
+            cfg = act_cfg.get(elem)
+            elem_free_moles[elem] = counts * cfg.MOLES_PER_CELL
+
+        outward_eq_mat_moles = np.zeros(ub + 1, dtype=np.float64)
+        for elem, counts in act_counts.items():
+            cfg = act_cfg.get(elem)
+            outward_eq_mat_moles += counts * cfg.EQ_MATRIX_MOLES_PER_CELL
+
+        product_moles_total = np.zeros(ub + 1, dtype=np.float64)
+        product_eq_mat_moles = np.zeros(ub + 1, dtype=np.float64)
+        elem_pure_moles = dict(elem_free_moles)
+        product_moles_by_identifier = {}
+        for case, case_mp in self.cases.product_case_pairs:
+            p_cfg = self._get_product_cfg_for_case_mp(case_mp)
+            p_counts = self._get_product_counts_upto_bound_for_case(case, case_mp, ub).astype(np.float64)
+            p_moles = p_counts * p_cfg.MOLES_PER_CELL_TC
+            product_moles_by_identifier[p_cfg.ELEMENT] = p_moles
+            product_moles_total += p_moles
+
+            stoich, outward_set, _ = self._resolve_product_stoich_roles(case, case_mp, p_cfg)
+            nu_sum = float(sum(stoich.values()))
+            for elem, nu in stoich.items():
+                frac = float(nu) / nu_sum
+                elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * frac
+                if elem in outward_set:
+                    eq_pc = act_cfg[elem].EQ_MATRIX_MOLES_PER_CELL
+                    product_eq_mat_moles += p_counts * eq_pc * float(nu)
+
+        matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
+        whole_moles = matrix_moles + product_moles_total
+        for m in elem_free_moles.values():
+            whole_moles += m
+        
+        product_c_by_identifier = {}
+        for p_ident, p_moles in product_moles_by_identifier.items():
+            product_c_by_identifier[p_ident] = p_moles / whole_moles
+
+        matrix_moles_pure = np.full(ub + 1, self.matrix_moles_per_page, dtype=np.float64)
+        for elem, moles in elem_pure_moles.items():
+            cfg_a = act_cfg.get(elem)
+            t_val = float(getattr(cfg_a, "T", 0.0))
+            matrix_moles_pure -= moles * t_val
+
+        matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", "Ni"))
+        comp_elems = [e for e in sorted(elem_pure_moles.keys()) if e and e != matrix_elem]
+        elements = [matrix_elem] + comp_elems
+        compositions = []
+        for i in range(ub + 1):
+            non_matrix_sum = 0.0
+            for elem in comp_elems:
+                non_matrix_sum += float(elem_pure_moles[elem][i])
+            tot = float(matrix_moles_pure[i] + non_matrix_sum)
+            if tot <= 0:
+                compositions.append([100.0] + [0.0] * len(comp_elems))
+                continue
+            row = [float(matrix_moles_pure[i] * 100.0 / tot)]
+            for elem in comp_elems:
+                row.append(float(elem_pure_moles[elem][i] * 100.0 / tot))
+            s = sum(row)
+            if s > 100.0:
+                scale = 100.0 / s
+                row = [v * scale for v in row]
+            compositions.append(row)
+
+        plane_indices = np.arange(ub + 1, dtype=np.intp)
+        task_ids = self.jmatpro_pool.submit_tasks(compositions, elements=elements)
+        task_to_plane = {tid: int(plane_indices[idx]) for idx, tid in enumerate(task_ids)}
+        raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=100000.0)
+
+        for case, case_mp in self.cases.product_case_pairs:
+            p_cfg = self._get_product_cfg_for_case_mp(case_mp)
+            case_mp.plane_indexes = []
+            out_elem = p_cfg.OUTWARD_ELEMENTS[0]
+            jm_plane0 = 0.0
+            for tid in task_ids:
+                phases = raw_list.get(tid, {})
+                phased = phases.get(p_cfg.JM_IDENTIFIER)
+                if not phased:
+                    continue
+                sum_non_ox = phased["sum_non_ox"]
+                plane_idx = task_to_plane[tid]
+                for jm_elem, jm_comp in zip(phased["elements"], phased["composition"]):
+                    if jm_elem == out_elem:
+                        product_c_jm = (jm_comp / sum_non_ox) * phased["molar_fraction"]
+                        if plane_idx == 0:
+                            jm_plane0 = float(product_c_jm)
+                        if product_c_jm > product_c_by_identifier[p_cfg.ELEMENT][plane_idx]:
+                            case_mp.plane_indexes.append(plane_idx)
+            if self.iteration is not None:
+                existing_plane0 = float(product_c_by_identifier[p_cfg.ELEMENT][0])
+                diff_plane0 = jm_plane0 - existing_plane0
+                self.product_plane0_tracking[(int(self.iteration), str(p_cfg.ELEMENT))] = (
+                    jm_plane0,
+                    existing_plane0,
+                    diff_plane0,
+                )
 
     def get_comb_ind_jmatpro(self):
         """Single active, single oxidant only (no secondary elements)."""
@@ -2197,13 +2371,13 @@ class CellularAutomata:
         self._precip_z_ranges_neg = z_ranges_neg
         self._precip_gap_z_groups_neg = gap_z_groups_neg
 
-    def precip_mp_subblock(self):
+    def precip_mp_subblock(self, cur_case, cur_case_mp):
         # Point case_mp at current read buffers (diffusion may have swapped A/B)
-        self.cur_case = self.cases.product_cases[0]
-        self.get_combi_ind()
-        self.cur_case_mp.oxidant_c3d_shm_mdata = self.cur_case.oxidant.get_current_c3d_shm_mdata()
-        self.cur_case_mp.active_c3d_shm_mdata = self.cur_case.active.get_current_c3d_shm_mdata()
-        self.cur_case.fix_init_precip_func_ref(self.cells_per_axis)
+        # self.cur_case = self.cases.product_cases[0]
+        # self.get_combi_ind()
+        cur_case_mp.oxidant_c3d_shm_mdata = cur_case.oxidant.get_current_c3d_shm_mdata()
+        cur_case_mp.active_c3d_shm_mdata = cur_case.active.get_current_c3d_shm_mdata()
+        cur_case.fix_init_precip_func_ref(self.cells_per_axis)
 
         # Two-state strategy only: even iterations -> base, odd iterations -> mirrored.
         if int(self.iteration) % 2 == 0:
@@ -2213,7 +2387,7 @@ class CellularAutomata:
             z_blocks = self._precip_z_blocks_neg
             gap_z_groups = self._precip_gap_z_groups_neg
 
-        plane_indexes = np.asarray(self.comb_indexes, dtype=np.intp)
+        plane_indexes = np.asarray(cur_case_mp.plane_indexes, dtype=np.intp)
         ind_form = np.asarray(ind_formation, dtype=np.int8)
 
         # Interior z-blocks:
@@ -2222,7 +2396,7 @@ class CellularAutomata:
         for segs in z_blocks:
             if len(segs) == 1:
                 k_lo, k_hi = segs[0]
-                tasks_std.append((self.cur_case_mp, k_lo, k_hi, plane_indexes, self.cur_case.oxidant.max_per_cell, self.cur_case.active.max_per_cell, ind_form))
+                tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, cur_case.active.max_per_cell, ind_form))
             else:
                 # Use the largest segment in the parallel pass; defer the remaining
                 # wrapped segment(s) to a short sequential tail pass.
@@ -2230,9 +2404,9 @@ class CellularAutomata:
                 main_seg = segs_sorted[0]
                 tail_segs = segs_sorted[1:]
                 k_lo, k_hi = main_seg
-                tasks_std.append((self.cur_case_mp, k_lo, k_hi, plane_indexes, self.cur_case.oxidant.max_per_cell, self.cur_case.active.max_per_cell, ind_form))
+                tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, cur_case.active.max_per_cell, ind_form))
                 for k_lo, k_hi in tail_segs:
-                    tasks_tail_seq.append((self.cur_case_mp, k_lo, k_hi, plane_indexes, self.cur_case.oxidant.max_per_cell, self.cur_case.active.max_per_cell, ind_form))
+                    tasks_tail_seq.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, cur_case.active.max_per_cell, ind_form))
         if tasks_std:
             self.worker_pools.nucleation_pool.map(precip_step_subblock_worker, tasks_std)
         for task in tasks_tail_seq:
@@ -2240,16 +2414,22 @@ class CellularAutomata:
         # Gap z-planes: run all gap indices in one worker task using explicit seed list.
         gap_seed_slab_k = list(dict.fromkeys(int(k) for group in gap_z_groups for k in group))
         gap_task = [(
-            self.cur_case_mp,
+            cur_case_mp,
             0,
-            int(self.cur_case_mp.oxidant_c3d_shm_mdata.shape[2]) - 1,
+            int(cur_case_mp.oxidant_c3d_shm_mdata.shape[2]) - 1,
             plane_indexes,
-            self.cur_case.oxidant.max_per_cell,
-            self.cur_case.active.max_per_cell,
+            cur_case.oxidant.max_per_cell,
+            cur_case.active.max_per_cell,
             ind_form,
             gap_seed_slab_k,
         )]
         self.worker_pools.nucleation_pool.map(precip_step_subblock_worker, gap_task)
+    
+    def nucleate(self):
+        self.get_combi_ind()
+        for case, case_mp in self.cases.product_case_pairs:
+            if case_mp.plane_indexes:
+                self.precip_mp_subblock(case, case_mp)
 
     def ioz_depth_from_kinetics(self):
         self.curr_time = Config.GENERATED_VALUES.TAU * (self.iteration + 1)

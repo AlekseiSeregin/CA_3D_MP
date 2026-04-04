@@ -10,6 +10,7 @@ class Database:
         self.c = self.conn.cursor()
         self.create_precipitation_front_table()
         self.create_time_parameters_table()
+        self.create_product_plane0_tracking_table()
         self.save_pickled_config_to_db()
 
     def save_pickled_config_to_db(self):
@@ -55,6 +56,31 @@ class Database:
 
     def insert_last_iteration(self, last_i):
         self.c.execute("""UPDATE time_parameters set last_i = {}""".format(last_i))
+
+    def create_product_plane0_tracking_table(self):
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS product_plane0_tracking
+               (iteration int,
+                product text,
+                jmatpro_conc float,
+                existing_conc float,
+                diff_conc float)"""
+        )
+
+    def insert_product_plane0_tracking(self, tracking_data):
+        if not tracking_data:
+            return
+        rows = []
+        for (iteration, product), values in tracking_data.items():
+            jmatpro_conc, existing_conc, diff_conc = values
+            rows.append((int(iteration), str(product), float(jmatpro_conc), float(existing_conc), float(diff_conc)))
+        rows.sort(key=lambda x: (x[0], x[1]))
+        self.c.executemany(
+            """INSERT INTO product_plane0_tracking
+               (iteration, product, jmatpro_conc, existing_conc, diff_conc)
+               VALUES (?, ?, ?, ?, ?)""",
+            rows,
+        )
 
     @staticmethod
     def to_tuple(points):

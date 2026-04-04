@@ -79,6 +79,9 @@ class ProdInput:
         self.THRESHOLD_OUTWARD = 0
         self.ELEMENT = "None"
         self.COMPONENTS = []
+        self.STOICH = {}
+        self.OUTWARD_ELEMENTS = []
+        self.INWARD_ELEMENTS = []
         self.PRIORITY = None
 
 

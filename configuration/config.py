@@ -12,17 +12,25 @@ class Config:
 
     PRODUCTS = ProdGroups()
     PRODUCTS.PRIMARY = ProdInput()
-    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 1
-    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 1
+    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 2
+    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 3
     PRODUCTS.PRIMARY.ELEMENT = "Cr2O3"
+    PRODUCTS.PRIMARY.JM_IDENTIFIER = "M2O3"
     PRODUCTS.PRIMARY.COMPONENTS = ["Cr", "O"]
+    PRODUCTS.PRIMARY.STOICH = {"Cr": 2, "O": 3}
+    PRODUCTS.PRIMARY.OUTWARD_ELEMENTS = ["Cr"]
+    PRODUCTS.PRIMARY.INWARD_ELEMENTS = ["O"]
     PRODUCTS.PRIMARY.PRIORITY = 1
 
     PRODUCTS.SECONDARY = ProdInput()
     PRODUCTS.SECONDARY.THRESHOLD_INWARD = 2
     PRODUCTS.SECONDARY.THRESHOLD_OUTWARD = 4
     PRODUCTS.SECONDARY.ELEMENT = "NiCr2O4"
+    PRODUCTS.SECONDARY.JM_IDENTIFIER = "SPINEL_AB2O4"
     PRODUCTS.SECONDARY.COMPONENTS = ["Cr", "O"]
+    PRODUCTS.SECONDARY.STOICH = {"Cr": 2, "O": 4}
+    PRODUCTS.SECONDARY.OUTWARD_ELEMENTS = ["Cr"]
+    PRODUCTS.SECONDARY.INWARD_ELEMENTS = ["O"]
     PRODUCTS.SECONDARY.PRIORITY = 2
 
     PRODUCTS.TERNARY = ProdInput()
@@ -45,7 +53,7 @@ class Config:
     OXIDANTS.PRIMARY.ELEMENT = "O"
     OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
     # OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.5
+    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 1
     OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 10
 
     # secondary oxidants
@@ -57,7 +65,7 @@ class Config:
     ACTIVES.PRIMARY.ELEMENT = "Cr"
     ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
     ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.07
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 0.5
+    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 5
     ACTIVES.PRIMARY.CONC_PRECISION = "rand"
     ACTIVES.PRIMARY.SPACE_FILL = "full"
     ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 10
@@ -99,8 +107,8 @@ class Config:
     # 3D Chopard–Droz diffusion (shared-memory MP): workers per element type
     # max_per_cell is per element: set ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL, OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL, etc.
     # Fallback only when an element's DIFFUSION_MAX_PER_CELL is not set.
-    OUTWARD_DIFFUSION_WORKERS = 3
-    INWARD_DIFFUSION_WORKERS = 3
+    OUTWARD_DIFFUSION_WORKERS = 8
+    INWARD_DIFFUSION_WORKERS = 4
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
     DIFFUSION_BOUNDARY_X_OUTWARD_RIGHT = "reflection"
@@ -122,7 +130,7 @@ class Config:
     #   stoich_simple -> threshold-based simplified nucleation
     #   stoich_prob_owner   -> threshold-based probabilistic nucleation with owner-phase exclusion
     #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
-    NUCLEATION_MODE = "legacy_simple_owner"
+    NUCLEATION_MODE = "stoich_simple_owner"
     # If True, precipitation stages are executed sequentially by product PRIORITY
     # using PRODUCTS.* configuration (ELEMENT/COMPONENTS).
     USE_PRODUCT_STAGE_SEQUENCE = True
@@ -136,7 +144,7 @@ class Config:
     #   JMATPRO_WORKER_RATIO = 0.4  # 40% JMatPro, 60% CA (recommended for balanced workload)
     #   JMATPRO_WORKER_RATIO = 0.5  # 50/50 split
     #   JMATPRO_WORKER_RATIO = None  # Auto: 40% JMatPro, 60% CA
-    JMATPRO_WORKER_RATIO = 0.3  # None = auto allocation
+    JMATPRO_WORKER_RATIO = 0.4  # None = auto allocation
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
     # Worker recycling: long-lived workers can grow RAM (NumPy/Python allocator fragmentation).

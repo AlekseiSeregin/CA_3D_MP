@@ -39,6 +39,8 @@ class Visualisation:
         self.last_i = None
         self.oxid_numb = None
         self.utils = utils.Utils()
+        self._table_prefix_aliases = {}
+        self._available_iter_prefixes = set()
         self.generate_param_from_db()
         self.cell_size_full = 40
         self.cell_size = 40
@@ -56,11 +58,40 @@ class Visualisation:
     def _fetch_iter_table(self, iteration, table_prefix):
         """Load one iteration table as numpy array. Returns (N,3) or empty array on error."""
         try:
-            self.c.execute("SELECT * from {}_iter_{}".format(table_prefix, iteration))
+            table_prefix = self._resolve_table_prefix(table_prefix)
+            self.c.execute('SELECT * from "{}_iter_{}"'.format(table_prefix, iteration))
             out = np.array(self.c.fetchall())
             return out if out.size else np.zeros((0, 3), dtype=np.int64)
         except (sql.OperationalError, TypeError):
             return np.zeros((0, 3), dtype=np.int64)
+
+    def _build_table_prefix_aliases(self):
+        self.c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_iter_%'")
+        self._available_iter_prefixes = set()
+        for (name,) in self.c.fetchall():
+            if "_iter_" in name:
+                self._available_iter_prefixes.add(name.rsplit("_iter_", 1)[0])
+
+        aliases = {
+            "primary_oxidant": str(getattr(self.Config.OXIDANTS.PRIMARY, "ELEMENT", "primary_oxidant")),
+            "secondary_oxidant": str(getattr(self.Config.OXIDANTS.SECONDARY, "ELEMENT", "secondary_oxidant")),
+            "primary_active": str(getattr(self.Config.ACTIVES.PRIMARY, "ELEMENT", "primary_active")),
+            "secondary_active": str(getattr(self.Config.ACTIVES.SECONDARY, "ELEMENT", "secondary_active")),
+            "primary_product": str(getattr(self.Config.PRODUCTS.PRIMARY, "ELEMENT", "primary_product")),
+            "secondary_product": str(getattr(self.Config.PRODUCTS.SECONDARY, "ELEMENT", "secondary_product")),
+            "ternary_product": str(getattr(self.Config.PRODUCTS.TERNARY, "ELEMENT", "ternary_product")),
+            "quaternary_product": str(getattr(self.Config.PRODUCTS.QUATERNARY, "ELEMENT", "quaternary_product")),
+            "quint_product": str(getattr(self.Config.PRODUCTS.QUINT, "ELEMENT", "quint_product")),
+        }
+        self._table_prefix_aliases = aliases
+
+    def _resolve_table_prefix(self, table_prefix):
+        if table_prefix in self._available_iter_prefixes:
+            return table_prefix
+        mapped = self._table_prefix_aliases.get(table_prefix, table_prefix)
+        if mapped in self._available_iter_prefixes:
+            return mapped
+        return table_prefix
 
     def _scatter_size(self, fig, cell_size=40):
         """Marker size for 3D scatter from fig.dpi and cell_size."""
@@ -111,15 +142,23 @@ class Visualisation:
     def _get_3d_panels(self):
         """Return list of (title, table, color, active) for separate 3D/2D panels."""
         cfg = self.Config
+        pox = self._resolve_table_prefix("primary_oxidant")
+        sox = self._resolve_table_prefix("secondary_oxidant")
+        pact = self._resolve_table_prefix("primary_active")
+        sact = self._resolve_table_prefix("secondary_active")
+        pprod = self._resolve_table_prefix("primary_product")
+        sprod = self._resolve_table_prefix("secondary_product")
+        tprod = self._resolve_table_prefix("ternary_product")
+        qprod = self._resolve_table_prefix("quaternary_product")
         return [
-            ("Primary oxidant (inward diffusion)", "primary_oxidant", "b", bool(cfg.INWARD_DIFFUSION)),
-            ("Secondary oxidant (inward diffusion)", "secondary_oxidant", "deeppink", bool(cfg.OXIDANTS.SECONDARY_EXISTENCE)),
-            ("Primary active (outward diffusion)", "primary_active", "g", bool(cfg.OUTWARD_DIFFUSION)),
-            ("Secondary active (outward diffusion)", "secondary_active", "darkorange", bool(cfg.ACTIVES.SECONDARY_EXISTENCE)),
-            ("Primary product (precipitation)", "primary_product", "r", bool(cfg.COMPUTE_PRECIPITATION)),
-            ("Secondary product (precipitation)", "secondary_product", "cyan" if (cfg.ACTIVES.SECONDARY_EXISTENCE and cfg.OXIDANTS.SECONDARY_EXISTENCE) else "saddlebrown", bool(cfg.COMPUTE_PRECIPITATION and cfg.ACTIVES.SECONDARY_EXISTENCE)),
-            ("Ternary product (precipitation)", "ternary_product", "darkgreen", bool(cfg.COMPUTE_PRECIPITATION and cfg.ACTIVES.SECONDARY_EXISTENCE and cfg.OXIDANTS.SECONDARY_EXISTENCE)),
-            ("Quaternary product (precipitation)", "quaternary_product", "steelblue", bool(cfg.COMPUTE_PRECIPITATION and cfg.ACTIVES.SECONDARY_EXISTENCE and cfg.OXIDANTS.SECONDARY_EXISTENCE)),
+            (f"{pox} (inward diffusion)", pox, "b", bool(cfg.INWARD_DIFFUSION and pox in self._available_iter_prefixes)),
+            (f"{sox} (inward diffusion)", sox, "deeppink", bool(cfg.INWARD_DIFFUSION and sox in self._available_iter_prefixes)),
+            (f"{pact} (outward diffusion)", pact, "g", bool(cfg.OUTWARD_DIFFUSION and pact in self._available_iter_prefixes)),
+            (f"{sact} (outward diffusion)", sact, "darkorange", bool(cfg.OUTWARD_DIFFUSION and sact in self._available_iter_prefixes)),
+            (f"{pprod} (precipitation)", pprod, "r", bool(cfg.COMPUTE_PRECIPITATION and pprod in self._available_iter_prefixes)),
+            (f"{sprod} (precipitation)", sprod, "cyan", bool(cfg.COMPUTE_PRECIPITATION and sprod in self._available_iter_prefixes)),
+            (f"{tprod} (precipitation)", tprod, "darkgreen", bool(cfg.COMPUTE_PRECIPITATION and tprod in self._available_iter_prefixes)),
+            (f"{qprod} (precipitation)", qprod, "steelblue", bool(cfg.COMPUTE_PRECIPITATION and qprod in self._available_iter_prefixes)),
         ]
 
     def generate_param_from_db(self):
@@ -156,6 +195,7 @@ class Visualisation:
         self.axlim = self.Config.N_CELLS_PER_AXIS
         self.shape = (self.axlim, self.axlim, self.axlim)
         self.oxid_numb = self.Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
+        self._build_table_prefix_aliases()
 
         if not self.Config.INWARD_DIFFUSION:
             print("No INWARD data!")
@@ -769,38 +809,33 @@ ELAPSED TIME: {message}
             quaternary_product_eq_mat_moles = np.zeros(self.axlim, dtype=int)
 
             if self.Config.INWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "primary_oxidant")
                 inward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                 inward_moles = inward * self.Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
                 inward_mass = inward * self.Config.OXIDANTS.PRIMARY.MASS_PER_CELL
 
                 if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
+                    items = self._fetch_iter_table(iteration, "secondary_oxidant")
                     sinward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     sinward_moles = sinward * self.Config.OXIDANTS.SECONDARY.MOLES_PER_CELL
                     sinward_mass = sinward * self.Config.OXIDANTS.SECONDARY.MASS_PER_CELL
 
             if self.Config.OUTWARD_DIFFUSION:
-                self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "primary_active")
                 outward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                 outward_moles = outward * self.Config.ACTIVES.PRIMARY.MOLES_PER_CELL
                 outward_mass = outward * self.Config.ACTIVES.PRIMARY.MASS_PER_CELL
                 outward_eq_mat_moles = outward * self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
                 if self.Config.ACTIVES.SECONDARY_EXISTENCE:
-                    self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
-                    items = np.array(self.c.fetchall())
+                    items = self._fetch_iter_table(iteration, "secondary_active")
                     soutward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     soutward_moles = soutward * self.Config.ACTIVES.SECONDARY.MOLES_PER_CELL
                     soutward_mass = soutward * self.Config.ACTIVES.SECONDARY.MASS_PER_CELL
                     soutward_eq_mat_moles = soutward * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
 
             if self.Config.COMPUTE_PRECIPITATION:
-                self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "primary_product")
                 if np.any(items):
                     primary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     primary_product_moles = primary_product * self.Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
@@ -1031,38 +1066,33 @@ ELAPSED TIME: {message}
         quint_product_eq_mat_moles = np.zeros(self.axlim, dtype=int)
 
         if self.Config.INWARD_DIFFUSION:
-            self.c.execute("SELECT * from primary_oxidant_iter_{}".format(iteration))
-            items = np.array(self.c.fetchall())
+            items = self._fetch_iter_table(iteration, "primary_oxidant")
             inward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
             inward_moles = inward * self.Config.OXIDANTS.PRIMARY.MOLES_PER_CELL
             inward_mass = inward * self.Config.OXIDANTS.PRIMARY.MASS_PER_CELL
 
             if self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                self.c.execute("SELECT * from secondary_oxidant_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "secondary_oxidant")
                 sinward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                 sinward_moles = sinward * self.Config.OXIDANTS.SECONDARY.MOLES_PER_CELL
                 sinward_mass = sinward * self.Config.OXIDANTS.SECONDARY.MASS_PER_CELL
 
         if self.Config.OUTWARD_DIFFUSION:
-            self.c.execute("SELECT * from primary_active_iter_{}".format(iteration))
-            items = np.array(self.c.fetchall())
+            items = self._fetch_iter_table(iteration, "primary_active")
             outward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
             outward_moles = outward * self.Config.ACTIVES.PRIMARY.MOLES_PER_CELL
             outward_mass = outward * self.Config.ACTIVES.PRIMARY.MASS_PER_CELL
             outward_eq_mat_moles = outward * self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL
 
             if self.Config.ACTIVES.SECONDARY_EXISTENCE:
-                self.c.execute("SELECT * from secondary_active_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "secondary_active")
                 soutward = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                 soutward_moles = soutward * self.Config.ACTIVES.SECONDARY.MOLES_PER_CELL
                 soutward_mass = soutward * self.Config.ACTIVES.SECONDARY.MASS_PER_CELL
                 soutward_eq_mat_moles = soutward * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL
 
         if self.Config.COMPUTE_PRECIPITATION:
-            self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
-            items = np.array(self.c.fetchall())
+            items = self._fetch_iter_table(iteration, "primary_product")
             if np.any(items):
                 primary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                 primary_product_moles = primary_product * self.Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
@@ -1072,8 +1102,7 @@ ELAPSED TIME: {message}
                                                self.Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
 
             if self.Config.ACTIVES.SECONDARY_EXISTENCE and self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "secondary_product")
                 if np.any(items):
                     secondary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     secondary_product_moles = secondary_product * self.Config.PRODUCTS.SECONDARY.MOLES_PER_CELL
@@ -1082,8 +1111,7 @@ ELAPSED TIME: {message}
                     secondary_product_eq_mat_moles = secondary_product * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *\
                                                      self.Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD
 
-                self.c.execute("SELECT * from ternary_product_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "ternary_product")
                 if np.any(items):
                     ternary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     ternary_product_moles = ternary_product * self.Config.PRODUCTS.TERNARY.MOLES_PER_CELL
@@ -1093,8 +1121,7 @@ ELAPSED TIME: {message}
                                         self.Config.PRODUCTS.TERNARY.THRESHOLD_OUTWARD) +
                                                                        self.Config.PRODUCTS.TERNARY.MOLES_PER_CELL))
 
-                self.c.execute("SELECT * from quaternary_product_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "quaternary_product")
                 if np.any(items):
                     quaternary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     quaternary_product_moles = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL
@@ -1104,8 +1131,7 @@ ELAPSED TIME: {message}
                                            self.Config.PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD) +
                                                                              self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL))
 
-                self.c.execute("SELECT * from quint_product_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "quint_product")
                 if np.any(items):
                     quint_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     quint_product_moles = quint_product * self.Config.PRODUCTS.QUINT.MOLES_PER_CELL
@@ -1114,8 +1140,7 @@ ELAPSED TIME: {message}
                     quint_product_eq_mat_moles = quint_product * self.Config.PRODUCTS.QUINT.MOLES_PER_CELL
 
             elif self.Config.ACTIVES.SECONDARY_EXISTENCE and not self.Config.OXIDANTS.SECONDARY_EXISTENCE:
-                self.c.execute("SELECT * from secondary_product_iter_{}".format(iteration))
-                items = np.array(self.c.fetchall())
+                items = self._fetch_iter_table(iteration, "secondary_product")
                 if np.any(items):
                     secondary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     secondary_product_moles = secondary_product * self.Config.PRODUCTS.SECONDARY.MOLES_PER_CELL
@@ -1341,8 +1366,7 @@ ELAPSED TIME: {message}
             iteration = self.last_i
 
         if self.Config.COMPUTE_PRECIPITATION:
-            self.c.execute("SELECT * from primary_product_iter_{}".format(iteration))
-            items = np.array(self.c.fetchall())
+            items = self._fetch_iter_table(iteration, "primary_product")
             if np.any(items):
                 array_3d[items[:, 0], items[:, 1], items[:, 2]] = True
                 # xs_mean = []
@@ -1445,6 +1469,48 @@ ELAPSED TIME: {message}
                 ax1.scatter(sqr_time_s, position_s, s=10, color='cyan')
             else:
                 return print("No Data to plot secondary precipitation front!")
+        plt.show()
+
+    def plot_plane0_product_tracking(self):
+        try:
+            self.c.execute(
+                """SELECT iteration, product, jmatpro_conc, existing_conc, diff_conc
+                   FROM product_plane0_tracking
+                   ORDER BY iteration, product"""
+            )
+            rows = self.c.fetchall()
+        except sql.OperationalError:
+            return print("No product_plane0_tracking table in this database!")
+
+        if not rows:
+            return print("No plane-0 product tracking data to plot!")
+
+        data = pd.DataFrame(
+            rows,
+            columns=["iteration", "product", "jmatpro_conc", "existing_conc", "diff_conc"],
+        )
+
+        fig, ax = plt.subplots()
+        for product in sorted(data["product"].unique()):
+            prod_data = data[data["product"] == product].sort_values("iteration")
+            ax.plot(
+                prod_data["iteration"].to_numpy(),
+                prod_data["jmatpro_conc"].to_numpy(),
+                label=f"{product} jmatpro",
+            )
+            ax.plot(
+                prod_data["iteration"].to_numpy(),
+                prod_data["existing_conc"].to_numpy(),
+                linestyle="--",
+                label=f"{product} existing",
+            )
+
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Concentration")
+        ax.set_title("Plane-0 concentration tracking")
+        ax.grid(True, alpha=0.25)
+        ax.legend()
+        plt.tight_layout()
         plt.show()
 
 

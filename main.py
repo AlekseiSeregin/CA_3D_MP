@@ -61,7 +61,7 @@ if __name__ == '__main__':
             super().__init__()
             # self.c_automata.cases.first.is_active = True
 
-            self.c_automata.precip_func = self.c_automata.precip_mp_subblock
+            self.c_automata.precip_func = self.c_automata.nucleate
 
             # self.c_automata.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(
             #     Config.PROBABILITIES.PRIMARY,
@@ -74,7 +74,7 @@ if __name__ == '__main__':
 
             self.c_automata.get_cur_ioz_bound = self.c_automata.ioz_depth_furthest_inward
 
-            self.c_automata.get_combi_ind = self.c_automata.get_comb_ind_jmatpro
+            self.c_automata.get_combi_ind = self.c_automata.get_comb_ind_jmatpro_generic
 
             # self.cases.get_all_oxidants()
             # self.cases.get_all_actives()
