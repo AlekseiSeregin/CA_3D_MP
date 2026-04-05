@@ -38,7 +38,7 @@ class Database:
 
     def create_precipitation_front_table(self):
         self.c.execute(f"""CREATE TABLE precip_front_p (sqrt_time int, position int)""")
-        if Config.ACTIVES.SECONDARY_EXISTENCE:
+        if getattr(Config, "ACTIVES_SECONDARY_EXISTENCE", False):
             self.c.execute("""CREATE TABLE precip_front_s (sqrt_time int, position int)""")
 
     def insert_precipitation_front(self, sqrt_time, position, sign):

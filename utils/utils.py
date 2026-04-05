@@ -5,6 +5,7 @@ import time
 import datetime
 from configuration import Config
 import math
+from types import SimpleNamespace
 
 
 class Utils:
@@ -71,32 +72,12 @@ class Utils:
 
         Config.GENERATED_VALUES.KINETIC_KONST = (Config.ZETTA_FINAL-Config.ZETTA_ZERO) / (Config.SIM_TIME ** 0.5)
 
-        if Config.ACTIVES.SECONDARY.ELEMENT == "None":
-            Config.ACTIVES.SECONDARY.MASS_CONCENTRATION = 0
-            Config.ACTIVES.SECONDARY.CELLS_CONCENTRATION = 0
-            Config.ACTIVES.SECONDARY_EXISTENCE = False
-        else:
-            Config.ACTIVES.SECONDARY_EXISTENCE = True
-
-        if Config.OXIDANTS.SECONDARY.ELEMENT == "None":
-            Config.OXIDANTS.SECONDARY.CELLS_CONCENTRATION = 0
-            Config.OXIDANTS.SECONDARY_EXISTENCE = False
-        else:
-            Config.OXIDANTS.SECONDARY_EXISTENCE = True
-
-        self.fetch_from_physical_data()
-        self.calc_atomic_conc()
-        self.check_c_min_and_calc_ncells()
-        self.calc_active_data()
-        self.calc_oxidant_data()
-
-        # if Config.MAP_PRODUCTS_TO_ELEMENTS:
-        #     self.calc_product_data()
-        # else:
-        #     self.calc_product_data_custom()
+        self._prepare_element_lists_dynamic()
+        self._calc_active_data_dynamic()
+        self._calc_oxidant_data_dynamic()
         self.calc_product_data()
-
-        self.calc_initial_conc_and_moles()
+        self._build_runtime_element_settings()
+        self._calc_initial_conc_and_moles_dynamic()
 
         time_stamp = int(time.time())
         # Config.GENERATED_VALUES.DB_ID = str(int(time_stamp + random.randint(1, 1000000)))
@@ -111,77 +92,198 @@ class Utils:
                 self.print_static_params_to_file(Config, file)
 
     @staticmethod
+    def _prepare_element_lists_dynamic():
+        # Normalize user input and filter "None" entries.
+        norm_actives = []
+        for item in Config.ACTIVES:
+            elem = str(item.get("element", "")).strip()
+            item["element"] = elem
+            item["mass_concentration"] = item.get("mass_concentration", 0.0)
+            item["cells_concentration"] = item.get("cells_concentration", 0.0)
+            item["conc_precision"] = item.get("conc_precision", "rand")
+            item["space_fill"] = item.get("space_fill", "full")
+            item["diffusion_max_per_cell"] = item.get("diffusion_max_per_cell", 10)
+            norm_actives.append(item)
+        Config.ACTIVES = norm_actives
+
+        norm_oxidants = []
+        for item in Config.OXIDANTS:
+            elem = str(item.get("element", "")).strip()
+            item["element"] = elem
+            item["cells_concentration"] = item.get("cells_concentration", 0.0)
+            item["diffusion_max_per_cell"] = item.get("diffusion_max_per_cell", 3)
+            item["diffusion_condition_gb"] = str(item.get("diffusion_condition_gb", item.get("diffusion_condition", "")))
+            norm_oxidants.append(item)
+        Config.OXIDANTS = norm_oxidants
+
+    def _calc_active_data_dynamic(self):
+        matrix_elem = Config.MATRIX.ELEMENT
+        Config.MATRIX.DENSITY = DENSITY[matrix_elem]
+        Config.MATRIX.MOLAR_MASS = MOLAR_MASS[matrix_elem]
+        cell_volume = Config.GENERATED_VALUES.LAMBDA ** 3
+        Config.MATRIX.MOLES_PER_CELL = Config.MATRIX.DENSITY * cell_volume / Config.MATRIX.MOLAR_MASS
+        Config.MATRIX.MASS_PER_CELL = Config.MATRIX.MOLES_PER_CELL * Config.MATRIX.MOLAR_MASS
+
+        for active in Config.ACTIVES:
+            elem = active["element"]
+            active["DENSITY"] = DENSITY[elem]
+            active["MOLAR_MASS"] = MOLAR_MASS[elem]
+            active["DIFFUSION_COEFFICIENT"] = get_diff_coeff(Config.TEMPERATURE, active["diffusion_condition"])
+            active["PROBABILITIES"] = self.calc_prob(active["DIFFUSION_COEFFICIENT"], stridden=True)
+
+        mass_sum = sum(float(a["mass_concentration"]) for a in Config.ACTIVES)
+        if mass_sum > 1.0:
+            raise ValueError(f"Sum of active mass concentrations must be <= 1.0, got {mass_sum}")
+
+        denom = (1.0 - mass_sum) / Config.MATRIX.MOLAR_MASS
+        for active in Config.ACTIVES:
+            denom += float(active["mass_concentration"]) / float(active["MOLAR_MASS"])
+        denom = max(denom, 1e-30)
+
+        denom_moles = 1.0
+        for active in Config.ACTIVES:
+            atomic_c = (float(active["mass_concentration"]) / float(active["MOLAR_MASS"])) / denom
+            active["ATOMIC_CONCENTRATION"] = atomic_c
+            t_val = float(active["MOLAR_MASS"]) * float(Config.MATRIX.DENSITY) / (
+                float(active["DENSITY"]) * float(Config.MATRIX.MOLAR_MASS)
+            )
+            active["T"] = t_val
+            active["n_ELEM"] = 1.0 - t_val
+            denom_moles += atomic_c * (t_val - 1.0)
+        denom_moles = max(denom_moles, 1e-30)
+
+        for active in Config.ACTIVES:
+            min_cells = float(active["ATOMIC_CONCENTRATION"]) * float(active["T"]) / denom_moles
+            min_cells = max(0.0, min_cells)
+
+            if Config.FULL_CELLS:
+                cells_conc = min_cells
+                active["cells_concentration"] = cells_conc
+            else:
+                cells_conc = float(active["cells_concentration"])
+                if cells_conc < min_cells:
+                    raise ValueError(
+                        f"Cells concentration for outward element '{active['element']}' must be >= {min_cells}"
+                    )
+
+            if cells_conc > 0.0:
+                moles_per_cell = (
+                    float(active["ATOMIC_CONCENTRATION"]) * float(Config.MATRIX.MOLES_PER_CELL)
+                ) / (cells_conc * denom_moles)
+            else:
+                moles_per_cell = 0.0
+            active["MOLES_PER_CELL"] = moles_per_cell
+            active["MASS_PER_CELL"] = moles_per_cell * float(active["MOLAR_MASS"])
+            active["EQ_MATRIX_MOLES_PER_CELL"] = moles_per_cell * float(active["T"])
+            active["EQ_MATRIX_MASS_PER_CELL"] = active["EQ_MATRIX_MOLES_PER_CELL"] * float(Config.MATRIX.MOLAR_MASS)
+            active["N_PER_PAGE"] = round(cells_conc * Config.N_CELLS_PER_AXIS ** 2)
+
+    def _calc_oxidant_data_dynamic(self):
+        if len(Config.ACTIVES) == 0:
+            raise ValueError("ACTIVES list is empty.")
+        ref_active_moles = float(Config.ACTIVES[0]["MOLES_PER_CELL"])
+
+        first_product = Config.PRODUCTS[0] if isinstance(Config.PRODUCTS, list) and len(Config.PRODUCTS) > 0 else {}
+        stoich = first_product.get("stoich", {})
+        outward = str(first_product.get("outward_element", "")).strip()
+        inward = str(first_product.get("inward_element", "")).strip()
+        thr_out = float(first_product.get("threshold_outward", 1.0))
+        thr_in = float(first_product.get("threshold_inward", 1.0))
+        nu_out = float(stoich.get(outward, 0.0))
+        nu_in = float(stoich.get(inward, 0.0))
+        ratio_in_to_out = (nu_in / max(nu_out, 1e-30)) * (thr_out / max(thr_in, 1e-30))
+        ref_oxidant_moles = ref_active_moles * ratio_in_to_out
+
+        for oxidant in Config.OXIDANTS:
+            elem = oxidant["element"]
+            oxidant["DENSITY"] = DENSITY[elem]
+            oxidant["MOLAR_MASS"] = MOLAR_MASS[elem]
+            oxidant["DIFFUSION_COEFFICIENT"] = get_diff_coeff(Config.TEMPERATURE, oxidant["diffusion_condition"])
+            oxidant["DIFFUSION_COEFFICIENT_GB"] = get_diff_coeff(
+                Config.TEMPERATURE, oxidant.get("diffusion_condition_gb", oxidant["diffusion_condition"])
+            )
+            oxidant["PROBABILITIES"] = self.calc_prob(oxidant["DIFFUSION_COEFFICIENT"])
+            oxidant["PROBABILITIES_2D"] = self.calc_p0_2d(oxidant["DIFFUSION_COEFFICIENT_GB"])
+            oxidant["PROBABILITIES_SCALE"] = self.calc_prob(oxidant["DIFFUSION_COEFFICIENT"] * 10 ** -2)
+            oxidant["PROBABILITIES_INTERFACE"] = self.calc_prob(oxidant["DIFFUSION_COEFFICIENT"] * 10 ** 3)
+            oxidant["N_PER_PAGE"] = round(float(oxidant["cells_concentration"]) * Config.N_CELLS_PER_AXIS ** 2)
+            oxidant["MOLES_PER_CELL"] = ref_oxidant_moles
+            oxidant["MASS_PER_CELL"] = ref_oxidant_moles * float(oxidant["MOLAR_MASS"])
+
+    @staticmethod
+    def _build_runtime_element_settings():
+        def to_runtime_obj(d):
+            ns = SimpleNamespace()
+            for k, v in d.items():
+                setattr(ns, k.upper(), v)
+            return ns
+        Config.ACTIVES_RUNTIME = [to_runtime_obj(a) for a in Config.ACTIVES]
+        Config.OXIDANTS_RUNTIME = [to_runtime_obj(o) for o in Config.OXIDANTS]
+
+    @staticmethod
+    def _calc_initial_conc_and_moles_dynamic():
+        # Keep only key totals that are consumed in runtime diagnostics.
+        inward_moles = sum(int(o["N_PER_PAGE"]) * float(o["MOLES_PER_CELL"]) for o in Config.OXIDANTS)
+        outward_moles = sum(int(a["N_PER_PAGE"]) * float(a["MOLES_PER_CELL"]) for a in Config.ACTIVES)
+        matrix_moles = float(Config.N_CELLS_PER_AXIS ** 2) * float(Config.MATRIX.MOLES_PER_CELL)
+        whole_moles = matrix_moles + inward_moles + outward_moles
+        Config.GENERATED_VALUES.inward_moles = inward_moles
+        Config.GENERATED_VALUES.outward_moles = outward_moles
+        Config.GENERATED_VALUES.matrix_moles = matrix_moles
+        Config.GENERATED_VALUES.whole_moles = whole_moles
+        Config.GENERATED_VALUES.max_gamma_min_one = 0 if Config.SOL_PROD == 0 else ((inward_moles ** 3) * (outward_moles ** 2)) / Config.SOL_PROD - 1
+
+    @staticmethod
     def calc_product_data():
-        # Primary
-        Config.PRODUCTS.PRIMARY.MASS_PER_CELL = Config.OXIDANTS.PRIMARY.MASS_PER_CELL + Config.ACTIVES.PRIMARY.MASS_PER_CELL
-        Config.PRODUCTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL / 2
-        Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC = Config.PRODUCTS.PRIMARY.MOLES_PER_CELL * 5
-        Config.PRODUCTS.PRIMARY.CONSTITUTION = Config.ACTIVES.PRIMARY.ELEMENT + "+" + Config.OXIDANTS.PRIMARY.ELEMENT
-        # Secondary
-        Config.PRODUCTS.SECONDARY.MASS_PER_CELL = Config.OXIDANTS.PRIMARY.MASS_PER_CELL + Config.ACTIVES.SECONDARY.MASS_PER_CELL
-        Config.PRODUCTS.SECONDARY.MOLES_PER_CELL = Config.ACTIVES.SECONDARY.MOLES_PER_CELL / 2
-        Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC = Config.PRODUCTS.SECONDARY.MOLES_PER_CELL * 5
-        Config.PRODUCTS.SECONDARY.CONSTITUTION = Config.ACTIVES.SECONDARY.ELEMENT + "+" + Config.OXIDANTS.PRIMARY.ELEMENT
-        # Ternary
-        Config.PRODUCTS.TERNARY.MASS_PER_CELL = Config.OXIDANTS.SECONDARY.MASS_PER_CELL + Config.ACTIVES.PRIMARY.MASS_PER_CELL
-        Config.PRODUCTS.TERNARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL
-        Config.PRODUCTS.TERNARY.MOLES_PER_CELL_TC = Config.PRODUCTS.TERNARY.MOLES_PER_CELL * 2
-        Config.PRODUCTS.TERNARY.CONSTITUTION = Config.ACTIVES.PRIMARY.ELEMENT + "+" + Config.OXIDANTS.SECONDARY.ELEMENT
-        # Quaternary
-        Config.PRODUCTS.QUATERNARY.MASS_PER_CELL = Config.OXIDANTS.SECONDARY.MASS_PER_CELL + Config.ACTIVES.SECONDARY.MASS_PER_CELL
-        Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL = Config.ACTIVES.SECONDARY.MOLES_PER_CELL
-        Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC = Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL * 2
-        Config.PRODUCTS.QUATERNARY.CONSTITUTION = Config.ACTIVES.SECONDARY.ELEMENT + "+" + Config.OXIDANTS.SECONDARY.ELEMENT
+        products = getattr(Config, "PRODUCTS", None)
 
-        t_1 = Config.ACTIVES.PRIMARY.MOLAR_MASS * Config.MATRIX.DENSITY / (Config.ACTIVES.PRIMARY.DENSITY * Config.MATRIX.MOLAR_MASS)
-        t_2 = Config.ACTIVES.SECONDARY.MOLAR_MASS * Config.MATRIX.DENSITY / (Config.ACTIVES.SECONDARY.DENSITY * Config.MATRIX.MOLAR_MASS)
+        act_cfg_by_elem = {}
+        ox_cfg_by_elem = {}
+        for cfg in Config.ACTIVES:
+            elem = str(cfg.get("element", "None"))
+            if elem and elem.lower() != "none":
+                act_cfg_by_elem[elem] = cfg
+        for cfg in Config.OXIDANTS:
+            elem = str(cfg.get("element", "None"))
+            if elem and elem.lower() != "none":
+                ox_cfg_by_elem[elem] = cfg
 
-        Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER =\
-            round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
+        for prod in products:
+            stoich = {str(k): int(v) for k, v in prod.get("stoich", {}).items()}
+            outward = str(prod.get("outward_element", "")).strip()
+            inward = str(prod.get("inward_element", "")).strip()
 
-        if Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER == 1:
-            Config.PRODUCTS.PRIMARY.LIND_FLAT_ARRAY = 6
-        else:
-            Config.PRODUCTS.PRIMARY.LIND_FLAT_ARRAY = 7
+            prod["components"] = list(stoich.keys())
+            thr_out = int(prod.get("threshold_outward", 0))
+            thr_in = int(prod.get("threshold_inward", 0))
+            prod["THRESHOLD_OUTWARD"] = thr_out
+            prod["THRESHOLD_INWARD"] = thr_in
 
-# #########################################################
-        Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = \
-            round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
-# #########################################################
+            ref_cfg = act_cfg_by_elem.get(outward)
+            in_cfg = ox_cfg_by_elem.get(inward)
 
-        if Config.ACTIVES.SECONDARY_EXISTENCE and Config.OXIDANTS.SECONDARY_EXISTENCE:
-            Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = \
-                round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2))
+            # Product mass and moles per cell-event are both threshold-driven.
+            out_mass = float(ref_cfg["MASS_PER_CELL"]) * float(thr_out)
+            in_mass = float(in_cfg["MASS_PER_CELL"]) * float(thr_in)
+            prod["MASS_PER_CELL"] = out_mass + in_mass
 
-            if Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER == 1:
-                Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 6
+            product_molar_mass = 0.0
+            for elem, nu in stoich.items():
+                product_molar_mass += float(nu) * float(MOLAR_MASS[elem])
+
+            prod["PRODUCT_MOLAR_MASS"] = product_molar_mass
+            prod["MOLES_PER_CELL"] = float(prod["MASS_PER_CELL"]) / product_molar_mass
+            prod["CONSTITUTION"] = "+".join(prod["components"])
+
+            t_val = float(ref_cfg.get("T", 0.0))
+            thr_out = max(1, int(prod["THRESHOLD_OUTWARD"]))
+            if t_val > 0.0 and float(ref_cfg["MOLES_PER_CELL"]) > 0.0:
+                ox_num = math.floor(
+                    (float(Config.MATRIX.MOLES_PER_CELL) / (float(ref_cfg["MOLES_PER_CELL"]) * t_val)) / thr_out
+                )
             else:
-                Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 7
-
-            Config.PRODUCTS.TERNARY.OXIDATION_NUMBER = \
-                round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.PRIMARY.MOLES_PER_CELL * t_1))
-
-            if Config.PRODUCTS.TERNARY.OXIDATION_NUMBER == 1:
-                Config.PRODUCTS.TERNARY.LIND_FLAT_ARRAY = 6
-            else:
-                Config.PRODUCTS.TERNARY.LIND_FLAT_ARRAY = 7
-
-            Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER = \
-                round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2))
-
-            if Config.PRODUCTS.QUATERNARY.OXIDATION_NUMBER == 1:
-                Config.PRODUCTS.QUATERNARY.LIND_FLAT_ARRAY = 6
-            else:
-                Config.PRODUCTS.QUATERNARY.LIND_FLAT_ARRAY = 7
-
-        elif Config.ACTIVES.SECONDARY_EXISTENCE and not Config.OXIDANTS.SECONDARY_EXISTENCE:
-            Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER = \
-                round(Config.MATRIX.MOLES_PER_CELL / (Config.ACTIVES.SECONDARY.MOLES_PER_CELL * t_2))
-
-            if Config.PRODUCTS.SECONDARY.OXIDATION_NUMBER == 1:
-                Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 6
-            else:
-                Config.PRODUCTS.SECONDARY.LIND_FLAT_ARRAY = 7
+                ox_num = 1
+            prod["OXIDATION_NUMBER"] = max(1, int(ox_num))
 
     def for_jmatpro(self):
         # Primary
@@ -352,7 +454,10 @@ class Utils:
         Config.OXIDANTS.PRIMARY.N_PER_PAGE = round(Config.OXIDANTS.PRIMARY.CELLS_CONCENTRATION * Config.N_CELLS_PER_AXIS ** 2)
         Config.OXIDANTS.SECONDARY.N_PER_PAGE = round(Config.OXIDANTS.SECONDARY.CELLS_CONCENTRATION * Config.N_CELLS_PER_AXIS ** 2)
 
-        if Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD > 1 or Config.PRODUCTS.PRIMARY.THRESHOLD_INWARD > 1:
+        first_product = Config.PRODUCTS[0] if isinstance(Config.PRODUCTS, list) and len(Config.PRODUCTS) > 0 else {}
+        thr_out = int(first_product.get("THRESHOLD_OUTWARD", 1))
+        thr_in = int(first_product.get("THRESHOLD_INWARD", 1))
+        if thr_out > 1 or thr_in > 1:
             Config.OXIDANTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL
         else:
             Config.OXIDANTS.PRIMARY.MOLES_PER_CELL = Config.ACTIVES.PRIMARY.MOLES_PER_CELL * 1.5

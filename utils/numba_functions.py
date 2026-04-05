@@ -431,7 +431,7 @@ def nucleation_subblock_kernel_owner(
                     state_count[i, j, k] = np.uint8(int(state_count[i, j, k]) + 1)
 
 
-@numba.njit(fastmath=True, cache=_CACHE)
+# @numba.njit(fastmath=True, cache=_CACHE)
 def nucleation_subblock_kernel_simple_owner(
     oxidant,
     oxidant_dirs,

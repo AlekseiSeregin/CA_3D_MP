@@ -65,6 +65,7 @@ class CaseSetUpMP:
         self.nucleation_mode = Config.NUCLEATION_MODE
         self.nucleation_kernel_runner = None
         self.product_key = None
+        self.product_cfg = None
         self.product_element = None
         self.product_components = ()
         self.stage_priority = 0

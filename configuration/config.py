@@ -1,81 +1,110 @@
-from .config_utils_classes import ElemInput, ElementGroups, ProdInput, ProdGroups, ConfigProbabilities, GeneratedValues
+from .config_utils_classes import ElemInput, GeneratedValues
 
 
 class Config:
-    OXIDANTS = ElementGroups()
-    OXIDANTS.PRIMARY = ElemInput()
-    OXIDANTS.SECONDARY = ElemInput()
+    OXIDANTS = [
+        {
+            "element": "O",
+            "diffusion_condition": "O in Ni Krupp",
+            "diffusion_condition_gb": "O in Ni Krupp 100",
+            "cells_concentration": 0.01,
+            "diffusion_max_per_cell": 3,
+        },
+        # {
+        #     "element": "N",
+        #     "diffusion_condition": "N in Ni Krupp",
+        #     "cells_concentration": 0.01,
+        #     "diffusion_max_per_cell": 3,
+        # },
+    ]
 
-    ACTIVES = ElementGroups()
-    ACTIVES.PRIMARY = ElemInput()
-    ACTIVES.SECONDARY = ElemInput()
+    ACTIVES = [
+        {
+            "element": "Cr",
+            "diffusion_condition": "Al in Ni Krupp",
+            "mass_concentration": 0.07,
+            "cells_concentration": 3,
+            "conc_precision": "rand",
+            "space_fill": "full",
+            "diffusion_max_per_cell": 10,
+        },
+        # {
+        #     "element": "Al",
+        #     "diffusion_condition": "Al in Ni Krupp",
+        #     "mass_concentration": 0.04,
+        #     "cells_concentration": 2,
+        #     "conc_precision": "rand",
+        #     "space_fill": "full",
+        #     "diffusion_max_per_cell": 10,
+        # },
+    ]
 
-    PRODUCTS = ProdGroups()
-    PRODUCTS.PRIMARY = ProdInput()
-    PRODUCTS.PRIMARY.THRESHOLD_INWARD = 1
-    PRODUCTS.PRIMARY.THRESHOLD_OUTWARD = 1
-    PRODUCTS.PRIMARY.ELEMENT = "Cr2O3"
-    PRODUCTS.PRIMARY.JM_IDENTIFIER = "M2O3"
-    PRODUCTS.PRIMARY.COMPONENTS = ["Cr", "O"]
-    PRODUCTS.PRIMARY.STOICH = {"Cr": 2, "O": 3}
-    PRODUCTS.PRIMARY.OUTWARD_ELEMENT = "Cr"
-    PRODUCTS.PRIMARY.INWARD_ELEMENT = "O"
-    PRODUCTS.PRIMARY.PRIORITY = 1
+    DEFAULT_PRODUCT_PROBABILITIES = {
+        # nucleation
+        "p0": 0.01,
+        "p0_f": 1,
+        "p0_A_const": 1,
+        "p0_B_const": 1,
+        "p1": 0.3,
+        "p1_f": 1,
+        "p1_A_const": 1,
+        "p1_B_const": 1,
+        "global_A": 1,
+        "global_B": None,
+        "global_B_f": -20,
+        "max_neigh_numb": None,
+        "nucl_adapt_function": 5,
+        # dissolution
+        "p0_d": 0.8,
+        "p0_d_f": 1,
+        "p0_d_A_const": 1,
+        "p0_d_B_const": 5,
+        "p1_d": 0.7,
+        "p1_d_f": 1,
+        "p1_d_A_const": 1,
+        "p1_d_B_const": 10,
+        "p6_d": 1e-6,
+        "p6_d_f": 0.99,
+        "p6_d_A_const": 1,
+        "p6_d_B_const": 20,
+        "global_d_A": 1,
+        "global_d_B": None,
+        "global_d_B_f": -0.33,
+        "n": 2,
+        "bsf": 3,
+        "dissol_adapt_function": 3,
+    }
 
-    PRODUCTS.SECONDARY = ProdInput()
-    # PRODUCTS.SECONDARY.THRESHOLD_INWARD = 4
-    # PRODUCTS.SECONDARY.THRESHOLD_OUTWARD = 2
-    # PRODUCTS.SECONDARY.ELEMENT = "NiCr2O4"
-    # PRODUCTS.SECONDARY.JM_IDENTIFIER = "SPINEL_AB2O4"
-    # PRODUCTS.SECONDARY.COMPONENTS = ["Cr", "O"]
-    # PRODUCTS.SECONDARY.STOICH = {"Cr": 2, "O": 4}
-    # PRODUCTS.SECONDARY.OUTWARD_ELEMENT = "Cr"
-    # PRODUCTS.SECONDARY.INWARD_ELEMENT = "O"
-    # PRODUCTS.SECONDARY.PRIORITY = 2
-
-    PRODUCTS.TERNARY = ProdInput()
-    # PRODUCTS.TERNARY.THRESHOLD_INWARD = 4
-    # PRODUCTS.TERNARY.THRESHOLD_OUTWARD = 2
-
-    PRODUCTS.QUATERNARY = ProdInput()
-    # PRODUCTS.QUATERNARY.THRESHOLD_INWARD = 4
-    # PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD = 2
-
-    PRODUCTS.QUINT = ProdInput()
-    # PRODUCTS.QUINT.THRESHOLD_INWARD = 1
-    # PRODUCTS.QUINT.THRESHOLD_OUTWARD = 0
+    PRODUCTS = [
+        {
+            "key": "cr2o3",
+            "element": "Cr2O3",
+            "jm_identifier": "M2O3",
+            # thresholds define nucleation cell consumption
+            "threshold_outward": 1,
+            "threshold_inward": 1,
+            # stoich defines product chemistry/formula
+            "stoich": {"Cr": 2, "O": 3},
+            "outward_element": "Cr",
+            "inward_element": "O",
+            "priority": 1,
+            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES),
+        },
+        # {
+        #     "key": "nicr2o4",
+        #     "element": "NiCr2O4",
+        #     "jm_identifier": "SPINEL_AB2O4",
+        #     "stoich": {"Ni": 1, "Cr": 2, "O": 4},
+        #     "outward_element": "Cr",
+        #     "inward_element": "O",
+        #     "priority": 2,
+        # },
+    ]
 
     MAP_PRODUCTS_TO_ELEMENTS = False
 
     MATRIX = ElemInput()
 
-    # primary oxidants
-    OXIDANTS.PRIMARY.ELEMENT = "O"
-    OXIDANTS.PRIMARY.DIFFUSION_CONDITION = "O in Ni Krupp"
-    # OXIDANTS.PRIMARY.DIFFUSION_CONDITION_GB = "O in Ni Krupp 100"
-    OXIDANTS.PRIMARY.CELLS_CONCENTRATION = 0.01
-    OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL = 3
-
-    # secondary oxidants
-    # OXIDANTS.SECONDARY.ELEMENT = "N"
-    # OXIDANTS.SECONDARY.DIFFUSION_CONDITION = "N in Ni Krupp"
-    # OXIDANTS.SECONDARY.CELLS_CONCENTRATION = 0.01
-
-    # primary actives
-    ACTIVES.PRIMARY.ELEMENT = "Cr"
-    ACTIVES.PRIMARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
-    ACTIVES.PRIMARY.MASS_CONCENTRATION = 0.07
-    ACTIVES.PRIMARY.CELLS_CONCENTRATION = 3
-    ACTIVES.PRIMARY.CONC_PRECISION = "rand"
-    ACTIVES.PRIMARY.SPACE_FILL = "full"
-    ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL = 10
-
-    # secondary actives
-    # ACTIVES.SECONDARY.ELEMENT = "Al"
-    # ACTIVES.SECONDARY.DIFFUSION_CONDITION = "Al in Ni Krupp"
-    # ACTIVES.SECONDARY.MASS_CONCENTRATION = 0.04
-    # ACTIVES.SECONDARY.CELLS_CONCENTRATION = 2
- 
     # matrix
     MATRIX.ELEMENT = "Ni"
 
@@ -104,11 +133,9 @@ class Config:
     INWARD_DIFFUSION = True
     OUTWARD_DIFFUSION = True
 
-    # 3D Chopard–Droz diffusion (shared-memory MP): workers per element type
-    # max_per_cell is per element: set ACTIVES.PRIMARY.DIFFUSION_MAX_PER_CELL, OXIDANTS.PRIMARY.DIFFUSION_MAX_PER_CELL, etc.
-    # Fallback only when an element's DIFFUSION_MAX_PER_CELL is not set.
     OUTWARD_DIFFUSION_WORKERS = 6
     INWARD_DIFFUSION_WORKERS = 1
+
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
     DIFFUSION_BOUNDARY_X_OUTWARD_RIGHT = "reflection"
@@ -128,11 +155,10 @@ class Config:
     #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
     NUCLEATION_MODE = "legacy_simple_owner"
     # If True, precipitation stages are executed sequentially by product PRIORITY
-    # using PRODUCTS.* configuration (ELEMENT/COMPONENTS).
+    # using entries from PRODUCTS list.
     USE_PRODUCT_STAGE_SEQUENCE = True
 
     # Execution___________________________________________________________________
-    # MULTIPROCESSING = False
     NUMBER_OF_PROCESSES = 10  # Total workers to allocate (split between CA and JMatPro)
     # JMatPro worker allocation ratio (0.0-1.0): fraction of NUMBER_OF_PROCESSES allocated to JMatPro
     # Remaining workers go to CA calculations. Default: auto (60% CA, 40% JMatPro)
@@ -143,195 +169,8 @@ class Config:
     JMATPRO_WORKER_RATIO = 0.4  # None = auto allocation
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
-    # Worker recycling: long-lived workers can grow RAM (NumPy/Python allocator fragmentation).
-    # int = recycle after N tasks (reclaims RAM; new workers load Numba from disk cache).
-    # None = never recycle (no Numba recompile; RAM may grow on very long runs).
     MAX_TASK_PER_CHILD = 50000
     TERMINATION_COMMAND = 'd+g+m'
-
-    # PROBABILITIES_______________________________________________________________
-    PROBABILITIES = ElementGroups()
-    PROBABILITIES.PRIMARY = ConfigProbabilities()
-    PROBABILITIES.SECONDARY = ConfigProbabilities()
-    # PROBABILITIES.TERNARY = ConfigProbabilities()
-    # PROBABILITIES.QUATERNARY = ConfigProbabilities()
-    # PROBABILITIES.QUINT = ConfigProbabilities()
-
-    # nucleation primary___________________________
-    PROBABILITIES.PRIMARY.p0 = 0.01
-    PROBABILITIES.PRIMARY.p0_f = 1
-    PROBABILITIES.PRIMARY.p0_A_const = 1
-    PROBABILITIES.PRIMARY.p0_B_const = 1
-    PROBABILITIES.PRIMARY.p1 = 0.3
-    PROBABILITIES.PRIMARY.p1_f = 1
-    PROBABILITIES.PRIMARY.p1_A_const = 1
-    PROBABILITIES.PRIMARY.p1_B_const = 1
-    PROBABILITIES.PRIMARY.global_A = 1
-    PROBABILITIES.PRIMARY.global_B = None
-    PROBABILITIES.PRIMARY.global_B_f = -20
-    PROBABILITIES.PRIMARY.max_neigh_numb = None
-    PROBABILITIES.PRIMARY.nucl_adapt_function = 5
-    # dissolution primary_________________________
-    PROBABILITIES.PRIMARY.p0_d = 0.8
-    PROBABILITIES.PRIMARY.p0_d_f = 1
-    PROBABILITIES.PRIMARY.p0_d_A_const = 1
-    PROBABILITIES.PRIMARY.p0_d_B_const = 5
-    PROBABILITIES.PRIMARY.p1_d = 0.7
-    PROBABILITIES.PRIMARY.p1_d_f = 1
-    PROBABILITIES.PRIMARY.p1_d_A_const = 1
-    PROBABILITIES.PRIMARY.p1_d_B_const = 10
-    PROBABILITIES.PRIMARY.p6_d = 1e-6
-    PROBABILITIES.PRIMARY.p6_d_f = 0.99
-    PROBABILITIES.PRIMARY.p6_d_A_const = 1
-    PROBABILITIES.PRIMARY.p6_d_B_const = 20
-    PROBABILITIES.PRIMARY.global_d_A = 1
-    PROBABILITIES.PRIMARY.global_d_B = None
-    PROBABILITIES.PRIMARY.global_d_B_f = -0.33
-    PROBABILITIES.PRIMARY.n = 2
-    PROBABILITIES.PRIMARY.bsf = 3
-    PROBABILITIES.PRIMARY.dissol_adapt_function = 3
-    # ________________________
-
-    # nucleation SECONDARY
-    # PROBABILITIES.SECONDARY.p0 = 0.001
-    # PROBABILITIES.SECONDARY.p0_f = 1
-    # PROBABILITIES.SECONDARY.p0_A_const = 1
-    # PROBABILITIES.SECONDARY.p0_B_const = 1
-    # PROBABILITIES.SECONDARY.p1 = 0.01
-    # PROBABILITIES.SECONDARY.p1_f = 1
-    # PROBABILITIES.SECONDARY.p1_A_const = 1
-    # PROBABILITIES.SECONDARY.p1_B_const = 1
-    # PROBABILITIES.SECONDARY.global_A = 1
-    # PROBABILITIES.SECONDARY.global_B = None
-    # PROBABILITIES.SECONDARY.global_B_f = -20
-    # PROBABILITIES.SECONDARY.max_neigh_numb = None
-    # PROBABILITIES.SECONDARY.nucl_adapt_function = 5
-    # # dissolution SECONDARY
-    # PROBABILITIES.SECONDARY.p0_d = 0.1
-    # PROBABILITIES.SECONDARY.p0_d_f = 1
-    # PROBABILITIES.SECONDARY.p0_d_A_const = 1
-    # PROBABILITIES.SECONDARY.p0_d_B_const = 1
-    # PROBABILITIES.SECONDARY.p1_d = 0.01
-    # PROBABILITIES.SECONDARY.p1_d_f = 1
-    # PROBABILITIES.SECONDARY.p1_d_A_const = 1
-    # PROBABILITIES.SECONDARY.p1_d_B_const = 1
-    # PROBABILITIES.SECONDARY.p6_d = 1 * 10 ** -4
-    # PROBABILITIES.SECONDARY.p6_d_f = 0.99
-    # PROBABILITIES.SECONDARY.p6_d_A_const = 1
-    # PROBABILITIES.SECONDARY.p6_d_B_const = 1
-    # PROBABILITIES.SECONDARY.global_d_A = 1
-    # PROBABILITIES.SECONDARY.global_d_B = None
-    # PROBABILITIES.SECONDARY.global_d_B_f = -0.001
-    # PROBABILITIES.SECONDARY.n = 2
-    # PROBABILITIES.SECONDARY.bsf = 10
-    # PROBABILITIES.SECONDARY.dissol_adapt_function = 3
-    # # ________________________
-    #
-    # # nucleation TERNARY
-    # PROBABILITIES.TERNARY.p0 = 0.1
-    # PROBABILITIES.TERNARY.p0_f = 1
-    # PROBABILITIES.TERNARY.p0_A_const = 1
-    # PROBABILITIES.TERNARY.p0_B_const = 1
-    # PROBABILITIES.TERNARY.p1 = 0.3
-    # PROBABILITIES.TERNARY.p1_f = 1
-    # PROBABILITIES.TERNARY.p1_A_const = 1
-    # PROBABILITIES.TERNARY.p1_B_const = 1
-    # PROBABILITIES.TERNARY.global_A = 1
-    # PROBABILITIES.TERNARY.global_B = None
-    # PROBABILITIES.TERNARY.global_B_f = -20
-    # PROBABILITIES.TERNARY.max_neigh_numb = None
-    # PROBABILITIES.TERNARY.nucl_adapt_function = 3
-    # # dissolution TERNARY
-    # PROBABILITIES.TERNARY.p0_d = 1 * 10 ** -3
-    # PROBABILITIES.TERNARY.p0_d_f = 1
-    # PROBABILITIES.TERNARY.p0_d_A_const = 1
-    # PROBABILITIES.TERNARY.p0_d_B_const = 1
-    # PROBABILITIES.TERNARY.p1_d = 1 * 10 ** -4
-    # PROBABILITIES.TERNARY.p1_d_f = 1
-    # PROBABILITIES.TERNARY.p1_d_A_const = 1
-    # PROBABILITIES.TERNARY.p1_d_B_const = 1
-    # PROBABILITIES.TERNARY.p6_d = 1 * 10 ** -7
-    # PROBABILITIES.TERNARY.p6_d_f = 0.99
-    # PROBABILITIES.TERNARY.p6_d_A_const = 1
-    # PROBABILITIES.TERNARY.p6_d_B_const = 1
-    # PROBABILITIES.TERNARY.global_d_A = 1
-    # PROBABILITIES.TERNARY.global_d_B = None
-    # PROBABILITIES.TERNARY.global_d_B_f = -0.001
-    # PROBABILITIES.TERNARY.n = 2
-    # PROBABILITIES.TERNARY.bsf = 10
-    # PROBABILITIES.TERNARY.dissol_adapt_function = 3
-    # # ________________________
-    #
-    # # nucleation QUATERNARY
-    # PROBABILITIES.QUATERNARY.p0 = 0.1
-    # PROBABILITIES.QUATERNARY.p0_f = 1
-    # PROBABILITIES.QUATERNARY.p0_A_const = 1
-    # PROBABILITIES.QUATERNARY.p0_B_const = 1
-    # PROBABILITIES.QUATERNARY.p1 = 0.3
-    # PROBABILITIES.QUATERNARY.p1_f = 1
-    # PROBABILITIES.QUATERNARY.p1_A_const = 1
-    # PROBABILITIES.QUATERNARY.p1_B_const = 1
-    # PROBABILITIES.QUATERNARY.global_A = 1
-    # PROBABILITIES.QUATERNARY.global_B = None
-    # PROBABILITIES.QUATERNARY.global_B_f = -20
-    # PROBABILITIES.QUATERNARY.max_neigh_numb = None
-    # PROBABILITIES.QUATERNARY.nucl_adapt_function = 3
-    # # dissolution QUATERNARY
-    # PROBABILITIES.QUATERNARY.p0_d = 1 * 10 ** -3
-    # PROBABILITIES.QUATERNARY.p0_d_f = 1
-    # PROBABILITIES.QUATERNARY.p0_d_A_const = 1
-    # PROBABILITIES.QUATERNARY.p0_d_B_const = 1
-    # PROBABILITIES.QUATERNARY.p1_d = 1 * 10 ** -4
-    # PROBABILITIES.QUATERNARY.p1_d_f = 1
-    # PROBABILITIES.QUATERNARY.p1_d_A_const = 1
-    # PROBABILITIES.QUATERNARY.p1_d_B_const = 1
-    # PROBABILITIES.QUATERNARY.p6_d = 1 * 10 ** -7
-    # PROBABILITIES.QUATERNARY.p6_d_f = 0.99
-    # PROBABILITIES.QUATERNARY.p6_d_A_const = 1
-    # PROBABILITIES.QUATERNARY.p6_d_B_const = 1
-    # PROBABILITIES.QUATERNARY.global_d_A = 1
-    # PROBABILITIES.QUATERNARY.global_d_B = None
-    # PROBABILITIES.QUATERNARY.global_d_B_f = -0.001
-    # PROBABILITIES.QUATERNARY.n = 2
-    # PROBABILITIES.QUATERNARY.bsf = 10
-    # PROBABILITIES.QUATERNARY.dissol_adapt_function = 3
-    # # ________________________
-    #
-    # # nucleation QUINT
-    # PROBABILITIES.QUINT.p0 = 0.1
-    # PROBABILITIES.QUINT.p0_f = 1
-    # PROBABILITIES.QUINT.p0_A_const = 1
-    # PROBABILITIES.QUINT.p0_B_const = 1
-    # PROBABILITIES.QUINT.p1 = 0.3
-    # PROBABILITIES.QUINT.p1_f = 1
-    # PROBABILITIES.QUINT.p1_A_const = 1
-    # PROBABILITIES.QUINT.p1_B_const = 1
-    # PROBABILITIES.QUINT.global_A = 1
-    # PROBABILITIES.QUINT.global_B = None
-    # PROBABILITIES.QUINT.global_B_f = -20
-    # PROBABILITIES.QUINT.max_neigh_numb = None
-    # PROBABILITIES.QUINT.nucl_adapt_function = 3
-    # # dissolution QUINT
-    # PROBABILITIES.QUINT.p0_d = 1 * 10 ** -3
-    # PROBABILITIES.QUINT.p0_d_f = 1
-    # PROBABILITIES.QUINT.p0_d_A_const = 1
-    # PROBABILITIES.QUINT.p0_d_B_const = 1
-    # PROBABILITIES.QUINT.p1_d = 1 * 10 ** -4
-    # PROBABILITIES.QUINT.p1_d_f = 1
-    # PROBABILITIES.QUINT.p1_d_A_const = 1
-    # PROBABILITIES.QUINT.p1_d_B_const = 1
-    # PROBABILITIES.QUINT.p6_d = 1 * 10 ** -7
-    # PROBABILITIES.QUINT.p6_d_f = 0.99
-    # PROBABILITIES.QUINT.p6_d_A_const = 1
-    # PROBABILITIES.QUINT.p6_d_B_const = 1
-    # PROBABILITIES.QUINT.global_d_A = 1
-    # PROBABILITIES.QUINT.global_d_B = None
-    # PROBABILITIES.QUINT.global_d_B_f = -0.001
-    # PROBABILITIES.QUINT.n = 2
-    # PROBABILITIES.QUINT.bsf = 10
-    # PROBABILITIES.QUINT.dissol_adapt_function = 3
-    # # ________________________
-
     GENERATED_VALUES = GeneratedValues()
     COMMENT = """NO COMMENTS"""
     INITIAL_SCRIPT = "\n"

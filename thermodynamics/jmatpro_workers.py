@@ -33,6 +33,7 @@ class Task:
     task_id: int
     composition: List[float]
     elements: List[str]
+    composition_unit: Optional[str] = None
     status: TaskStatus = TaskStatus.PENDING
     result: Optional[Dict[str, Any]] = None  # raw: phase_name -> {molar_fraction, elements, composition} or float
     error: Optional[str] = None
@@ -65,6 +66,7 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
             sys.path.append(ROOT_PATH)
     
     try:
+        import apiwrapper as _aw
         from apiwrapper import (
             JMP_MATERIAL_NICKEL_BASED_SUPERALLOY,
             JMP_COMPOSITION_UNIT_ATOMIC_PERCENT,
@@ -125,6 +127,23 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
     jmpSetSolverTemperature(temperature)
     jmpSetScreenOutput(0)
 
+    def _resolve_comp_unit(unit_name):
+        if unit_name is None:
+            return unit
+        name = str(unit_name).strip().lower()
+        if name in ("atomic", "at", "at%", "atomic_percent"):
+            return getattr(_aw, "JMP_COMPOSITION_UNIT_ATOMIC_PERCENT", unit)
+        if name in ("mass", "wt", "wt%", "mass_fraction", "weight_percent"):
+            for cand in (
+                "JMP_COMPOSITION_UNIT_WEIGHT_PERCENT",
+                "JMP_COMPOSITION_UNIT_WEIGHT_FRACTION",
+                "JMP_COMPOSITION_UNIT_MASS_PERCENT",
+            ):
+                if hasattr(_aw, cand):
+                    return getattr(_aw, cand)
+            return getattr(_aw, "JMP_COMPOSITION_UNIT_ATOMIC_PERCENT", unit)
+        return unit
+
     # Signal worker is ready
     result_queue.put({
         'worker_id': worker_id,
@@ -151,6 +170,7 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
             task_id = task_data['task_id']
             composition = task_data['composition']
             elements = task_data['elements']
+            composition_unit = task_data.get('composition_unit', None)
             
             start_time = time.time()
             composition = list(composition)
@@ -175,7 +195,7 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
                 # Set up JMatPro calculation
                 # jmpSetMaterialType(material_type)
                 jmpSetAlloyElements(elements)
-                # jmpSetCompositionUnit(unit)
+                jmpSetCompositionUnit(_resolve_comp_unit(composition_unit))
                 jmpSetAlloyComposition(composition)
                 # jmpSetSolverCalculationType(calculation_type)
                 # jmpSetTemperatureUnit(unit_temperature)
@@ -520,7 +540,8 @@ class JMatProWorkerPool:
                 self.task_queue.put({
                     'task_id': task_id,
                     'composition': list(task.composition),
-                    'elements': list(task.elements)
+                    'elements': list(task.elements),
+                    'composition_unit': task.composition_unit,
                 }, timeout=1.0)
                 task.status = TaskStatus.RUNNING
                 task.start_time = time.time()
@@ -530,8 +551,9 @@ class JMatProWorkerPool:
                 self.pending_tasks.insert(0, task_id)
                 break
     
-    def submit_tasks(self, compositions: List[List[float]], 
-                    elements: List[str]) -> List[int]:
+    def submit_tasks(self, compositions: List[List[float]],
+                    elements: List[str],
+                    composition_unit: Optional[str] = None) -> List[int]:
         """
         Submit multiple calculation tasks.
         
@@ -550,7 +572,8 @@ class JMatProWorkerPool:
             task = Task(
                 task_id=task_id,
                 composition=list(composition),
-                elements=list(elements)
+                elements=list(elements),
+                composition_unit=composition_unit,
             )
             
             self.tasks[task_id] = task

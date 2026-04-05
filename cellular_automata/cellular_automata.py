@@ -18,9 +18,15 @@ from .nucleation_functions import (
     precip_step_subblock_worker,
 )
 from .neigh_indexes import ind_formation
+from utils.physical_data import MOLAR_MASS
 
 
 class CellularAutomata:
+    @staticmethod
+    def _configured_products():
+        products = getattr(Config, "PRODUCTS", [])
+        return products if isinstance(products, (list, tuple)) else []
+
     def __init__(self, cases, utils_inst):
         self.utils = utils_inst
         self.cases = cases
@@ -66,7 +72,11 @@ class CellularAutomata:
         self.coord_buffer = None
         self.to_dissol_pn_buffer = None
 
-        self.primary_oxid_numb = Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
+        product_defs = self._configured_products()
+        first_oxid_numb = 1
+        if len(product_defs) > 0 and isinstance(product_defs[0], dict):
+            first_oxid_numb = int(product_defs[0].get("OXIDATION_NUMBER", 1))
+        self.primary_oxid_numb = max(1, first_oxid_numb)
         self.max_inside_neigh_number = 6 * self.primary_oxid_numb
         self.max_block_neigh_number = 7
 
@@ -521,6 +531,20 @@ class CellularAutomata:
     @staticmethod
     def _cfg_elem_map(group):
         out = {}
+        if isinstance(group, list):
+            for cfg in group:
+                if not isinstance(cfg, dict):
+                    continue
+                elem = str(cfg.get("element", "None"))
+                if elem and elem.lower() != "none":
+                    out[elem] = type("ElemCfgProxy", (), {
+                        "MOLES_PER_CELL": cfg.get("MOLES_PER_CELL", 0.0),
+                        "MASS_PER_CELL": cfg.get("MASS_PER_CELL", 0.0),
+                        "EQ_MATRIX_MOLES_PER_CELL": cfg.get("EQ_MATRIX_MOLES_PER_CELL", 0.0),
+                        "T": cfg.get("T", 0.0),
+                    })()
+            return out
+
         for key in ("PRIMARY", "SECONDARY"):
             cfg = getattr(group, key, None)
             if cfg is None:
@@ -531,8 +555,7 @@ class CellularAutomata:
         return out
 
     def _get_product_cfg_for_case_mp(self, case_mp):
-        key = str(getattr(case_mp, "product_key", "PRIMARY"))
-        return getattr(Config.PRODUCTS, key, Config.PRODUCTS.PRIMARY)
+        return getattr(case_mp, "product_cfg", None)
 
     def _gather_species_counts_by_element(self, u_bound, species_objs):
         ub = int(u_bound)
@@ -551,7 +574,7 @@ class CellularAutomata:
         return out
 
     def _resolve_product_stoich_roles(self, case, case_mp, product_cfg):
-        stoich_cfg = product_cfg.STOICH
+        stoich_cfg = getattr(product_cfg, "STOICH", {})
         stoich = {}
         for k, v in stoich_cfg.items():
             try:
@@ -561,8 +584,10 @@ class CellularAutomata:
             if vv > 0:
                 stoich[str(k)] = vv
 
-        outward = product_cfg.OUTWARD_ELEMENT
-        inward = product_cfg.INWARD_ELEMENT
+        outward_elem = str(getattr(product_cfg, "OUTWARD_ELEMENT", ""))
+        inward_elem = str(getattr(product_cfg, "INWARD_ELEMENT", ""))
+        outward = set([outward_elem]) if outward_elem else set()
+        inward = set([inward_elem]) if inward_elem else set()
         if len(outward) == 0 and len(inward) == 0:
             out_elem = str(getattr(getattr(case, "active", None), "elem_name", ""))
             in_elem = str(getattr(getattr(case, "oxidant", None), "elem_name", ""))
@@ -592,12 +617,15 @@ class CellularAutomata:
             total_act_counts += v
 
         elem_free_moles = {}
+        elem_free_mass = {}
         for elem, counts in oxid_counts.items():
             cfg = oxid_cfg.get(elem)
             elem_free_moles[elem] = counts * cfg.MOLES_PER_CELL
+            elem_free_mass[elem] = counts * cfg.MASS_PER_CELL
         for elem, counts in act_counts.items():
             cfg = act_cfg.get(elem)
             elem_free_moles[elem] = counts * cfg.MOLES_PER_CELL
+            elem_free_mass[elem] = counts * cfg.MASS_PER_CELL
 
         outward_eq_mat_moles = np.zeros(ub + 1, dtype=np.float64)
         for elem, counts in act_counts.items():
@@ -605,33 +633,38 @@ class CellularAutomata:
             outward_eq_mat_moles += counts * cfg.EQ_MATRIX_MOLES_PER_CELL
 
         product_moles_total = np.zeros(ub + 1, dtype=np.float64)
+        product_mass_total = np.zeros(ub + 1, dtype=np.float64)
         product_eq_mat_moles = np.zeros(ub + 1, dtype=np.float64)
         elem_pure_moles = dict(elem_free_moles)
-        product_moles_by_identifier = {}
+        product_mass_by_identifier = {}
         for case, case_mp in self.cases.product_case_pairs:
             p_cfg = self._get_product_cfg_for_case_mp(case_mp)
             p_counts = self._get_product_counts_upto_bound_for_case(case, case_mp, ub).astype(np.float64)
-            p_moles = p_counts * p_cfg.MOLES_PER_CELL_TC
-            product_moles_by_identifier[p_cfg.ELEMENT] = p_moles
+            p_moles = p_counts * p_cfg.MOLES_PER_CELL
+            p_mass = p_counts * p_cfg.MASS_PER_CELL
+            product_mass_by_identifier[p_cfg.ELEMENT] = p_mass
             product_moles_total += p_moles
+            product_mass_total += p_mass
 
             stoich, outward_set, _ = self._resolve_product_stoich_roles(case, case_mp, p_cfg)
-            nu_sum = float(sum(stoich.values()))
+            # nu_sum = float(sum(stoich.values()))
             for elem, nu in stoich.items():
-                frac = float(nu) / nu_sum
-                elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * frac
+                # frac = float(nu) / nu_sum
+                elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * nu
                 if elem in outward_set:
                     eq_pc = act_cfg[elem].EQ_MATRIX_MOLES_PER_CELL
-                    product_eq_mat_moles += p_counts * eq_pc * float(nu)
+                    product_eq_mat_moles += p_counts * eq_pc * p_cfg.THRESHOLD_OUTWARD
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
-        whole_moles = matrix_moles + product_moles_total
-        for m in elem_free_moles.values():
-            whole_moles += m
-        
+        matrix_molar_mass = float(MOLAR_MASS.get(str(getattr(Config.MATRIX, "ELEMENT", "Ni")), 0.0))
+        matrix_mass = matrix_moles * matrix_molar_mass
+        whole_mass = matrix_mass + product_mass_total
+        for m in elem_free_mass.values():
+            whole_mass += m
+
         product_c_by_identifier = {}
-        for p_ident, p_moles in product_moles_by_identifier.items():
-            product_c_by_identifier[p_ident] = p_moles / whole_moles
+        for p_ident, p_mass in product_mass_by_identifier.items():
+            product_c_by_identifier[p_ident] = p_mass / whole_mass
 
         matrix_moles_pure = np.full(ub + 1, self.matrix_moles_per_page, dtype=np.float64)
         for elem, moles in elem_pure_moles.items():
@@ -640,20 +673,22 @@ class CellularAutomata:
             matrix_moles_pure -= moles * t_val
 
         matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", "Ni"))
+        matrix_elem_mm = float(MOLAR_MASS.get(matrix_elem, 0.0))
         comp_elems = [e for e in sorted(elem_pure_moles.keys()) if e and e != matrix_elem]
         elements = [matrix_elem] + comp_elems
         compositions = []
         for i in range(ub + 1):
             non_matrix_sum = 0.0
             for elem in comp_elems:
-                non_matrix_sum += float(elem_pure_moles[elem][i])
-            tot = float(matrix_moles_pure[i] + non_matrix_sum)
+                non_matrix_sum += float(elem_pure_moles[elem][i] * float(MOLAR_MASS.get(elem, 0.0)))
+            matrix_mass_i = float(matrix_moles_pure[i] * matrix_elem_mm)
+            tot = float(matrix_mass_i + non_matrix_sum)
             if tot <= 0:
                 compositions.append([100.0] + [0.0] * len(comp_elems))
                 continue
-            row = [float(matrix_moles_pure[i] * 100.0 / tot)]
+            row = [float(matrix_mass_i * 100.0 / tot)]
             for elem in comp_elems:
-                row.append(float(elem_pure_moles[elem][i] * 100.0 / tot))
+                row.append(float(elem_pure_moles[elem][i] * float(MOLAR_MASS.get(elem, 0.0)) * 100.0 / tot))
             s = sum(row)
             if s > 100.0:
                 scale = 100.0 / s
@@ -661,7 +696,7 @@ class CellularAutomata:
             compositions.append(row)
 
         plane_indices = np.arange(ub + 1, dtype=np.intp)
-        task_ids = self.jmatpro_pool.submit_tasks(compositions, elements=elements)
+        task_ids = self.jmatpro_pool.submit_tasks(compositions, elements=elements, composition_unit="mass")
         task_to_plane = {tid: int(plane_indices[idx]) for idx, tid in enumerate(task_ids)}
         raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=100000.0)
 
@@ -674,15 +709,33 @@ class CellularAutomata:
                 phased = phases.get(p_cfg.JM_IDENTIFIER)
                 if not phased:
                     continue
-                sum_non_ox = phased["sum_non_ox"]
+                phase_mass_contrib = {}
+                total_phase_mass = 0.0
+                for phase_name, pdat in phases.items():
+                    phase_mf = float(pdat.get("molar_fraction", 0.0))
+                    if phase_mf <= 0.0:
+                        continue
+                    p_elems = pdat.get("elements", [])
+                    p_comps = pdat.get("composition", [])
+                    comp_sum = float(sum(float(v) for v in p_comps)) if p_comps else 0.0
+                    if comp_sum <= 0.0:
+                        continue
+                    phase_mm = 0.0
+                    for e_i, c_i in zip(p_elems, p_comps):
+                        phase_mm += (float(c_i) / comp_sum) * float(MOLAR_MASS.get(str(e_i), 0.0))
+                    if phase_mm <= 0.0:
+                        continue
+                    contrib = phase_mf * phase_mm
+                    phase_mass_contrib[phase_name] = contrib
+                    total_phase_mass += contrib
+                if total_phase_mass <= 0.0:
+                    continue
                 plane_idx = task_to_plane[tid]
-                for jm_elem, jm_comp in zip(phased["elements"], phased["composition"]):
-                    if jm_elem == p_cfg.OUTWARD_ELEMENT:
-                        product_c_jm = (jm_comp / sum_non_ox) * phased["molar_fraction"]
-                        if plane_idx == 0:
-                            jm_plane0 = float(product_c_jm)
-                        if product_c_jm > product_c_by_identifier[p_cfg.ELEMENT][plane_idx]:
-                            case_mp.plane_indexes.append(plane_idx)
+                product_c_jm = float(phase_mass_contrib.get(p_cfg.JM_IDENTIFIER, 0.0) / total_phase_mass)
+                if plane_idx == 0:
+                    jm_plane0 = float(product_c_jm)
+                if product_c_jm > product_c_by_identifier[p_cfg.ELEMENT][plane_idx]:
+                    case_mp.plane_indexes.append(plane_idx)
             existing_plane0 = float(product_c_by_identifier[p_cfg.ELEMENT][0])
             diff_plane0 = jm_plane0 - existing_plane0
             self.product_plane0_tracking[(int(self.iteration), str(p_cfg.ELEMENT))] = (

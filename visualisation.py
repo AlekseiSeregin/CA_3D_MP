@@ -72,18 +72,51 @@ class Visualisation:
             if "_iter_" in name:
                 self._available_iter_prefixes.add(name.rsplit("_iter_", 1)[0])
 
+        oxidants = getattr(self.Config, "OXIDANTS", [])
+        actives = getattr(self.Config, "ACTIVES", [])
+        ox_1 = oxidants[0].get("element", "primary_oxidant") if isinstance(oxidants, list) and len(oxidants) > 0 else "primary_oxidant"
+        ox_2 = oxidants[1].get("element", "secondary_oxidant") if isinstance(oxidants, list) and len(oxidants) > 1 else "secondary_oxidant"
+        ac_1 = actives[0].get("element", "primary_active") if isinstance(actives, list) and len(actives) > 0 else "primary_active"
+        ac_2 = actives[1].get("element", "secondary_active") if isinstance(actives, list) and len(actives) > 1 else "secondary_active"
+
         aliases = {
-            "primary_oxidant": str(getattr(self.Config.OXIDANTS.PRIMARY, "ELEMENT", "primary_oxidant")),
-            "secondary_oxidant": str(getattr(self.Config.OXIDANTS.SECONDARY, "ELEMENT", "secondary_oxidant")),
-            "primary_active": str(getattr(self.Config.ACTIVES.PRIMARY, "ELEMENT", "primary_active")),
-            "secondary_active": str(getattr(self.Config.ACTIVES.SECONDARY, "ELEMENT", "secondary_active")),
-            "primary_product": str(getattr(self.Config.PRODUCTS.PRIMARY, "ELEMENT", "primary_product")),
-            "secondary_product": str(getattr(self.Config.PRODUCTS.SECONDARY, "ELEMENT", "secondary_product")),
-            "ternary_product": str(getattr(self.Config.PRODUCTS.TERNARY, "ELEMENT", "ternary_product")),
-            "quaternary_product": str(getattr(self.Config.PRODUCTS.QUATERNARY, "ELEMENT", "quaternary_product")),
-            "quint_product": str(getattr(self.Config.PRODUCTS.QUINT, "ELEMENT", "quint_product")),
+            "primary_oxidant": str(ox_1),
+            "secondary_oxidant": str(ox_2),
+            "primary_active": str(ac_1),
+            "secondary_active": str(ac_2),
+            "primary_product": "primary_product",
+            "secondary_product": "secondary_product",
+            "ternary_product": "ternary_product",
+            "quaternary_product": "quaternary_product",
+            "quint_product": "quint_product",
         }
+        products = getattr(self.Config, "PRODUCTS", [])
+        if isinstance(products, list):
+            legacy_product_slots = [
+                "primary_product",
+                "secondary_product",
+                "ternary_product",
+                "quaternary_product",
+                "quint_product",
+            ]
+            for idx, slot in enumerate(legacy_product_slots):
+                if idx >= len(products):
+                    break
+                prod = products[idx]
+                if isinstance(prod, dict):
+                    aliases[slot] = str(prod.get("element", slot))
         self._table_prefix_aliases = aliases
+
+    @staticmethod
+    def _ensure_element_list_flags(cfg_obj):
+        class _ElemList(list):
+            pass
+        for name in ("ACTIVES", "OXIDANTS"):
+            val = getattr(cfg_obj, name, None)
+            if isinstance(val, list) and not hasattr(val, "SECONDARY_EXISTENCE"):
+                wrapped = _ElemList(val)
+                wrapped.SECONDARY_EXISTENCE = len(wrapped) > 1
+                setattr(cfg_obj, name, wrapped)
 
     def _resolve_table_prefix(self, table_prefix):
         if table_prefix in self._available_iter_prefixes:
@@ -176,6 +209,7 @@ class Visualisation:
             unpickled_dict = pickle.loads(pickled_instance)
             update_class_from_dict(Config, unpickled_dict)
             self.Config = Config()
+            self._ensure_element_list_flags(self.Config)
 
         table_name = 'PickledMicrostructure'
         self.c.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
@@ -194,7 +228,11 @@ class Visualisation:
 
         self.axlim = self.Config.N_CELLS_PER_AXIS
         self.shape = (self.axlim, self.axlim, self.axlim)
-        self.oxid_numb = self.Config.PRODUCTS.PRIMARY.OXIDATION_NUMBER
+        products = getattr(self.Config, "PRODUCTS", [])
+        if isinstance(products, list) and len(products) > 0 and isinstance(products[0], dict):
+            self.oxid_numb = int(products[0].get("OXIDATION_NUMBER", 1))
+        else:
+            self.oxid_numb = 1
         self._build_table_prefix_aliases()
 
         if not self.Config.INWARD_DIFFUSION:

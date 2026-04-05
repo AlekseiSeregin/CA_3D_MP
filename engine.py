@@ -8,6 +8,7 @@ import elements
 import numpy as np
 from diffusion_3d_mp_example import DiffusionEngine as _DiffusionEngine
 from workers.worker_pools import WorkerPools
+from types import SimpleNamespace
 
 
 
@@ -114,16 +115,117 @@ class SimulationConfigurator:
         self.db.conn.commit()
 
     def init_inward(self):
-        self.cases.add_oxidant(elements.OxidantElem(Config.OXIDANTS.PRIMARY, self.utils))
+        oxidants = getattr(Config, "OXIDANTS_RUNTIME", [])
+        for ox_cfg in oxidants:
+            self.cases.add_oxidant(elements.OxidantElem(ox_cfg, self.utils))
 
     def init_outward(self):
-        self.cases.add_active(elements.ActiveElem(Config.ACTIVES.PRIMARY))
+        actives = getattr(Config, "ACTIVES_RUNTIME", [])
+        for act_cfg in actives:
+            self.cases.add_active(elements.ActiveElem(act_cfg))
 
     @staticmethod
     def _normalize_component_names(components):
         if components is None:
             return []
         return [str(comp).strip() for comp in components if str(comp).strip() and str(comp).strip().lower() != "none"]
+
+    @staticmethod
+    def _make_product_cfg(raw_def, idx):
+        if not isinstance(raw_def, dict):
+            raise ValueError(f"PRODUCTS[{idx}] must be a dictionary.")
+
+        key = str(raw_def.get("key", f"product_{idx + 1}")).strip().lower()
+        element = str(raw_def.get("element", "")).strip()
+        jm_identifier = str(raw_def.get("jm_identifier", "")).strip()
+        priority = int(raw_def.get("priority", idx + 1))
+        stoich_raw = raw_def.get("stoich", {})
+        outward_element = str(raw_def.get("outward_element", "")).strip()
+        inward_element = str(raw_def.get("inward_element", "")).strip()
+
+        if not key:
+            raise ValueError(f"PRODUCTS[{idx}] has empty key.")
+        if not element:
+            raise ValueError(f"PRODUCTS[{idx}] has empty element.")
+        if not jm_identifier:
+            raise ValueError(f"PRODUCTS[{idx}] has empty jm_identifier.")
+        if not isinstance(stoich_raw, dict) or len(stoich_raw) == 0:
+            raise ValueError(f"PRODUCTS[{idx}] must define non-empty stoich dictionary.")
+        if not outward_element or not inward_element:
+            raise ValueError(
+                f"PRODUCTS[{idx}] must define non-empty inward_element and outward_element."
+            )
+
+        stoich = {}
+        for elem, val in stoich_raw.items():
+            ev = str(elem).strip()
+            if not ev:
+                continue
+            iv = int(val)
+            if iv <= 0:
+                raise ValueError(f"PRODUCTS[{idx}] stoich[{ev}] must be > 0.")
+            stoich[ev] = iv
+        if len(stoich) == 0:
+            raise ValueError(f"PRODUCTS[{idx}] has no valid stoichiometric entries.")
+
+        comp_set = set(stoich.keys())
+        if outward_element not in comp_set:
+            raise ValueError(f"PRODUCTS[{idx}] outward_element must be part of stoich keys.")
+        if inward_element not in comp_set:
+            raise ValueError(f"PRODUCTS[{idx}] inward_element must be part of stoich keys.")
+        if outward_element == inward_element:
+            raise ValueError(f"PRODUCTS[{idx}] inward_element and outward_element must not be the same.")
+
+        product_cfg = SimpleNamespace()
+        product_cfg.KEY = key
+        product_cfg.ELEMENT = element
+        product_cfg.JM_IDENTIFIER = jm_identifier
+        product_cfg.PRIORITY = priority
+        product_cfg.STOICH = stoich
+        product_cfg.OUTWARD_ELEMENT = outward_element
+        product_cfg.INWARD_ELEMENT = inward_element
+        product_cfg.COMPONENTS = list(stoich.keys())
+        thr_out = int(raw_def.get("threshold_outward", raw_def.get("THRESHOLD_OUTWARD", 0)))
+        thr_in = int(raw_def.get("threshold_inward", raw_def.get("THRESHOLD_INWARD", 0)))
+        if thr_out <= 0 or thr_in <= 0:
+            raise ValueError(
+                f"PRODUCTS[{idx}] must define positive threshold_outward and threshold_inward "
+                f"(independent from stoich)."
+            )
+        product_cfg.THRESHOLD_OUTWARD = thr_out
+        product_cfg.THRESHOLD_INWARD = thr_in
+        product_cfg.MASS_PER_CELL = float(raw_def.get("MASS_PER_CELL", 0.0))
+        product_cfg.MOLES_PER_CELL = float(raw_def.get("MOLES_PER_CELL", 0.0))
+        product_cfg.CONSTITUTION = str(raw_def.get("CONSTITUTION", "+".join(product_cfg.COMPONENTS)))
+        product_cfg.OXIDATION_NUMBER = int(raw_def.get("OXIDATION_NUMBER", 1))
+        product_cfg.LIND_FLAT_ARRAY = int(raw_def.get("LIND_FLAT_ARRAY", 6))
+        product_cfg.PHASE_FRACTION_LIMIT = float(raw_def.get("PHASE_FRACTION_LIMIT", Config.PHASE_FRACTION_LIMIT))
+        probs_raw = raw_def.get("probabilities", None)
+        if probs_raw is None:
+            raise ValueError(f"PRODUCTS[{idx}] must define 'probabilities'.")
+        product_cfg.PROBABILITIES = SimulationConfigurator._make_probabilities_cfg(probs_raw, idx)
+        return product_cfg
+
+    @staticmethod
+    def _make_probabilities_cfg(probs_raw, idx):
+        if not isinstance(probs_raw, dict):
+            raise ValueError(f"PRODUCTS[{idx}].probabilities must be a dictionary.")
+        p_cfg = SimpleNamespace()
+        required = [
+            "p0", "p0_f", "p0_A_const", "p0_B_const",
+            "p1", "p1_f", "p1_A_const", "p1_B_const",
+            "global_A", "global_B", "global_B_f", "max_neigh_numb", "nucl_adapt_function",
+            "p0_d", "p0_d_f", "p0_d_A_const", "p0_d_B_const",
+            "p1_d", "p1_d_f", "p1_d_A_const", "p1_d_B_const",
+            "p6_d", "p6_d_f", "p6_d_A_const", "p6_d_B_const",
+            "global_d_A", "global_d_B", "global_d_B_f", "bsf", "dissol_adapt_function",
+        ]
+        missing = [k for k in required if k not in probs_raw]
+        if missing:
+            raise ValueError(f"PRODUCTS[{idx}].probabilities missing keys: {missing}")
+        for k, v in probs_raw.items():
+            setattr(p_cfg, k, v)
+        return p_cfg
 
     def _build_species_maps(self):
         oxidants_by_element = {}
@@ -135,58 +237,46 @@ class SimulationConfigurator:
         return oxidants_by_element, actives_by_element
 
     def _get_configured_product_definitions(self):
-        product_groups = getattr(Config, "PRODUCTS", None)
-        if product_groups is None:
+        products = getattr(Config, "PRODUCTS", None)
+        if products is None:
             return []
-        definitions = []
-        declaration_order = []
-        for key in ("PRIMARY", "SECONDARY", "TERNARY", "QUATERNARY", "QUINT"):
-            if hasattr(product_groups, key):
-                declaration_order.append(key)
-        for key in product_groups.__dict__.keys():
-            if key.startswith("_"):
-                continue
-            if key not in declaration_order:
-                declaration_order.append(key)
+        if not isinstance(products, (list, tuple)):
+            raise ValueError("Config.PRODUCTS must be a list of product dictionaries.")
 
-        for idx, key in enumerate(declaration_order):
-            cfg = getattr(product_groups, key, None)
-            if cfg is None:
-                continue
-            thr_in = int(getattr(cfg, "THRESHOLD_INWARD", 0))
-            thr_out = int(getattr(cfg, "THRESHOLD_OUTWARD", 0))
-            if thr_in <= 0 or thr_out <= 0:
-                continue
-            priority = getattr(cfg, "PRIORITY", None)
-            if priority is None:
-                priority = idx + 1
-            components = self._normalize_component_names(getattr(cfg, "COMPONENTS", []))
+        definitions = []
+        seen_keys = set()
+        for idx, raw_def in enumerate(products):
+            cfg = self._make_product_cfg(raw_def, idx)
+            if cfg.KEY in seen_keys:
+                raise ValueError(f"Duplicate product key '{cfg.KEY}' in Config.PRODUCTS.")
+            seen_keys.add(cfg.KEY)
             definitions.append({
-                "key": key,
+                "key": cfg.KEY,
                 "cfg": cfg,
-                "priority": int(priority),
-                "components": components,
-                "element": str(getattr(cfg, "ELEMENT", key)),
+                "priority": int(cfg.PRIORITY),
+                "components": list(cfg.COMPONENTS),
+                "element": str(cfg.ELEMENT),
+                "inward_element": str(cfg.INWARD_ELEMENT),
+                "outward_element": str(cfg.OUTWARD_ELEMENT),
                 "decl_idx": idx,
             })
         definitions.sort(key=lambda item: (item["priority"], item["decl_idx"]))
         return definitions
 
-    def _resolve_reactants_from_components(self, components):
-        oxidants_by_element, actives_by_element = self._build_species_maps()
-        oxidant = None
-        active = None
-        for comp in components:
-            if oxidant is None and comp in oxidants_by_element:
-                oxidant = oxidants_by_element[comp]
-            if active is None and comp in actives_by_element:
-                active = actives_by_element[comp]
-            if oxidant is not None and active is not None:
-                break
-        return oxidant, active
-
     def _apply_case_reactants_from_components(self, case, case_mp, product_def):
-        oxidant, active = self._resolve_reactants_from_components(product_def["components"])
+        oxidants_by_element, actives_by_element = self._build_species_maps()
+        inward_element = product_def["inward_element"]
+        outward_element = product_def["outward_element"]
+        missing_inward = inward_element not in oxidants_by_element
+        missing_outward = outward_element not in actives_by_element
+        if missing_inward or missing_outward:
+            raise ValueError(
+                f"Product '{product_def['element']}' is missing configured reactants. "
+                f"Missing inward oxidant: {inward_element if missing_inward else None}; "
+                f"missing outward active: {outward_element if missing_outward else None}"
+            )
+        oxidant = oxidants_by_element[inward_element]
+        active = actives_by_element[outward_element]
         case.oxidant = oxidant
         case_mp.oxidant_c3d_shm_mdata = oxidant.c3d_shm_mdata
         case.active = active
@@ -265,14 +355,15 @@ class SimulationConfigurator:
         case_mp.nucleation_mode = mode
         case_mp.nucleation_kernel_runner = get_nucleation_kernel_runner(mode)
         case_mp.product_key = product_key
+        case_mp.product_cfg = product_config
         case_mp.product_element = product_element
         case_mp.product_components = tuple(components)
         case_mp.stage_priority = int(stage_priority)
         case.fix_init_precip_func_ref = self.c_automata.fix_init_precip_int
         case_mp.precip_3d_init_shm_mdata = self.cases.precip_3d_init_shm_mdata
         case_mp.nucleation_probabilities = utils.NucleationProbabilities(
-            Config.PROBABILITIES.PRIMARY,
-            Config.PRODUCTS.PRIMARY
+            product_config.PROBABILITIES,
+            product_config
         )
 
     def save_results(self):
@@ -346,7 +437,8 @@ class SimulationConfigurator:
         if self.c_automata.iteration % Config.STRIDE == 0:
             self.c_automata.record_prod_per_layer(product.shape[0]-1, product, np.zeros(product.shape))
 
-        threshold = Config.ACTIVES.PRIMARY.CELLS_CONCENTRATION
+        actives = getattr(Config, "ACTIVES", [])
+        threshold = float(actives[0]["cells_concentration"]) if isinstance(actives, list) and len(actives) > 0 else 0.0
         for rev_index, precip_conc in enumerate(np.flip(product)):
             if precip_conc > threshold / 2:
                 position = (len(product) - 1 - rev_index) * Config.SIZE * 10 ** 6 \
