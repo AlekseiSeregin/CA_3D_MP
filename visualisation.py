@@ -107,6 +107,19 @@ class Visualisation:
                     aliases[slot] = str(prod.get("element", slot))
         self._table_prefix_aliases = aliases
 
+    def _available_iterations(self):
+        self.c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_iter_%'")
+        out = set()
+        for (name,) in self.c.fetchall():
+            if "_iter_" not in name:
+                continue
+            tail = name.rsplit("_iter_", 1)[1]
+            try:
+                out.add(int(tail))
+            except (TypeError, ValueError):
+                continue
+        return sorted(out)
+
     @staticmethod
     def _ensure_element_list_flags(cfg_obj):
         class _ElemList(list):
@@ -406,7 +419,8 @@ ELAPSED TIME: {message}
 -----------------------------------------------------------------""")
 
     def animate_3d(self, animate_separate=False, const_cam_pos=False):
-        if not self.Config.SAVE_WHOLE:
+        frames = self._available_iterations()
+        if len(frames) == 0:
             return print("No Data To Animate!")
 
         def animate(iteration):
@@ -482,14 +496,14 @@ ELAPSED TIME: {message}
                 return upd
 
             for fig_i, ax, table, color in panels:
-                FuncAnimation(fig_i, make_updater(ax, table, color))
+                FuncAnimation(fig_i, make_updater(ax, table, color), frames=frames)
             plt.show()
             plt.close('all')
             return
 
         fig = plt.figure()
         ax_all = fig.add_subplot(111, projection='3d')
-        FuncAnimation(fig, animate)
+        FuncAnimation(fig, animate, frames=frames)
         plt.show()
 
     def plot_3d(self, plot_separate=False, iteration=None, const_cam_pos=False):

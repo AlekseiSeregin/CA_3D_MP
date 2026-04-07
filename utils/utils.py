@@ -252,6 +252,7 @@ class Utils:
             stoich = {str(k): int(v) for k, v in prod.get("stoich", {}).items()}
             outward = str(prod.get("outward_element", "")).strip()
             inward = str(prod.get("inward_element", "")).strip()
+            matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", ""))
 
             prod["components"] = list(stoich.keys())
             thr_out = int(prod.get("threshold_outward", 0))
@@ -265,14 +266,28 @@ class Utils:
             # Product mass and moles per cell-event are both threshold-driven.
             out_mass = float(ref_cfg["MASS_PER_CELL"]) * float(thr_out)
             in_mass = float(in_cfg["MASS_PER_CELL"]) * float(thr_in)
-            prod["MASS_PER_CELL"] = out_mass + in_mass
 
-            product_molar_mass = 0.0
-            for elem, nu in stoich.items():
-                product_molar_mass += float(nu) * float(MOLAR_MASS[elem])
+            out_moles = float(ref_cfg["MOLES_PER_CELL"]) * float(thr_out)
+            in_moles = float(in_cfg["MOLES_PER_CELL"]) * float(thr_in)
 
-            prod["PRODUCT_MOLAR_MASS"] = product_molar_mass
-            prod["MOLES_PER_CELL"] = float(prod["MASS_PER_CELL"]) / product_molar_mass
+            # Optional matrix contribution for products whose stoich includes matrix element (e.g., spinels).
+            matrix_moles = 0.0
+            nu_matrix = float(stoich.get(matrix_elem, 0.0))
+            if nu_matrix > 0.0:
+                nu_out = float(stoich.get(outward, 0.0))
+                nu_in = float(stoich.get(inward, 0.0))
+                matrix_candidates = []
+                if nu_out > 0.0:
+                    matrix_candidates.append(out_moles * (nu_matrix / nu_out))
+                if nu_in > 0.0:
+                    matrix_candidates.append(in_moles * (nu_matrix / nu_in))
+                if len(matrix_candidates) > 0:
+                    matrix_moles = float(sum(matrix_candidates) / len(matrix_candidates))
+            matrix_mass = matrix_moles * float(getattr(Config.MATRIX, "MOLAR_MASS", 0.0))
+
+            prod["MATRIX_MOLES_PER_CELL"] = matrix_moles
+            prod["MASS_PER_CELL"] = out_mass + in_mass + matrix_mass
+            prod["MOLES_PER_CELL"] = out_moles + in_moles + matrix_moles
             prod["CONSTITUTION"] = "+".join(prod["components"])
 
             t_val = float(ref_cfg.get("T", 0.0))

@@ -359,6 +359,16 @@ class SimulationConfigurator:
         case_mp.product_element = product_element
         case_mp.product_components = tuple(components)
         case_mp.stage_priority = int(stage_priority)
+        case_mp.jm_identifier = str(getattr(product_config, "JM_IDENTIFIER", ""))
+        case_mp.outward_element = str(getattr(product_config, "OUTWARD_ELEMENT", ""))
+        stoich = getattr(product_config, "STOICH", {}) or {}
+        nu_sum = float(sum(float(v) for v in stoich.values())) if len(stoich) > 0 else 0.0
+        if nu_sum > 0.0:
+            case_mp.stoich_frac_items = tuple(
+                (str(elem), float(val) / nu_sum) for elem, val in stoich.items() if float(val) > 0.0
+            )
+        else:
+            case_mp.stoich_frac_items = ()
         case.fix_init_precip_func_ref = self.c_automata.fix_init_precip_int
         case_mp.precip_3d_init_shm_mdata = self.cases.precip_3d_init_shm_mdata
         case_mp.nucleation_probabilities = utils.NucleationProbabilities(

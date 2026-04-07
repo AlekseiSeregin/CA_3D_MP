@@ -69,8 +69,12 @@ class CaseSetUpMP:
         self.product_element = None
         self.product_components = ()
         self.stage_priority = 0
+        self.jm_identifier = ""
+        self.outward_element = ""
+        self.stoich_frac_items = ()
 
         self.plane_indexes = []
+        self.dissolution_plane_indexes = []
 
 
 class CaseRef:

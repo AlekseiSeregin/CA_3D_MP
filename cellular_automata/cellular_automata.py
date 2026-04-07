@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from types import SimpleNamespace
 import utils
 from multiprocessing import shared_memory
 from .nes_for_mp import *
@@ -18,7 +19,6 @@ from .nucleation_functions import (
     precip_step_subblock_worker,
 )
 from .neigh_indexes import ind_formation
-from utils.physical_data import MOLAR_MASS
 
 
 class CellularAutomata:
@@ -42,6 +42,11 @@ class CellularAutomata:
         self.curr_max_furthest = 0
         self.furthest_index = 0
         self.ioz_bound = 0
+        self._oxid_cfg_map = {}
+        self._act_cfg_map = {}
+        self._act_eq_matrix_map = {}
+        self._act_t_map = {}
+        self._refresh_elem_cfg_cache()
 
         # New 3D diffusion engine (set by engine when USE_NEW_DIFFUSION_ENGINE is True)
         self.diffusion_engine = None
@@ -510,7 +515,7 @@ class CellularAutomata:
             max_retries=3,
         )
 
-    def _get_product_counts_upto_bound_for_case(self, case, case_mp, u_bound):
+    def _get_product_counts_upto_bound_for_case(self, case_mp, u_bound):
         ub = int(u_bound)
         pid = int(case_mp.product_phase_id)
         state = self.cases.product_state
@@ -531,46 +536,42 @@ class CellularAutomata:
     @staticmethod
     def _cfg_elem_map(group):
         out = {}
-        if isinstance(group, list):
-            for cfg in group:
-                if not isinstance(cfg, dict):
-                    continue
-                elem = str(cfg.get("element", "None"))
-                if elem and elem.lower() != "none":
-                    out[elem] = type("ElemCfgProxy", (), {
-                        "MOLES_PER_CELL": cfg.get("MOLES_PER_CELL", 0.0),
-                        "MASS_PER_CELL": cfg.get("MASS_PER_CELL", 0.0),
-                        "EQ_MATRIX_MOLES_PER_CELL": cfg.get("EQ_MATRIX_MOLES_PER_CELL", 0.0),
-                        "T": cfg.get("T", 0.0),
-                    })()
-            return out
-
-        for key in ("PRIMARY", "SECONDARY"):
-            cfg = getattr(group, key, None)
-            if cfg is None:
+        for cfg in group:
+            if not isinstance(cfg, dict):
                 continue
-            elem = str(getattr(cfg, "ELEMENT", "None"))
-            if elem and elem.lower() != "none":
-                out[elem] = cfg
+            elem = str(cfg.get("element", "None"))
+            if not elem or elem.lower() == "none":
+                continue
+            out[elem] = SimpleNamespace(
+                MOLES_PER_CELL=cfg.get("MOLES_PER_CELL", 0.0),
+                MASS_PER_CELL=cfg.get("MASS_PER_CELL", 0.0),
+                EQ_MATRIX_MOLES_PER_CELL=cfg.get("EQ_MATRIX_MOLES_PER_CELL", 0.0),
+                T=cfg.get("T", 0.0),
+            )
         return out
+
+    def _refresh_elem_cfg_cache(self):
+        self._oxid_cfg_map = self._cfg_elem_map(Config.OXIDANTS)
+        self._act_cfg_map = self._cfg_elem_map(Config.ACTIVES)
+        self._act_eq_matrix_map = {
+            elem: float(getattr(cfg, "EQ_MATRIX_MOLES_PER_CELL", 0.0))
+            for elem, cfg in self._act_cfg_map.items()
+        }
+        self._act_t_map = {
+            elem: float(getattr(cfg, "T", 0.0))
+            for elem, cfg in self._act_cfg_map.items()
+        }
 
     def _get_product_cfg_for_case_mp(self, case_mp):
         return getattr(case_mp, "product_cfg", None)
 
     def _gather_species_counts_by_element(self, u_bound, species_objs):
-        ub = int(u_bound)
         out = {}
         for obj in species_objs:
-            elem = str(getattr(obj, "elem_name", ""))
-            if not elem:
-                continue
+            elem = obj.elem_name
             grid = obj.get_3d_grid()[0]
-            counts = np.sum(grid[:ub + 1, :, :], axis=(1, 2)).astype(np.float64)
-            prev = out.get(elem)
-            if prev is None:
-                out[elem] = counts
-            else:
-                out[elem] = prev + counts
+            counts = np.sum(grid[:u_bound + 1, :, :], axis=(1, 2)).astype(np.float64)
+            out[elem] = counts
         return out
 
     def _resolve_product_stoich_roles(self, case, case_mp, product_cfg):
@@ -603,142 +604,110 @@ class CellularAutomata:
 
     def get_comb_ind_jmatpro_generic(self):
         self.ioz_bound = self.get_cur_ioz_bound()
-        ub = int(self.ioz_bound)
-
-        oxid_cfg = self._cfg_elem_map(Config.OXIDANTS)
-        act_cfg = self._cfg_elem_map(Config.ACTIVES)
-        oxid_counts = self._gather_species_counts_by_element(ub, self.cases.all_oxidants)
-        act_counts = self._gather_species_counts_by_element(ub, self.cases.all_actives)
-        total_oxid_counts = np.zeros(ub + 1, dtype=np.float64)
-        for v in oxid_counts.values():
-            total_oxid_counts += v
-        total_act_counts = np.zeros(ub + 1, dtype=np.float64)
-        for v in act_counts.values():
-            total_act_counts += v
-
+        matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", "Ni"))
+        oxid_counts = self._gather_species_counts_by_element(self.ioz_bound, self.cases.all_oxidants)
+        act_counts = self._gather_species_counts_by_element(self.ioz_bound, self.cases.all_actives)
         elem_free_moles = {}
-        elem_free_mass = {}
         for elem, counts in oxid_counts.items():
-            cfg = oxid_cfg.get(elem)
-            elem_free_moles[elem] = counts * cfg.MOLES_PER_CELL
-            elem_free_mass[elem] = counts * cfg.MASS_PER_CELL
+            elem_free_moles[elem] = counts * self._oxid_cfg_map[elem].MOLES_PER_CELL
         for elem, counts in act_counts.items():
-            cfg = act_cfg.get(elem)
-            elem_free_moles[elem] = counts * cfg.MOLES_PER_CELL
-            elem_free_mass[elem] = counts * cfg.MASS_PER_CELL
+            elem_free_moles[elem] = counts * self._act_cfg_map[elem].MOLES_PER_CELL
 
-        outward_eq_mat_moles = np.zeros(ub + 1, dtype=np.float64)
+        outward_eq_mat_moles = np.zeros(self.ioz_bound + 1, dtype=np.float64)
         for elem, counts in act_counts.items():
-            cfg = act_cfg.get(elem)
-            outward_eq_mat_moles += counts * cfg.EQ_MATRIX_MOLES_PER_CELL
+            outward_eq_mat_moles += counts * self._act_eq_matrix_map[elem]
 
-        product_moles_total = np.zeros(ub + 1, dtype=np.float64)
-        product_mass_total = np.zeros(ub + 1, dtype=np.float64)
-        product_eq_mat_moles = np.zeros(ub + 1, dtype=np.float64)
+        product_moles_total = np.zeros(self.ioz_bound + 1, dtype=np.float64)
+        product_eq_mat_moles = np.zeros(self.ioz_bound + 1, dtype=np.float64)
+        product_matrix_pull_moles = np.zeros(self.ioz_bound + 1, dtype=np.float64)
         elem_pure_moles = dict(elem_free_moles)
-        product_mass_by_identifier = {}
-        for case, case_mp in self.cases.product_case_pairs:
-            p_cfg = self._get_product_cfg_for_case_mp(case_mp)
-            p_counts = self._get_product_counts_upto_bound_for_case(case, case_mp, ub).astype(np.float64)
+        product_moles_by_identifier = {}
+        product_runtime = []
+        for _, case_mp in self.cases.product_case_pairs:
+            p_cfg = case_mp.product_cfg
+            p_counts = self._get_product_counts_upto_bound_for_case(case_mp, self.ioz_bound).astype(np.float64)
             p_moles = p_counts * p_cfg.MOLES_PER_CELL
-            p_mass = p_counts * p_cfg.MASS_PER_CELL
-            product_mass_by_identifier[p_cfg.ELEMENT] = p_mass
+            product_moles_by_identifier[p_cfg.ELEMENT] = p_moles
             product_moles_total += p_moles
-            product_mass_total += p_mass
 
-            stoich, outward_set, _ = self._resolve_product_stoich_roles(case, case_mp, p_cfg)
-            # nu_sum = float(sum(stoich.values()))
-            for elem, nu in stoich.items():
-                # frac = float(nu) / nu_sum
-                elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * nu
-                if elem in outward_set:
-                    eq_pc = act_cfg[elem].EQ_MATRIX_MOLES_PER_CELL
-                    product_eq_mat_moles += p_counts * eq_pc * p_cfg.THRESHOLD_OUTWARD
+            for elem, frac in case_mp.stoich_frac_items:
+                elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * frac
+            product_eq_mat_moles += p_counts * self._act_eq_matrix_map[case_mp.outward_element] * p_cfg.THRESHOLD_OUTWARD
+            product_matrix_pull_moles += p_counts * float(getattr(p_cfg, "MATRIX_MOLES_PER_CELL", 0.0))
+            product_runtime.append((case_mp, p_cfg.ELEMENT))
 
-        matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles
-        matrix_molar_mass = float(MOLAR_MASS.get(str(getattr(Config.MATRIX, "ELEMENT", "Ni")), 0.0))
-        matrix_mass = matrix_moles * matrix_molar_mass
-        whole_mass = matrix_mass + product_mass_total
-        for m in elem_free_mass.values():
-            whole_mass += m
+        matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles - product_matrix_pull_moles
+        whole_moles = matrix_moles + product_moles_total
+        for m in elem_free_moles.values():
+            whole_moles += m
 
         product_c_by_identifier = {}
-        for p_ident, p_mass in product_mass_by_identifier.items():
-            product_c_by_identifier[p_ident] = p_mass / whole_mass
+        for p_ident, p_moles in product_moles_by_identifier.items():
+            product_c_by_identifier[p_ident] = p_moles / whole_moles
 
-        matrix_moles_pure = np.full(ub + 1, self.matrix_moles_per_page, dtype=np.float64)
+        matrix_moles_pure = np.full(self.ioz_bound + 1, self.matrix_moles_per_page, dtype=np.float64)
         for elem, moles in elem_pure_moles.items():
-            cfg_a = act_cfg.get(elem)
-            t_val = float(getattr(cfg_a, "T", 0.0))
-            matrix_moles_pure -= moles * t_val
+            matrix_moles_pure -= moles * self._act_t_map.get(elem, 0.0)
 
-        matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", "Ni"))
-        matrix_elem_mm = float(MOLAR_MASS.get(matrix_elem, 0.0))
         comp_elems = [e for e in sorted(elem_pure_moles.keys()) if e and e != matrix_elem]
         elements = [matrix_elem] + comp_elems
-        compositions = []
-        for i in range(ub + 1):
-            non_matrix_sum = 0.0
-            for elem in comp_elems:
-                non_matrix_sum += float(elem_pure_moles[elem][i] * float(MOLAR_MASS.get(elem, 0.0)))
-            matrix_mass_i = float(matrix_moles_pure[i] * matrix_elem_mm)
-            tot = float(matrix_mass_i + non_matrix_sum)
-            if tot <= 0:
-                compositions.append([100.0] + [0.0] * len(comp_elems))
-                continue
-            row = [float(matrix_mass_i * 100.0 / tot)]
-            for elem in comp_elems:
-                row.append(float(elem_pure_moles[elem][i] * float(MOLAR_MASS.get(elem, 0.0)) * 100.0 / tot))
-            s = sum(row)
-            if s > 100.0:
-                scale = 100.0 / s
-                row = [v * scale for v in row]
-            compositions.append(row)
+        n_planes = self.ioz_bound + 1
+        n_comp = len(comp_elems)
+        if n_comp > 0:
+            comp_stack = np.vstack([elem_pure_moles[e] for e in comp_elems])  # (n_comp, n_planes)
+            non_matrix_sum = np.sum(comp_stack, axis=0)
+        else:
+            comp_stack = np.zeros((0, n_planes), dtype=np.float64)
+            non_matrix_sum = np.zeros(n_planes, dtype=np.float64)
+        tot = matrix_moles_pure + non_matrix_sum
+        rows = np.zeros((n_planes, n_comp + 1), dtype=np.float64)
+        valid = tot > 0.0
+        rows[~valid, 0] = 100.0
+        if np.any(valid):
+            inv_tot = np.zeros(n_planes, dtype=np.float64)
+            inv_tot[valid] = 100.0 / tot[valid]
+            rows[:, 0] = matrix_moles_pure * inv_tot
+            for j in range(n_comp):
+                rows[:, j + 1] = comp_stack[j] * inv_tot
+            row_sum = np.sum(rows, axis=1)
+            high = row_sum > 100.0
+            if np.any(high):
+                rows[high] *= (100.0 / row_sum[high])[:, None]
+        compositions = rows.tolist()
 
-        plane_indices = np.arange(ub + 1, dtype=np.intp)
-        task_ids = self.jmatpro_pool.submit_tasks(compositions, elements=elements, composition_unit="mass")
-        task_to_plane = {tid: int(plane_indices[idx]) for idx, tid in enumerate(task_ids)}
-        raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=100000.0)
+        task_ids = self.jmatpro_pool.submit_tasks(compositions, elements=elements)
+        raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=10.0)
 
-        for case, case_mp in self.cases.product_case_pairs:
-            p_cfg = self._get_product_cfg_for_case_mp(case_mp)
+        for case_mp, product_ident in product_runtime:
             case_mp.plane_indexes = []
+            case_mp.dissolution_plane_indexes = []
             jm_plane0 = 0.0
-            for tid in task_ids:
+            out_elem_ref = case_mp.outward_element
+            jm_identifier = case_mp.jm_identifier
+            for plane_idx, tid in enumerate(task_ids):
                 phases = raw_list.get(tid, {})
-                phased = phases.get(p_cfg.JM_IDENTIFIER)
+                phased = phases.get(jm_identifier)
                 if not phased:
                     continue
-                phase_mass_contrib = {}
-                total_phase_mass = 0.0
-                for phase_name, pdat in phases.items():
-                    phase_mf = float(pdat.get("molar_fraction", 0.0))
-                    if phase_mf <= 0.0:
-                        continue
-                    p_elems = pdat.get("elements", [])
-                    p_comps = pdat.get("composition", [])
-                    comp_sum = float(sum(float(v) for v in p_comps)) if p_comps else 0.0
-                    if comp_sum <= 0.0:
-                        continue
-                    phase_mm = 0.0
-                    for e_i, c_i in zip(p_elems, p_comps):
-                        phase_mm += (float(c_i) / comp_sum) * float(MOLAR_MASS.get(str(e_i), 0.0))
-                    if phase_mm <= 0.0:
-                        continue
-                    contrib = phase_mf * phase_mm
-                    phase_mass_contrib[phase_name] = contrib
-                    total_phase_mass += contrib
-                if total_phase_mass <= 0.0:
-                    continue
-                plane_idx = task_to_plane[tid]
-                product_c_jm = float(phase_mass_contrib.get(p_cfg.JM_IDENTIFIER, 0.0) / total_phase_mass)
-                if plane_idx == 0:
-                    jm_plane0 = float(product_c_jm)
-                if product_c_jm > product_c_by_identifier[p_cfg.ELEMENT][plane_idx]:
-                    case_mp.plane_indexes.append(plane_idx)
-            existing_plane0 = float(product_c_by_identifier[p_cfg.ELEMENT][0])
+                sum_non_ox = float(phased.get("sum_non_ox", 0.0))
+                for jm_elem, jm_comp in zip(phased["elements"], phased["composition"]):
+                    if jm_elem == out_elem_ref:
+                        product_c_jm = (float(jm_comp) / sum_non_ox) * float(phased.get("molar_fraction", 0.0))
+                        if plane_idx == 0:
+                            jm_plane0 = float(product_c_jm)
+                        existing_c = float(product_c_by_identifier[product_ident][plane_idx])
+                        if product_c_jm > existing_c:
+                            case_mp.plane_indexes.append(plane_idx)
+                        elif product_c_jm < existing_c:
+                            case_mp.dissolution_plane_indexes.append(plane_idx)
+                        break
+            if len(case_mp.plane_indexes) > 1:
+                case_mp.plane_indexes = sorted(set(case_mp.plane_indexes))
+            if len(case_mp.dissolution_plane_indexes) > 1:
+                case_mp.dissolution_plane_indexes = sorted(set(case_mp.dissolution_plane_indexes))
+            existing_plane0 = float(product_c_by_identifier[product_ident][0])
             diff_plane0 = jm_plane0 - existing_plane0
-            self.product_plane0_tracking[(int(self.iteration), str(p_cfg.ELEMENT))] = (
+            self.product_plane0_tracking[(int(self.iteration), str(product_ident))] = (
                 jm_plane0,
                 existing_plane0,
                 diff_plane0,
@@ -2250,7 +2219,10 @@ class CellularAutomata:
         dp = self.cur_case.dissolution_probabilities
         if dp is None:
             return
-        comb = np.asarray(self.comb_indexes, dtype=np.intp).ravel()
+        comb_src = getattr(self.cur_case_mp, "dissolution_plane_indexes", None)
+        if comb_src is None or len(comb_src) == 0:
+            comb_src = self.comb_indexes
+        comb = np.asarray(comb_src, dtype=np.intp).ravel()
         if comb.size == 0:
             return
         oxidant_elem = self.cur_case.oxidant
@@ -2481,6 +2453,13 @@ class CellularAutomata:
         for case, case_mp in self.cases.product_case_pairs:
             if case_mp.plane_indexes:
                 self.precip_mp_subblock(case, case_mp)
+    
+    def dissolve(self):
+        for case, case_mp in self.cases.product_case_pairs:
+            if case_mp.dissolution_plane_indexes:
+                self.curr_case = case
+                self.curr_case_mp = case_mp
+                self.dissolve_mp_subblock()
 
     def ioz_depth_from_kinetics(self):
         self.curr_time = Config.GENERATED_VALUES.TAU * (self.iteration + 1)
@@ -2491,7 +2470,7 @@ class CellularAutomata:
         oxidant_3d = self.cur_case.oxidant.get_3d_grid()[0]
         # ioz_bound = max x (i) where any oxidant or active particle exists (narrow the domain)
         flat_o = np.flatnonzero(oxidant_3d.ravel(order="F") > 0)
-        max_x_ox = int(np.max(flat_o % self.cells_per_axis)) if flat_o.size > 0 else -1
+        max_x_ox = int(np.max(flat_o % self.cells_per_axis))
         self.ioz_bound = max(max_x_ox, 0)
         return self.ioz_bound
 

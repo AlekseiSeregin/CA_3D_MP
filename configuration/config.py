@@ -1,3 +1,4 @@
+from numba.core.utils import T
 from .config_utils_classes import ElemInput, GeneratedValues
 
 
@@ -7,8 +8,8 @@ class Config:
             "element": "O",
             "diffusion_condition": "O in Ni Krupp",
             "diffusion_condition_gb": "O in Ni Krupp 100",
-            "cells_concentration": 0.01,
-            "diffusion_max_per_cell": 3,
+            "cells_concentration": 5,
+            "diffusion_max_per_cell": 20,
         },
         # {
         #     "element": "N",
@@ -23,10 +24,10 @@ class Config:
             "element": "Cr",
             "diffusion_condition": "Al in Ni Krupp",
             "mass_concentration": 0.07,
-            "cells_concentration": 3,
+            "cells_concentration": 10,
             "conc_precision": "rand",
             "space_fill": "full",
-            "diffusion_max_per_cell": 10,
+            "diffusion_max_per_cell": 20,
         },
         # {
         #     "element": "Al",
@@ -81,24 +82,27 @@ class Config:
             "element": "Cr2O3",
             "jm_identifier": "M2O3",
             # thresholds define nucleation cell consumption
-            "threshold_outward": 1,
-            "threshold_inward": 1,
+            "threshold_outward": 2,
+            "threshold_inward": 3,
             # stoich defines product chemistry/formula
             "stoich": {"Cr": 2, "O": 3},
             "outward_element": "Cr",
             "inward_element": "O",
             "priority": 1,
-            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES),
+            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
         },
-        # {
-        #     "key": "nicr2o4",
-        #     "element": "NiCr2O4",
-        #     "jm_identifier": "SPINEL_AB2O4",
-        #     "stoich": {"Ni": 1, "Cr": 2, "O": 4},
-        #     "outward_element": "Cr",
-        #     "inward_element": "O",
-        #     "priority": 2,
-        # },
+        {
+            "key": "nicr2o4",
+            "element": "NiCr2O4",
+            "jm_identifier": "SPINEL_AB2O4",
+            "threshold_outward": 2,
+            "threshold_inward": 4,
+            "stoich": {"Ni": 1, "Cr": 2, "O": 4},
+            "outward_element": "Cr",
+            "inward_element": "O",
+            "priority": 2,
+            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
+        },
     ]
 
     MAP_PRODUCTS_TO_ELEMENTS = False
@@ -134,7 +138,7 @@ class Config:
     OUTWARD_DIFFUSION = True
 
     OUTWARD_DIFFUSION_WORKERS = 6
-    INWARD_DIFFUSION_WORKERS = 1
+    INWARD_DIFFUSION_WORKERS = 2
 
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
@@ -143,7 +147,7 @@ class Config:
     DIFFUSION_BOUNDARY_X_INWARD_RIGHT = "deletion"
     COMPUTE_PRECIPITATION = True
     SAVE_WHOLE = False
-    DECOMPOSE_PRECIPITATIONS = False
+    DECOMPOSE_PRECIPITATIONS = True
     FULL_CELLS = False
     SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True

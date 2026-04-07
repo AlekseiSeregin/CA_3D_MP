@@ -62,7 +62,7 @@ if __name__ == '__main__':
             # self.c_automata.cases.first.is_active = True
 
             self.c_automata.precip_func = self.c_automata.nucleate
-
+            
             # self.c_automata.cases.first_mp.nucleation_probabilities = utils.NucleationProbabilities(
             #     Config.PROBABILITIES.PRIMARY,
             #     Config.PRODUCTS.PRIMARY)
@@ -82,7 +82,7 @@ if __name__ == '__main__':
             self.save_function = self.save_results_product_only
             # self.c_automata.cases.first.active.diffuse = elementsdgm.diffuse_bulk_mp_numba
 
-            self.c_automata.decomposition = self.c_automata.dissolution_mp_subblock
+            self.c_automata.decomposition = self.c_automata.dissolve
 
     source_code = inspect.getsource(NewSystem)
     Config.INITIAL_SCRIPT += source_code
