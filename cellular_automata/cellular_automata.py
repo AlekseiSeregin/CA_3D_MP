@@ -632,8 +632,11 @@ class CellularAutomata:
 
             for elem, frac in case_mp.stoich_frac_items:
                 elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * frac
-            product_eq_mat_moles += p_counts * self._act_eq_matrix_map[case_mp.outward_element] * p_cfg.THRESHOLD_OUTWARD
-            product_matrix_pull_moles += p_counts * float(getattr(p_cfg, "MATRIX_MOLES_PER_CELL", 0.0))
+            out_elem_case = str(getattr(case_mp, "outward_element", ""))
+            thr_out_case = int(getattr(p_cfg, "THRESHOLD_OUTWARD", 0))
+            if out_elem_case and thr_out_case > 0:
+                product_eq_mat_moles += p_counts * self._act_eq_matrix_map[out_elem_case] * thr_out_case
+            product_matrix_pull_moles += p_counts * float(getattr(case_mp, "matrix_moles_per_cell", 0.0))
             product_runtime.append((case_mp, p_cfg.ELEMENT))
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles - product_matrix_pull_moles
@@ -689,18 +692,25 @@ class CellularAutomata:
                 phased = phases.get(jm_identifier)
                 if not phased:
                     continue
-                sum_non_ox = float(phased.get("sum_non_ox", 0.0))
-                for jm_elem, jm_comp in zip(phased["elements"], phased["composition"]):
-                    if jm_elem == out_elem_ref:
-                        product_c_jm = (float(jm_comp) / sum_non_ox) * float(phased.get("molar_fraction", 0.0))
-                        if plane_idx == 0:
-                            jm_plane0 = float(product_c_jm)
-                        existing_c = float(product_c_by_identifier[product_ident][plane_idx])
-                        if product_c_jm > existing_c:
-                            case_mp.plane_indexes.append(plane_idx)
-                        elif product_c_jm < existing_c:
-                            case_mp.dissolution_plane_indexes.append(plane_idx)
-                        break
+                product_c_jm = 0.0
+                if out_elem_ref:
+                    sum_non_ox = float(phased.get("sum_non_ox", 0.0))
+                    if sum_non_ox > 0.0:
+                        for jm_elem, jm_comp in zip(phased["elements"], phased["composition"]):
+                            if jm_elem == out_elem_ref:
+                                product_c_jm = (float(jm_comp) / sum_non_ox) * float(phased.get("molar_fraction", 0.0))
+                                break
+                else:
+                    # No outward reactant: use phase fraction directly.
+                    product_c_jm = float(phased.get("molar_fraction", 0.0))
+
+                if plane_idx == 0:
+                    jm_plane0 = float(product_c_jm)
+                existing_c = float(product_c_by_identifier[product_ident][plane_idx])
+                if product_c_jm > existing_c:
+                    case_mp.plane_indexes.append(plane_idx)
+                elif product_c_jm < existing_c:
+                    case_mp.dissolution_plane_indexes.append(plane_idx)
             if len(case_mp.plane_indexes) > 1:
                 case_mp.plane_indexes = sorted(set(case_mp.plane_indexes))
             if len(case_mp.dissolution_plane_indexes) > 1:
@@ -2216,7 +2226,9 @@ class CellularAutomata:
         to oxidant write buffer (count + dirs grid) and active. No flat cells/dirs; oxidant is
         in shared memory. Optional block logic via aggregated_ind and bsf.
         """
-        dp = self.cur_case.dissolution_probabilities
+        dp = getattr(self.cur_case_mp, "dissolution_probabilities", None)
+        if dp is None:
+            dp = getattr(self.cur_case, "dissolution_probabilities", None)
         if dp is None:
             return
         comb_src = getattr(self.cur_case_mp, "dissolution_plane_indexes", None)
@@ -2229,7 +2241,9 @@ class CellularAutomata:
         if not hasattr(oxidant_elem, "get_current_c3d_shm_mdata"):
             return
         n_workers = max(1, getattr(self.worker_pools, "n_outward_workers", getattr(self.diffusion_engine, "n_outward_workers", 4)))
-        n_z = self.cur_case_mp.product_c3d_shm_mdata.shape[2]
+        if getattr(self.cur_case_mp, "oxidant_c3d_shm_mdata", None) is None:
+            return
+        n_z = self.cur_case_mp.oxidant_c3d_shm_mdata.shape[2]
         # Partition z into contiguous slabs (no gaps), like diffusion
         base = n_z // n_workers
         extra = n_z % n_workers
@@ -2249,24 +2263,13 @@ class CellularAutomata:
         if bsf < 1.0:
             bsf = 1.0
 
-        # Product snapshot (read-only for workers)
-        shm_product = shared_memory.SharedMemory(name=self.cur_case_mp.product_c3d_shm_mdata.name)
-        product = np.ndarray(
-            self.cur_case_mp.product_c3d_shm_mdata.shape,
-            dtype=self.cur_case_mp.product_c3d_shm_mdata.dtype,
-            buffer=shm_product.buf,
-        )
-        snapshot_shm = shared_memory.SharedMemory(create=True, size=product.nbytes)
-        snapshot = np.ndarray(product.shape, dtype=product.dtype, buffer=snapshot_shm.buf)
-        np.copyto(snapshot, product)
-        shm_product.close()
-        product_snapshot_mdata = SharedMetaData(snapshot_shm.name, snapshot.shape, snapshot.dtype)
+        product_snapshot_mdata = None
 
         # Add new oxidant to current (read) buffer so particles are in the active state and survive next diffusion
         oxidant_write_mdata = oxidant_elem.get_current_c3d_shm_mdata()
         max_per_cell_oxidant = oxidant_elem.max_per_cell
         active_elem = self.cur_case.active
-        max_per_cell_active = active_elem.max_per_cell
+        max_per_cell_active = active_elem.max_per_cell if active_elem is not None else 0
         packed_dirs = np.asarray(_DIRS_6_PACKED, dtype=np.uint8)
 
         values_pp = np.asarray(dp.dissol_prob.values_pp, dtype=np.float64)
@@ -2299,12 +2302,6 @@ class CellularAutomata:
 
         pool = self.worker_pools.dissolution_pool
         pool.map(dissolution_subblock_worker, tasks)
-
-        snapshot_shm.close()
-        try:
-            snapshot_shm.unlink()
-        except FileNotFoundError:
-            pass
 
 
     def _build_precip_mirror_state(self, n_cells, z_ranges_base):
@@ -2398,8 +2395,8 @@ class CellularAutomata:
         # Point case_mp at current read buffers (diffusion may have swapped A/B)
         # self.cur_case = self.cases.product_cases[0]
         # self.get_combi_ind()
-        cur_case_mp.oxidant_c3d_shm_mdata = cur_case.oxidant.get_current_c3d_shm_mdata()
-        cur_case_mp.active_c3d_shm_mdata = cur_case.active.get_current_c3d_shm_mdata()
+        # cur_case_mp.oxidant_c3d_shm_mdata = cur_case.oxidant.get_current_c3d_shm_mdata()
+        # cur_case_mp.active_c3d_shm_mdata = cur_case.active.get_current_c3d_shm_mdata()
         cur_case.fix_init_precip_func_ref(self.cells_per_axis)
 
         # Two-state strategy only: even iterations -> base, odd iterations -> mirrored.
@@ -2419,7 +2416,8 @@ class CellularAutomata:
         for segs in z_blocks:
             if len(segs) == 1:
                 k_lo, k_hi = segs[0]
-                tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, cur_case.active.max_per_cell, ind_form))
+                max_per_cell_active = cur_case.active.max_per_cell if cur_case.active is not None else 0
+                tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form))
             else:
                 # Use the largest segment in the parallel pass; defer the remaining
                 # wrapped segment(s) to a short sequential tail pass.
@@ -2427,9 +2425,10 @@ class CellularAutomata:
                 main_seg = segs_sorted[0]
                 tail_segs = segs_sorted[1:]
                 k_lo, k_hi = main_seg
-                tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, cur_case.active.max_per_cell, ind_form))
+                max_per_cell_active = cur_case.active.max_per_cell if cur_case.active is not None else 0
+                tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form))
                 for k_lo, k_hi in tail_segs:
-                    tasks_tail_seq.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, cur_case.active.max_per_cell, ind_form))
+                    tasks_tail_seq.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form))
         if tasks_std:
             self.worker_pools.nucleation_pool.map(precip_step_subblock_worker, tasks_std)
         for task in tasks_tail_seq:
@@ -2442,7 +2441,7 @@ class CellularAutomata:
             int(cur_case_mp.oxidant_c3d_shm_mdata.shape[2]) - 1,
             plane_indexes,
             cur_case.oxidant.max_per_cell,
-            cur_case.active.max_per_cell,
+            (cur_case.active.max_per_cell if cur_case.active is not None else 0),
             ind_form,
             gap_seed_slab_k,
         )]
@@ -2457,9 +2456,9 @@ class CellularAutomata:
     def dissolve(self):
         for case, case_mp in self.cases.product_case_pairs:
             if case_mp.dissolution_plane_indexes:
-                self.curr_case = case
-                self.curr_case_mp = case_mp
-                self.dissolve_mp_subblock()
+                self.cur_case = case
+                self.cur_case_mp = case_mp
+                self.dissolution_mp_subblock()
 
     def ioz_depth_from_kinetics(self):
         self.curr_time = Config.GENERATED_VALUES.TAU * (self.iteration + 1)

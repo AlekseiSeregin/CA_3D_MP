@@ -250,8 +250,10 @@ class Utils:
 
         for prod in products:
             stoich = {str(k): int(v) for k, v in prod.get("stoich", {}).items()}
-            outward = str(prod.get("outward_element", "")).strip()
-            inward = str(prod.get("inward_element", "")).strip()
+            outward_raw = prod.get("outward_element", "")
+            inward_raw = prod.get("inward_element", "")
+            outward = "" if outward_raw is None else str(outward_raw).strip()
+            inward = "" if inward_raw is None else str(inward_raw).strip()
             matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", ""))
 
             prod["components"] = list(stoich.keys())
@@ -260,14 +262,29 @@ class Utils:
             prod["THRESHOLD_OUTWARD"] = thr_out
             prod["THRESHOLD_INWARD"] = thr_in
 
-            ref_cfg = act_cfg_by_elem.get(outward)
             in_cfg = ox_cfg_by_elem.get(inward)
+            if in_cfg is None:
+                raise ValueError(
+                    f"Product '{prod.get('element', '<unknown>')}' inward_element '{inward}' is not configured in OXIDANTS."
+                )
+
+            ref_cfg = None
+            if outward:
+                ref_cfg = act_cfg_by_elem.get(outward)
+                if ref_cfg is None:
+                    raise ValueError(
+                        f"Product '{prod.get('element', '<unknown>')}' outward_element '{outward}' is not configured in ACTIVES."
+                    )
+            elif thr_out != 0:
+                raise ValueError(
+                    f"Product '{prod.get('element', '<unknown>')}' has no outward_element, so threshold_outward must be 0."
+                )
 
             # Product mass and moles per cell-event are both threshold-driven.
-            out_mass = float(ref_cfg["MASS_PER_CELL"]) * float(thr_out)
+            out_mass = float(ref_cfg["MASS_PER_CELL"]) * float(thr_out) if ref_cfg is not None else 0.0
             in_mass = float(in_cfg["MASS_PER_CELL"]) * float(thr_in)
 
-            out_moles = float(ref_cfg["MOLES_PER_CELL"]) * float(thr_out)
+            out_moles = float(ref_cfg["MOLES_PER_CELL"]) * float(thr_out) if ref_cfg is not None else 0.0
             in_moles = float(in_cfg["MOLES_PER_CELL"]) * float(thr_in)
 
             # Optional matrix contribution for products whose stoich includes matrix element (e.g., spinels).
@@ -286,18 +303,21 @@ class Utils:
             matrix_mass = matrix_moles * float(getattr(Config.MATRIX, "MOLAR_MASS", 0.0))
 
             prod["MATRIX_MOLES_PER_CELL"] = matrix_moles
+            prod["MATRIX_MASS_PER_CELL"] = matrix_mass
             prod["MASS_PER_CELL"] = out_mass + in_mass + matrix_mass
             prod["MOLES_PER_CELL"] = out_moles + in_moles + matrix_moles
             prod["CONSTITUTION"] = "+".join(prod["components"])
 
-            t_val = float(ref_cfg.get("T", 0.0))
+            t_val = float(ref_cfg.get("T", 0.0)) if ref_cfg is not None else 0.0
             thr_out = max(1, int(prod["THRESHOLD_OUTWARD"]))
-            if t_val > 0.0 and float(ref_cfg["MOLES_PER_CELL"]) > 0.0:
+            if ref_cfg is not None and t_val > 0.0 and float(ref_cfg["MOLES_PER_CELL"]) > 0.0:
                 ox_num = math.floor(
-                    (float(Config.MATRIX.MOLES_PER_CELL) / (float(ref_cfg["MOLES_PER_CELL"]) * t_val)) / thr_out
+                    (float(Config.MATRIX.MOLES_PER_CELL) / (float(prod["stoich"].get(Config.MATRIX.ELEMENT, 0) * matrix_moles + ref_cfg["MOLES_PER_CELL"]) * t_val * thr_out))
                 )
-            else:
-                ox_num = 1
+            elif ref_cfg is None and float(prod["MOLES_PER_CELL"]) > 0.0:
+                # No outward reactant case: cap by matrix moles available per matrix cell-event.
+                ox_num = math.floor(float(Config.MATRIX.MOLES_PER_CELL) / float(prod["stoich"][Config.MATRIX.ELEMENT] * matrix_moles))
+
             prod["OXIDATION_NUMBER"] = max(1, int(ox_num))
 
     def for_jmatpro(self):

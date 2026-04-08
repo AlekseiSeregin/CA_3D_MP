@@ -68,15 +68,16 @@ def dissolution_subblock_worker(task):
     threshold_outward = int(getattr(cur_case_mp, "threshold_outward", 1))
     dissolution_thresholds = np.array([threshold_inward, threshold_outward], dtype=np.int32)
 
-    shm_p = shared_memory.SharedMemory(name=cur_case_mp.product_c3d_shm_mdata.name)
-    product = np.ndarray(
-        cur_case_mp.product_c3d_shm_mdata.shape,
-        dtype=cur_case_mp.product_c3d_shm_mdata.dtype,
-        buffer=shm_p.buf,
-    )
-    shm_a = shared_memory.SharedMemory(name=cur_case_mp.active_c3d_shm_mdata.name)
-    n_i, n_j, n_z = cur_case_mp.active_c3d_shm_mdata.shape
-    active_count, active_dirs = _views_from_segment_dissol(shm_a, n_i, max_per_cell_active)
+    n_i, n_j, n_z = cur_case_mp.oxidant_c3d_shm_mdata.shape
+    shm_a = None
+    if getattr(cur_case_mp, "active_c3d_shm_mdata", None) is not None and int(max_per_cell_active) > 0:
+        shm_a = shared_memory.SharedMemory(name=cur_case_mp.active_c3d_shm_mdata.name)
+        active_count, active_dirs = _views_from_segment_dissol(shm_a, n_i, max_per_cell_active)
+    else:
+        # No-outward product path: keep outward buffers inert.
+        active_count = np.zeros((n_i * n_j * n_z,), dtype=np.int8)
+        active_dirs = np.zeros((n_i * n_j * n_z, 1), dtype=np.uint8)
+        max_per_cell_active = 0
     shm_ox_w = shared_memory.SharedMemory(name=oxidant_write_shm_mdata.name)
     n_ox = oxidant_write_shm_mdata.shape[0]
     oxidant_count, oxidant_dirs = _views_from_segment_dissol(shm_ox_w, n_ox, max_per_cell_oxidant)
@@ -116,7 +117,6 @@ def dissolution_subblock_worker(task):
     if use_blocks:
         block_pat = np.asarray(block_patterns, dtype=np.int8)
         dissolution_subblock_kernel_snapshot_with_blocks_owner(
-            product,
             product_state,
             phase_id,
             oxidant_count,
@@ -143,7 +143,6 @@ def dissolution_subblock_worker(task):
         )
     else:
         dissolution_subblock_kernel_snapshot_owner(
-            product,
             product_state,
             phase_id,
             oxidant_count,
@@ -167,8 +166,8 @@ def dissolution_subblock_worker(task):
             packed_dirs,
         )
 
-    shm_p.close()
-    shm_a.close()
+    if shm_a is not None:
+        shm_a.close()
     shm_ox_w.close()
     shm_state.close()
     return None

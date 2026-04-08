@@ -8,7 +8,7 @@ class Config:
             "element": "O",
             "diffusion_condition": "O in Ni Krupp",
             "diffusion_condition_gb": "O in Ni Krupp 100",
-            "cells_concentration": 5,
+            "cells_concentration": 1,
             "diffusion_max_per_cell": 20,
         },
         # {
@@ -24,7 +24,7 @@ class Config:
             "element": "Cr",
             "diffusion_condition": "Al in Ni Krupp",
             "mass_concentration": 0.07,
-            "cells_concentration": 10,
+            "cells_concentration": 6,
             "conc_precision": "rand",
             "space_fill": "full",
             "diffusion_max_per_cell": 20,
@@ -56,15 +56,15 @@ class Config:
         "max_neigh_numb": None,
         "nucl_adapt_function": 5,
         # dissolution
-        "p0_d": 0.8,
+        "p0_d": 0.999999999,
         "p0_d_f": 1,
         "p0_d_A_const": 1,
         "p0_d_B_const": 5,
-        "p1_d": 0.7,
+        "p1_d": 0.99999,
         "p1_d_f": 1,
         "p1_d_A_const": 1,
         "p1_d_B_const": 10,
-        "p6_d": 1e-6,
+        "p6_d": 8e-1,
         "p6_d_f": 0.99,
         "p6_d_A_const": 1,
         "p6_d_B_const": 20,
@@ -103,6 +103,18 @@ class Config:
             "priority": 2,
             "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
         },
+        # {
+        #     "key": "nio",
+        #     "element": "NiO",
+        #     "jm_identifier": "MO_B2",
+        #     "threshold_outward": 0,
+        #     "threshold_inward": 1,
+        #     "stoich": {"Ni": 1, "O": 1},
+        #     "outward_element": None,
+        #     "inward_element": "O",
+        #     "priority": 3,
+        #     "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
+        # },
     ]
 
     MAP_PRODUCTS_TO_ELEMENTS = False
@@ -137,8 +149,8 @@ class Config:
     INWARD_DIFFUSION = True
     OUTWARD_DIFFUSION = True
 
-    OUTWARD_DIFFUSION_WORKERS = 6
-    INWARD_DIFFUSION_WORKERS = 2
+    OUTWARD_DIFFUSION_WORKERS = 1
+    INWARD_DIFFUSION_WORKERS = 1
 
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
