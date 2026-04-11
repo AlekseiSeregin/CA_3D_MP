@@ -1,4 +1,4 @@
-from numba.core.utils import T
+from re import T
 from .config_utils_classes import ElemInput, GeneratedValues
 
 
@@ -8,7 +8,7 @@ class Config:
             "element": "O",
             "diffusion_condition": "O in Ni Krupp",
             "diffusion_condition_gb": "O in Ni Krupp 100",
-            "cells_concentration": 1,
+            "cells_concentration": 3,
             "diffusion_max_per_cell": 20,
         },
         # {
@@ -22,9 +22,9 @@ class Config:
     ACTIVES = [
         {
             "element": "Cr",
-            "diffusion_condition": "Al in Ni Krupp",
-            "mass_concentration": 0.07,
-            "cells_concentration": 6,
+            "diffusion_condition": "Cr in Ni Krupp",
+            "mass_concentration": 0.05,
+            "cells_concentration": 10,
             "conc_precision": "rand",
             "space_fill": "full",
             "diffusion_max_per_cell": 20,
@@ -32,11 +32,12 @@ class Config:
         # {
         #     "element": "Al",
         #     "diffusion_condition": "Al in Ni Krupp",
-        #     "mass_concentration": 0.04,
-        #     "cells_concentration": 2,
+        #     "mass_concentration": 0.025,
+        #     "cells_concentration": 1.925925,
         #     "conc_precision": "rand",
         #     "space_fill": "full",
-        #     "diffusion_max_per_cell": 10,
+        #     "diffusion_max_per_cell": 8,
+        #     # 5.192307693
         # },
     ]
 
@@ -56,15 +57,15 @@ class Config:
         "max_neigh_numb": None,
         "nucl_adapt_function": 5,
         # dissolution
-        "p0_d": 0.999999999,
+        "p0_d": 0.9,
         "p0_d_f": 1,
         "p0_d_A_const": 1,
         "p0_d_B_const": 5,
-        "p1_d": 0.99999,
+        "p1_d": 0.7,
         "p1_d_f": 1,
         "p1_d_A_const": 1,
         "p1_d_B_const": 10,
-        "p6_d": 8e-1,
+        "p6_d": 1e-6,
         "p6_d_f": 0.99,
         "p6_d_A_const": 1,
         "p6_d_B_const": 20,
@@ -100,21 +101,47 @@ class Config:
             "stoich": {"Ni": 1, "Cr": 2, "O": 4},
             "outward_element": "Cr",
             "inward_element": "O",
-            "priority": 2,
+            "priority": 3,
             "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
         },
         # {
-        #     "key": "nio",
-        #     "element": "NiO",
-        #     "jm_identifier": "MO_B2",
-        #     "threshold_outward": 0,
-        #     "threshold_inward": 1,
-        #     "stoich": {"Ni": 1, "O": 1},
-        #     "outward_element": None,
+        #     "key": "al2o3",
+        #     "element": "Al2O3",
+        #     "jm_identifier": "M2O3",
+        #     # thresholds define nucleation cell consumption
+        #     "threshold_outward": 2,
+        #     "threshold_inward": 3,
+        #     # stoich defines product chemistry/formula
+        #     "stoich": {"Al": 2, "O": 3},
+        #     "outward_element": "Al",
         #     "inward_element": "O",
-        #     "priority": 3,
+        #     "priority": 2,
         #     "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
         # },
+        # {
+        #     "key": "nial2o4",
+        #     "element": "NiAl2O4",
+        #     "jm_identifier": "SPINEL_AB2O4",
+        #     "threshold_outward": 2,
+        #     "threshold_inward": 4,
+        #     "stoich": {"Ni": 1, "Al": 2, "O": 4},
+        #     "outward_element": "Al",
+        #     "inward_element": "O",
+        #     "priority": 4,
+        #     "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
+        # },
+        {
+            "key": "nio",
+            "element": "NiO",
+            "jm_identifier": "MO_B2",
+            "threshold_outward": 0,
+            "threshold_inward": 1,
+            "stoich": {"Ni": 1, "O": 1},
+            "outward_element": None,
+            "inward_element": "O",
+            "priority": 5,
+            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
+        },
     ]
 
     MAP_PRODUCTS_TO_ELEMENTS = False
@@ -142,15 +169,15 @@ class Config:
     N_BOOST_STEPS = 1
 
     PROD_INCR_CONST = 1 * 10 ** -5
-    PROD_ERROR = 0.01
+    PROD_ERROR = 0.05
     ZETTA_ZERO = 10 * (10 ** -6)  # [m]
     ZETTA_FINAL = 43 * (10 ** -6)  # [m]
 
     INWARD_DIFFUSION = True
     OUTWARD_DIFFUSION = True
 
-    OUTWARD_DIFFUSION_WORKERS = 1
-    INWARD_DIFFUSION_WORKERS = 1
+    OUTWARD_DIFFUSION_WORKERS = 5
+    INWARD_DIFFUSION_WORKERS = 2
 
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
@@ -159,7 +186,7 @@ class Config:
     DIFFUSION_BOUNDARY_X_INWARD_RIGHT = "deletion"
     COMPUTE_PRECIPITATION = True
     SAVE_WHOLE = False
-    DECOMPOSE_PRECIPITATIONS = True
+    DECOMPOSE_PRECIPITATIONS = False
     FULL_CELLS = False
     SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
@@ -169,7 +196,7 @@ class Config:
     #   legacy_simple_owner -> legacy simplified with owner-phase exclusion
     #   stoich_prob_owner   -> threshold-based probabilistic nucleation with owner-phase exclusion
     #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
-    NUCLEATION_MODE = "legacy_simple_owner"
+    NUCLEATION_MODE = "stoich_simple_owner"
     # If True, precipitation stages are executed sequentially by product PRIORITY
     # using entries from PRODUCTS list.
     USE_PRODUCT_STAGE_SEQUENCE = True

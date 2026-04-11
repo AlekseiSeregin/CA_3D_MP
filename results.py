@@ -2,6 +2,11 @@
 Results visualisation launcher with GUI.
 Load a simulation database and run visualisations via buttons and sliders.
 """
+import matplotlib
+
+# Must run before pyplot/visualisation import so animations and redraw work with this Tk app.
+matplotlib.use("TkAgg")
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from visualisation import Visualisation, plot_kinetics, plot_kinetics_mult_comb
@@ -84,7 +89,7 @@ class VisualisationApp:
         self._plot3d_separate = tk.BooleanVar(value=False)
         self._plot3d_const_cam = tk.BooleanVar(value=False)
         self._plot3d_iter = tk.IntVar(value=0)
-        ttk.Checkbutton(lf_plot, text="Separate windows (one per quantity)", variable=self._plot3d_separate).pack(anchor=tk.W)
+        ttk.Checkbutton(lf_plot, text="Separate windows (one per entitiy)", variable=self._plot3d_separate).pack(anchor=tk.W)
         ttk.Checkbutton(lf_plot, text="Fixed camera", variable=self._plot3d_const_cam).pack(anchor=tk.W)
         row_i = ttk.Frame(lf_plot)
         row_i.pack(fill=tk.X, pady=2)

@@ -414,6 +414,15 @@ class SimulationConfigurator:
                     self._get_product_save_coords(case, case_mp),
                 )
 
+    def save_results_inward_only(self):
+        if Config.INWARD_DIFFUSION:
+            for oxidant in self.cases.all_oxidants:
+                self.db.insert_particle_data(
+                    str(oxidant.elem_name),
+                    self.c_automata.iteration,
+                    oxidant.cells,
+                )
+
     def _get_product_save_coords(self, case, case_mp):
         """
         Return product coordinates as (3, n) with rows [z, y, x] for DB insert.

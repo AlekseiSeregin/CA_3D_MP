@@ -1,8 +1,6 @@
 from multiprocessing import shared_memory
 import numpy as np
 from utils.numba_functions import (
-    dissolution_subblock_kernel_snapshot,
-    dissolution_subblock_kernel_snapshot_with_blocks,
     dissolution_subblock_kernel_snapshot_owner,
     dissolution_subblock_kernel_snapshot_with_blocks_owner,
 
@@ -112,7 +110,7 @@ def dissolution_subblock_worker(task):
     use_blocks = (
         block_patterns is not None
         and getattr(block_patterns, "shape", (0,))[0] > 0
-        and float(bsf) >= 1.0
+        and float(bsf) > 1.0
     )
     if use_blocks:
         block_pat = np.asarray(block_patterns, dtype=np.int8)

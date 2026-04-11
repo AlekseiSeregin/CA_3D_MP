@@ -19,7 +19,7 @@ class WorkerPools:
 
         # These are used by precips/dissolution when using the shared-memory subblock kernels.
         self.nucleation_pool = mp.Pool(
-            self.n_inward_workers,
+            self.n_outward_workers,
             maxtasksperchild=int(getattr(Config, "MAX_TASK_PER_CHILD", 0)) or None,
         )
         self.dissolution_pool = mp.Pool(

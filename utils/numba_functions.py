@@ -12,15 +12,14 @@ def product_counts_upto_bound_from_state(owner_phase, state_count, phase_id, u_b
     pid = np.uint8(phase_id)
     ub = int(u_bound)
     out = np.zeros(ub + 1, dtype=np.uint32)
-    n_i = owner_phase.shape[0]
-    n_j = owner_phase.shape[1]
-    for k in range(ub + 1):
+    n = owner_phase.shape[0]
+    for i in range(ub + 1):
         s = 0
-        for i in range(n_i):
-            for j in range(n_j):
+        for j in range(n):
+            for k in range(n):
                 if owner_phase[i, j, k] == pid:
                     s += int(state_count[i, j, k])
-        out[k] = s
+        out[i] = s
     return out
 
 
@@ -795,91 +794,6 @@ def _dissolution_add_particles_at_cell(
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
-def dissolution_subblock_kernel_snapshot(
-    product_read,
-    full_3d,
-    oxidant_count,
-    oxidant_dirs,
-    active_count,
-    active_dirs,
-    plane_indexes,
-    offsets_26,
-    k_lo,
-    k_hi,
-    values_pp,
-    const_a_pp,
-    const_b_pp,
-    const_c_pp,
-    const_d_pp,
-    n_cells,
-    n_z,
-    seed,
-    dissolution_thresholds,
-    max_per_cell_ox,
-    max_per_cell_active,
-    packed_dirs,
-):
-    """
-    Snapshot-based dissolution. Processes only k in [k_lo, k_hi] (z-slab). When a particle
-    dissolves, appends (i,j,k) to a local buffer; at the end adds particles for all collected coords.
-    """
-    np.random.seed(seed)
-    n_i, n_j, _ = product_read.shape
-    coords_list = [(0, 0, 0) for _ in range(0)]  # empty list of (i,j,k) for Numba typing
-
-    for k in range(k_lo, k_hi + 1):
-        for idx_i in range(plane_indexes.shape[0]):
-            i = int(plane_indexes[idx_i])
-            for j in range(n_j):
-                n_p = int(product_read[i, j, k])
-                if n_p <= 0:
-                    continue
-                flat_count = 0
-                for ni in range(6):
-                    di = int(offsets_26[ni, 0])
-                    dj = int(offsets_26[ni, 1])
-                    dk = int(offsets_26[ni, 2])
-                    ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-                        i + di, j + dj, k + dk, n_cells
-                    )
-                    if valid and product_read[ii, jj, kk] > 0:
-                        flat_count += 1
-                if flat_count == 0:
-                    prob = values_pp[k]
-                else:
-                    prob = (
-                        const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
-                        + const_d_pp[k]
-                    )
-                for _ in range(n_p):
-                    if np.random.random() < prob:
-                        product_read[i, j, k] -= 1
-                        coords_list.append((i, j, k))
-                if product_read[i, j, k] <= 0 and k < full_3d.shape[2]:
-                    full_3d[i, j, k] = False
-
-    if len(coords_list) == 0:
-        return
-    _dissolution_add_particles_at_cell(
-        oxidant_count,
-        oxidant_dirs,
-        active_count,
-        active_dirs,
-        coords_list,
-        n_cells,
-        dissolution_thresholds,
-        max_per_cell_ox,
-        max_per_cell_active,
-        packed_dirs,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Dissolution subblock with snapshot + block detection (26-neighbour, prob /= bsf if in block)
-# ---------------------------------------------------------------------------
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
 def _dissolution_is_block_cell(neigh26_bool, block_patterns):
     """Return True if for any row in block_patterns, all 7 indexed entries in neigh26_bool are True."""
     for p in range(block_patterns.shape[0]):
@@ -891,105 +805,6 @@ def _dissolution_is_block_cell(neigh26_bool, block_patterns):
         if all7:
             return True
     return False
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def _dissolution_fill_neigh_26(neigh26, offsets_26, i, j, k, n_cells, product_read):
-    """Fill all 26 entries of neigh26 from offsets_26 in one pass; return flat_count (sum of product_read for first 6)."""
-    flat_count = 0
-    for ni in range(26):
-        di = int(offsets_26[ni, 0])
-        dj = int(offsets_26[ni, 1])
-        dk = int(offsets_26[ni, 2])
-        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
-            i + di, j + dj, k + dk, n_cells
-        )
-        has_neigh = valid and product_read[ii, jj, kk] > 0
-        neigh26[ni] = has_neigh
-        if ni < 6 and has_neigh:
-            flat_count += 1
-    return flat_count
-
-
-@numba.njit(fastmath=True, cache=_CACHE)
-def dissolution_subblock_kernel_snapshot_with_blocks(
-    product_read,
-    product,
-    full_3d,
-    oxidant_count,
-    oxidant_dirs,
-    active_count,
-    active_dirs,
-    plane_indexes,
-    offsets_26,
-    k_lo,
-    k_hi,
-    block_patterns,
-    bsf,
-    values_pp,
-    const_a_pp,
-    const_b_pp,
-    const_c_pp,
-    const_d_pp,
-    n_cells,
-    n_z,
-    seed,
-    dissolution_thresholds,
-    max_per_cell_ox,
-    max_per_cell_active,
-    packed_dirs,
-):
-    """
-    Snapshot-based dissolution with block detection. Processes only k in [k_lo, k_hi] (z-slab).
-    When a particle dissolves, appends (i,j,k) to a local buffer; at the end adds particles.
-    """
-    np.random.seed(seed)
-    n_i, n_j, _ = product.shape
-    bsf_inv = 1.0 / bsf if bsf > 0.0 else 1.0
-    coords_list = [(0, 0, 0) for _ in range(0)]  # empty list of (i,j,k) for Numba typing
-
-    for k in range(k_lo, k_hi + 1):
-        for idx_i in range(plane_indexes.shape[0]):
-            i = int(plane_indexes[idx_i])
-            for j in range(n_j):
-                n_p = int(product[i, j, k])
-                if n_p <= 0:
-                    continue
-                neigh26 = np.zeros(26, dtype=np.bool_)
-                flat_count = _dissolution_fill_neigh_26(
-                    neigh26, offsets_26, i, j, k, n_cells, product_read
-                )
-                is_block = block_patterns.shape[0] > 0 and _dissolution_is_block_cell(neigh26, block_patterns)
-                if flat_count == 0:
-                    prob = values_pp[k]
-                else:
-                    prob = (
-                        const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
-                        + const_d_pp[k]
-                    )
-                if is_block:
-                    prob *= bsf_inv
-                for _ in range(n_p):
-                    if np.random.random() < prob:
-                        product[i, j, k] -= 1
-                        coords_list.append((i, j, k))
-                if product[i, j, k] <= 0 and k < full_3d.shape[2]:
-                    full_3d[i, j, k] = False
-
-    if len(coords_list) == 0:
-        return
-    _dissolution_add_particles_at_cell(
-        oxidant_count,
-        oxidant_dirs,
-        active_count,
-        active_dirs,
-        coords_list,
-        n_cells,
-        dissolution_thresholds,
-        max_per_cell_ox,
-        max_per_cell_active,
-        packed_dirs,
-    )
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1039,7 +854,8 @@ def dissolution_subblock_kernel_snapshot_owner(
                     dj = int(offsets_26[ni, 1])
                     dk = int(offsets_26[ni, 2])
                     ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
-                    if valid and owner_phase[ii, jj, kk] > 0:
+                    # Dissolution neighbourhood is phase-local: only same product owner counts.
+                    if valid and owner_phase[ii, jj, kk] == pid:
                         flat_count += 1
                 if flat_count == 0:
                     prob = values_pp[k]
@@ -1121,7 +937,8 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner(
                     dj = int(offsets_26[ni, 1])
                     dk = int(offsets_26[ni, 2])
                     ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
-                    has_neigh = valid and owner_phase[ii, jj, kk] > 0
+                    # Dissolution neighbourhood is phase-local: only same product owner counts.
+                    has_neigh = valid and owner_phase[ii, jj, kk] == pid
                     neigh26[ni] = has_neigh
                     if ni < 6 and has_neigh:
                         flat_count += 1

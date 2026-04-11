@@ -8,6 +8,7 @@ import numpy as np
 import utils
 from scipy import ndimage
 import pickle
+from types import SimpleNamespace
 from configuration import Config
 from configuration import update_class_from_dict
 import pandas as pd
@@ -131,6 +132,62 @@ class Visualisation:
                 wrapped.SECONDARY_EXISTENCE = len(wrapped) > 1
                 setattr(cfg_obj, name, wrapped)
 
+    @staticmethod
+    def _dict_to_attr_namespace(d):
+        """Build SimpleNamespace with UPPERCASE attributes so it matches legacy ElemInput-style access."""
+        ns = SimpleNamespace()
+        if not isinstance(d, dict):
+            return ns
+        for k, v in d.items():
+            setattr(ns, str(k).upper(), v)
+        return ns
+
+    @classmethod
+    def _ensure_legacy_primary_access(cls, cfg):
+        """
+        Plotting code expects Config.OXIDANTS.PRIMARY.MOLES_PER_CELL etc.
+        Pickled / list-based configs only store lists of dicts — attach PRIMARY/SECONDARY/... aliases.
+        """
+        class _ListWithSlots(list):
+            pass
+
+        class _ProdList(list):
+            pass
+
+        def ensure_ox_act(attr, slots):
+            obj = getattr(cfg, attr, None)
+            if obj is None or not isinstance(obj, list) or len(obj) == 0:
+                return
+            if hasattr(obj, slots[0]):
+                return
+            if type(obj) is list:
+                obj = _ListWithSlots(obj)
+                setattr(cfg, attr, obj)
+            for i, name in enumerate(slots):
+                setattr(
+                    obj,
+                    name,
+                    cls._dict_to_attr_namespace(obj[i]) if i < len(obj) else SimpleNamespace(),
+                )
+            if not hasattr(obj, "SECONDARY_EXISTENCE"):
+                obj.SECONDARY_EXISTENCE = len(obj) > 1
+
+        ensure_ox_act("OXIDANTS", ("PRIMARY", "SECONDARY"))
+        ensure_ox_act("ACTIVES", ("PRIMARY", "SECONDARY"))
+
+        prods = getattr(cfg, "PRODUCTS", None)
+        if prods is None or not isinstance(prods, list) or len(prods) == 0 or hasattr(prods, "PRIMARY"):
+            return
+        if type(prods) is list:
+            prods = _ProdList(prods)
+            cfg.PRODUCTS = prods
+        for i, name in enumerate(("PRIMARY", "SECONDARY", "TERNARY", "QUATERNARY", "QUINT")):
+            setattr(
+                prods,
+                name,
+                cls._dict_to_attr_namespace(prods[i]) if i < len(prods) else SimpleNamespace(),
+            )
+
     def _resolve_table_prefix(self, table_prefix):
         if table_prefix in self._available_iter_prefixes:
             return table_prefix
@@ -223,6 +280,8 @@ class Visualisation:
             update_class_from_dict(Config, unpickled_dict)
             self.Config = Config()
             self._ensure_element_list_flags(self.Config)
+
+        self._ensure_legacy_primary_access(self.Config)
 
         table_name = 'PickledMicrostructure'
         self.c.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
@@ -467,6 +526,7 @@ ELAPSED TIME: {message}
             if const_cam_pos:
                 azim, elev, dist = CAM_ANIM_COMBINED
                 self._set_camera_3d(ax_all, azim, elev, dist)
+            fig.suptitle(f"Iteration {iteration}", fontsize=12, fontweight="bold")
 
         if animate_separate:
             azim, elev, dist = CAM_ANIM_SEPARATE
@@ -493,17 +553,22 @@ ELAPSED TIME: {message}
                     self._set_axes_lim_3d(ax, self.axlim)
                     if const_cam_pos:
                         self._set_camera_3d(ax, azim, elev, dist)
+                    ax.figure.suptitle(f"Iteration {iteration}", fontsize=12, fontweight="bold")
                 return upd
 
+            # Keep references: FuncAnimation is garbage-collected if not retained, so nothing animates.
+            _anim_refs = []
             for fig_i, ax, table, color in panels:
-                FuncAnimation(fig_i, make_updater(ax, table, color), frames=frames)
+                _anim_refs.append(
+                    FuncAnimation(fig_i, make_updater(ax, table, color), frames=frames, interval=200)
+                )
             plt.show()
             plt.close('all')
             return
 
         fig = plt.figure()
         ax_all = fig.add_subplot(111, projection='3d')
-        FuncAnimation(fig, animate, frames=frames)
+        _anim = FuncAnimation(fig, animate, frames=frames, interval=200)
         plt.show()
 
     def plot_3d(self, plot_separate=False, iteration=None, const_cam_pos=False):
@@ -750,6 +815,10 @@ ELAPSED TIME: {message}
         if not self.Config.SAVE_WHOLE:
             print("No Data To Animate!")
             return
+        frames = self._available_iterations()
+        if len(frames) == 0:
+            print("No Data To Animate!")
+            return
         if slice_pos is None:
             slice_pos = int(self.axlim / 2)
 
@@ -792,10 +861,14 @@ ELAPSED TIME: {message}
                         _slice_scatter(ax, items, color, s)
                     ax.set_xlim(0, self.axlim)
                     ax.set_ylim(0, self.axlim)
+                    ax.figure.suptitle(f"Iteration {iteration}", fontsize=12, fontweight="bold")
                 return upd
 
+            _anim_refs = []
             for fig_i, ax, table, color in panels:
-                FuncAnimation(fig_i, make_updater_2d(ax, table, color))
+                _anim_refs.append(
+                    FuncAnimation(fig_i, make_updater_2d(ax, table, color), frames=frames, interval=200)
+                )
             plt.show()
             plt.close('all')
             return
@@ -814,13 +887,19 @@ ELAPSED TIME: {message}
                 _slice_scatter(ax_all, items, 'r', s)
             ax_all.set_xlim(0, self.axlim)
             ax_all.set_ylim(0, self.axlim)
+            fig.suptitle(f"Iteration {iteration}", fontsize=12, fontweight="bold")
 
         fig = plt.figure()
         ax_all = fig.add_subplot(111)
-        FuncAnimation(fig, animate)
+        _anim = FuncAnimation(fig, animate, frames=frames, interval=200)
         plt.show()
 
     def animate_concentration(self, analytic_sol=False, conc_type="atomic"):
+        frames = self._available_iterations()
+        if len(frames) == 0:
+            print("No Data To Animate!")
+            return
+
         def animate(iteration):
             inward = np.zeros(self.axlim, dtype=int)
             inward_moles = np.zeros(self.axlim, dtype=int)
@@ -1059,10 +1138,12 @@ ELAPSED TIME: {message}
             #     ax1.set_ylim(0, y_max_sand * 2 + y_max_sand * 0.2)
             #     ax1.plot(x, analytical_concentration_sand, color='k')
 
+            fig.suptitle(f"Iteration {iteration}", fontsize=12, fontweight="bold")
+
         fig = plt.figure()
         ax1 = fig.add_subplot(121)
         ax2 = fig.add_subplot(122)
-        animation = FuncAnimation(fig, animate)
+        _anim = FuncAnimation(fig, animate, frames=frames, interval=200)
         plt.show()
         # self.conn.commit()
 
@@ -1148,7 +1229,7 @@ ELAPSED TIME: {message}
             if np.any(items):
                 primary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                 primary_product_moles = primary_product * self.Config.PRODUCTS.PRIMARY.MOLES_PER_CELL
-                primary_product_moles_tc = primary_product * self.Config.PRODUCTS.PRIMARY.MOLES_PER_CELL_TC
+                primary_product_moles_tc = primary_product * utils.product_moles_per_cell_tc(self.Config.PRODUCTS.PRIMARY)
                 primary_product_mass = primary_product * self.Config.PRODUCTS.PRIMARY.MASS_PER_CELL
                 primary_product_eq_mat_moles = primary_product * self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *\
                                                self.Config.PRODUCTS.PRIMARY.THRESHOLD_OUTWARD
@@ -1158,7 +1239,7 @@ ELAPSED TIME: {message}
                 if np.any(items):
                     secondary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     secondary_product_moles = secondary_product * self.Config.PRODUCTS.SECONDARY.MOLES_PER_CELL
-                    secondary_product_moles_tc = secondary_product * self.Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC
+                    secondary_product_moles_tc = secondary_product * utils.product_moles_per_cell_tc(self.Config.PRODUCTS.SECONDARY)
                     secondary_product_mass = secondary_product * self.Config.PRODUCTS.SECONDARY.MASS_PER_CELL
                     secondary_product_eq_mat_moles = secondary_product * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *\
                                                      self.Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD
@@ -1167,7 +1248,7 @@ ELAPSED TIME: {message}
                 if np.any(items):
                     ternary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     ternary_product_moles = ternary_product * self.Config.PRODUCTS.TERNARY.MOLES_PER_CELL
-                    ternary_product_moles_tc = ternary_product * self.Config.PRODUCTS.TERNARY.MOLES_PER_CELL_TC
+                    ternary_product_moles_tc = ternary_product * utils.product_moles_per_cell_tc(self.Config.PRODUCTS.TERNARY)
                     ternary_product_mass = ternary_product * self.Config.PRODUCTS.TERNARY.MASS_PER_CELL
                     ternary_product_eq_mat_moles = (ternary_product * ((self.Config.ACTIVES.PRIMARY.EQ_MATRIX_MOLES_PER_CELL *
                                         self.Config.PRODUCTS.TERNARY.THRESHOLD_OUTWARD) +
@@ -1177,7 +1258,7 @@ ELAPSED TIME: {message}
                 if np.any(items):
                     quaternary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     quaternary_product_moles = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL
-                    quaternary_product_moles_tc = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC
+                    quaternary_product_moles_tc = quaternary_product * utils.product_moles_per_cell_tc(self.Config.PRODUCTS.QUATERNARY)
                     quaternary_product_mass = quaternary_product * self.Config.PRODUCTS.QUATERNARY.MASS_PER_CELL
                     quaternary_product_eq_mat_moles = (quaternary_product * ((self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *
                                            self.Config.PRODUCTS.QUATERNARY.THRESHOLD_OUTWARD) +
@@ -1187,7 +1268,7 @@ ELAPSED TIME: {message}
                 if np.any(items):
                     quint_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     quint_product_moles = quint_product * self.Config.PRODUCTS.QUINT.MOLES_PER_CELL
-                    quint_product_moles_tc = quint_product * self.Config.PRODUCTS.QUATERNARY.MOLES_PER_CELL_TC
+                    quint_product_moles_tc = quint_product * utils.product_moles_per_cell_tc(self.Config.PRODUCTS.QUINT)
                     quint_product_mass = quint_product * self.Config.PRODUCTS.QUINT.MASS_PER_CELL
                     quint_product_eq_mat_moles = quint_product * self.Config.PRODUCTS.QUINT.MOLES_PER_CELL
 
@@ -1196,7 +1277,7 @@ ELAPSED TIME: {message}
                 if np.any(items):
                     secondary_product = np.array([len(np.where(items[:, 2] == i)[0]) for i in range(self.axlim)])
                     secondary_product_moles = secondary_product * self.Config.PRODUCTS.SECONDARY.MOLES_PER_CELL
-                    secondary_product_moles_tc = secondary_product * self.Config.PRODUCTS.SECONDARY.MOLES_PER_CELL_TC
+                    secondary_product_moles_tc = secondary_product * utils.product_moles_per_cell_tc(self.Config.PRODUCTS.SECONDARY)
                     secondary_product_mass = secondary_product * self.Config.PRODUCTS.SECONDARY.MASS_PER_CELL
                     secondary_product_eq_mat_moles = secondary_product * self.Config.ACTIVES.SECONDARY.EQ_MATRIX_MOLES_PER_CELL *\
                                                       self.Config.PRODUCTS.SECONDARY.THRESHOLD_OUTWARD

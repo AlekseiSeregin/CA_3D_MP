@@ -691,6 +691,7 @@ class CellularAutomata:
                 phases = raw_list.get(tid, {})
                 phased = phases.get(jm_identifier)
                 if not phased:
+                    case_mp.dissolution_plane_indexes.append(plane_idx)
                     continue
                 product_c_jm = 0.0
                 if out_elem_ref:
@@ -707,9 +708,9 @@ class CellularAutomata:
                 if plane_idx == 0:
                     jm_plane0 = float(product_c_jm)
                 existing_c = float(product_c_by_identifier[product_ident][plane_idx])
-                if product_c_jm > existing_c:
+                if (product_c_jm - existing_c)/product_c_jm > Config.PROD_ERROR:
                     case_mp.plane_indexes.append(plane_idx)
-                elif product_c_jm < existing_c:
+                elif (product_c_jm - existing_c)/product_c_jm < Config.PROD_ERROR:
                     case_mp.dissolution_plane_indexes.append(plane_idx)
             if len(case_mp.plane_indexes) > 1:
                 case_mp.plane_indexes = sorted(set(case_mp.plane_indexes))
@@ -2452,6 +2453,10 @@ class CellularAutomata:
         for case, case_mp in self.cases.product_case_pairs:
             if case_mp.plane_indexes:
                 self.precip_mp_subblock(case, case_mp)
+            if case_mp.dissolution_plane_indexes:
+                self.cur_case = case
+                self.cur_case_mp = case_mp
+                self.dissolution_mp_subblock()
     
     def dissolve(self):
         for case, case_mp in self.cases.product_case_pairs:
