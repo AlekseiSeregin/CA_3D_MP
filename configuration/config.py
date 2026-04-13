@@ -1,4 +1,3 @@
-from re import T
 from .config_utils_classes import ElemInput, GeneratedValues
 
 
@@ -9,7 +8,7 @@ class Config:
             "diffusion_condition": "O in Ni Krupp",
             "diffusion_condition_gb": "O in Ni Krupp 100",
             "cells_concentration": 3,
-            "diffusion_max_per_cell": 20,
+            "diffusion_max_per_cell": 100,
         },
         # {
         #     "element": "N",
@@ -23,22 +22,22 @@ class Config:
         {
             "element": "Cr",
             "diffusion_condition": "Cr in Ni Krupp",
-            "mass_concentration": 0.05,
+            "mass_concentration": 0.25,
             "cells_concentration": 10,
             "conc_precision": "rand",
             "space_fill": "full",
             "diffusion_max_per_cell": 20,
         },
-        # {
-        #     "element": "Al",
-        #     "diffusion_condition": "Al in Ni Krupp",
-        #     "mass_concentration": 0.025,
-        #     "cells_concentration": 1.925925,
-        #     "conc_precision": "rand",
-        #     "space_fill": "full",
-        #     "diffusion_max_per_cell": 8,
-        #     # 5.192307693
-        # },
+        {
+            "element": "Al",
+            "diffusion_condition": "Al in Ni Krupp",
+            "mass_concentration": 0.025,
+            "cells_concentration": 1.925925,
+            "conc_precision": "rand",
+            "space_fill": "full",
+            "diffusion_max_per_cell": 8,
+            # 5.192307693
+        },
     ]
 
     DEFAULT_PRODUCT_PROBABILITIES = {
@@ -65,7 +64,7 @@ class Config:
         "p1_d_f": 1,
         "p1_d_A_const": 1,
         "p1_d_B_const": 10,
-        "p6_d": 1e-6,
+        "p6_d": 1e-1,
         "p6_d_f": 0.99,
         "p6_d_A_const": 1,
         "p6_d_B_const": 20,
@@ -73,7 +72,7 @@ class Config:
         "global_d_B": None,
         "global_d_B_f": -0.33,
         "n": 2,
-        "bsf": 3,
+        "bsf": 0,
         "dissol_adapt_function": 3,
     }
 
@@ -89,7 +88,7 @@ class Config:
             "stoich": {"Cr": 2, "O": 3},
             "outward_element": "Cr",
             "inward_element": "O",
-            "priority": 1,
+            "priority": 3,
             "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
         },
         {
@@ -101,35 +100,35 @@ class Config:
             "stoich": {"Ni": 1, "Cr": 2, "O": 4},
             "outward_element": "Cr",
             "inward_element": "O",
-            "priority": 3,
+            "priority": 4,
             "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
         },
-        # {
-        #     "key": "al2o3",
-        #     "element": "Al2O3",
-        #     "jm_identifier": "M2O3",
-        #     # thresholds define nucleation cell consumption
-        #     "threshold_outward": 2,
-        #     "threshold_inward": 3,
-        #     # stoich defines product chemistry/formula
-        #     "stoich": {"Al": 2, "O": 3},
-        #     "outward_element": "Al",
-        #     "inward_element": "O",
-        #     "priority": 2,
-        #     "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
-        # },
-        # {
-        #     "key": "nial2o4",
-        #     "element": "NiAl2O4",
-        #     "jm_identifier": "SPINEL_AB2O4",
-        #     "threshold_outward": 2,
-        #     "threshold_inward": 4,
-        #     "stoich": {"Ni": 1, "Al": 2, "O": 4},
-        #     "outward_element": "Al",
-        #     "inward_element": "O",
-        #     "priority": 4,
-        #     "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
-        # },
+        {
+            "key": "al2o3",
+            "element": "Al2O3",
+            "jm_identifier": "M2O3",
+            # thresholds define nucleation cell consumption
+            "threshold_outward": 2,
+            "threshold_inward": 3,
+            # stoich defines product chemistry/formula
+            "stoich": {"Al": 2, "O": 3},
+            "outward_element": "Al",
+            "inward_element": "O",
+            "priority": 1,
+            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
+        },
+        {
+            "key": "nial2o4",
+            "element": "NiAl2O4",
+            "jm_identifier": "SPINEL_AB2O4",
+            "threshold_outward": 2,
+            "threshold_inward": 4,
+            "stoich": {"Ni": 1, "Al": 2, "O": 4},
+            "outward_element": "Al",
+            "inward_element": "O",
+            "priority": 2,
+            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
+        },
         {
             "key": "nio",
             "element": "NiO",

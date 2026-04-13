@@ -85,7 +85,8 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
             jmpGetPhaseCompositionAt,
             jmpSetWorkingDirectory,
             JMPError,
-            jmpSetScreenOutput
+            jmpSetScreenOutput,
+            jmpSetSolverPhases
         )
     except ImportError as e:
         # Send error back to master
@@ -180,7 +181,8 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
                 # jmpSetSolverCalculationType(calculation_type)
                 # jmpSetTemperatureUnit(unit_temperature)
                 # jmpSetSolverTemperature(temperature)
-                jmpSetDefaultPhases()
+                # jmpSetDefaultPhases()
+                jmpSetSolverPhases(["GAMMA", "M2O3", "MO_B2", "SPINEL_AB2O4"])
                 
                 # Run calculation with timeout check
                 jmpRunSolverCalculation()

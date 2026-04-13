@@ -1,4 +1,5 @@
 import os
+import copy
 import numpy as np
 from types import SimpleNamespace
 import utils
@@ -144,6 +145,8 @@ class CellularAutomata:
         # self.TdDATA.fetch_look_up_from_file()
         self.TdDATA = None
         self.jmatpro_pool = None
+        # Last non-empty JMatPro phase dict per plane index (aligned with enumerate(task_ids)).
+        self._jmatpro_phases_by_plane = {}
         # self.curr_look_up = None
 
         # self.TdDATA = JMatProWorkerPool(
@@ -179,6 +182,8 @@ class CellularAutomata:
 
         # self.prev_len = 0
         # self.powers = utils.physical_data.POWERS
+
+        self.all_phases = []
 
     def get_combi_ind_standard_v2(self):
         """
@@ -515,6 +520,21 @@ class CellularAutomata:
             max_retries=3,
         )
 
+    def _merge_jmatpro_results_with_plane_memory(self, raw_list, task_ids):
+        """
+        For each plane index i, task_ids[i] maps to one JMatPro result. If that result is an
+        empty dict (failure/timeout), substitute the last stored non-empty phases for plane i.
+        Successful results refresh the stored copy so memory always tracks the latest good data.
+        """
+        for plane_idx, tid in enumerate(task_ids):
+            phases = raw_list.get(tid)
+            if isinstance(phases, dict) and phases:
+                self._jmatpro_phases_by_plane[plane_idx] = copy.deepcopy(phases)
+            else:
+                prev = self._jmatpro_phases_by_plane.get(plane_idx)
+                if prev:
+                    raw_list[tid] = copy.deepcopy(prev)
+
     def _get_product_counts_upto_bound_for_case(self, case_mp, u_bound):
         ub = int(u_bound)
         pid = int(case_mp.product_phase_id)
@@ -680,6 +700,17 @@ class CellularAutomata:
 
         task_ids = self.jmatpro_pool.submit_tasks(compositions, elements=elements)
         raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=10.0)
+        self._merge_jmatpro_results_with_plane_memory(raw_list, task_ids)
+
+        totals = 0
+        for ind, phases in raw_list.items():
+            for phase, data in phases.items():
+                if phase not in self.all_phases:
+                    self.all_phases.append(phase)
+                if phase != "GAMMA" and phase != "BCC":
+                    totals += data.get("molar_fraction", 0.0)
+        if totals == 0:
+            print(f"totals: {totals}")
 
         for case_mp, product_ident in product_runtime:
             case_mp.plane_indexes = []
@@ -689,6 +720,8 @@ class CellularAutomata:
             jm_identifier = case_mp.jm_identifier
             for plane_idx, tid in enumerate(task_ids):
                 phases = raw_list.get(tid, {})
+                if not phases:
+                    continue
                 phased = phases.get(jm_identifier)
                 if not phased:
                     case_mp.dissolution_plane_indexes.append(plane_idx)
@@ -782,6 +815,7 @@ class CellularAutomata:
 
         task_ids = self.jmatpro_pool.submit_tasks(compositions, elements=elements)
         raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=100000.0)
+        self._merge_jmatpro_results_with_plane_memory(raw_list, task_ids)
 
         # Preserve composition index: result[i] must match composition[i] (task_ids[i])
         def _m2o3_fraction(raw):

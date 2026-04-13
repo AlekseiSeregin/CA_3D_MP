@@ -77,6 +77,38 @@ class SimulationConfigurator:
         self.save_function = None  # must be defined elsewhere
 
         self.termination_command = Config.TERMINATION_COMMAND
+        self.print_config()
+
+    def print_config(self):
+        all_oxidants = Config.OXIDANTS[0]["N_PER_PAGE"] * Config.OXIDANTS[0]["MOLES_PER_CELL"]
+        all_actives = Config.ACTIVES[0]["N_PER_PAGE"] * Config.ACTIVES[0]["MOLES_PER_CELL"]
+        all_matrix = Config.N_CELLS_PER_AXIS ** 2 * Config.MATRIX.MOLES_PER_CELL
+        all_matrix = all_matrix - Config.ACTIVES[0]["N_PER_PAGE"] * Config.ACTIVES[0]["MOLES_PER_CELL"] * Config.ACTIVES[0]["T"]
+
+        all_oxidants_m = all_oxidants * Config.OXIDANTS[0]["MOLAR_MASS"]
+        all_actives_m = all_actives * Config.ACTIVES[0]["MOLAR_MASS"]
+        all_matrix_m = all_matrix * Config.MATRIX.MOLAR_MASS
+        all_total_m = all_oxidants_m + all_actives_m + all_matrix_m
+
+        c_all_oxidants_m = all_oxidants_m / all_total_m
+        c_all_actives_m = all_actives_m / all_total_m
+        c_all_matrix_m = all_matrix_m / all_total_m
+        c_only_actives_m = all_actives_m / (all_actives_m + all_matrix_m)
+
+        print(f"c_all_oxidants_m: {c_all_oxidants_m}")
+        print(f"c_all_actives_m: {c_all_actives_m}")
+        print(f"c_all_matrix_m: {c_all_matrix_m}")
+        print(f"c_only_actives_m: {c_only_actives_m}")
+
+        c_all_oxidants = all_oxidants / (all_oxidants + all_actives + all_matrix)
+        c_all_actives = all_actives / (all_oxidants + all_actives + all_matrix)
+        c_all_matrix = all_matrix / (all_oxidants + all_actives + all_matrix)
+        c_only_actives = all_actives / (all_actives + all_matrix)
+
+        print(f"c_all_oxidants: {c_all_oxidants}")
+        print(f"c_all_actives: {c_all_actives}")
+        print(f"c_all_matrix: {c_all_matrix}")
+        print(f"c_only_actives: {c_only_actives}")
 
     def start_simulation(self):
         try:
