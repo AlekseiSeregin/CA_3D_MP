@@ -26,27 +26,27 @@ class Config:
             "cells_concentration": 10,
             "conc_precision": "rand",
             "space_fill": "full",
-            "diffusion_max_per_cell": 20,
+            "diffusion_max_per_cell": 100,
         },
-        {
-            "element": "Al",
-            "diffusion_condition": "Al in Ni Krupp",
-            "mass_concentration": 0.025,
-            "cells_concentration": 1.925925,
-            "conc_precision": "rand",
-            "space_fill": "full",
-            "diffusion_max_per_cell": 8,
-            # 5.192307693
-        },
+        # {
+        #     "element": "Al",
+        #     "diffusion_condition": "Al in Ni Krupp",
+        #     "mass_concentration": 0.025,
+        #     "cells_concentration": 1.925925,
+        #     "conc_precision": "rand",
+        #     "space_fill": "full",
+        #     "diffusion_max_per_cell": 8,
+        #     # 5.192307693
+        # },
     ]
 
     DEFAULT_PRODUCT_PROBABILITIES = {
         # nucleation
-        "p0": 0.01,
+        "p0": 0.001,
         "p0_f": 1,
         "p0_A_const": 1,
         "p0_B_const": 1,
-        "p1": 0.3,
+        "p1": 0.03,
         "p1_f": 1,
         "p1_A_const": 1,
         "p1_B_const": 1,
@@ -60,7 +60,7 @@ class Config:
         "p0_d_f": 1,
         "p0_d_A_const": 1,
         "p0_d_B_const": 5,
-        "p1_d": 0.7,
+        "p1_d": 0.3,
         "p1_d_f": 1,
         "p1_d_A_const": 1,
         "p1_d_B_const": 10,
@@ -103,32 +103,32 @@ class Config:
             "priority": 4,
             "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
         },
-        {
-            "key": "al2o3",
-            "element": "Al2O3",
-            "jm_identifier": "M2O3",
-            # thresholds define nucleation cell consumption
-            "threshold_outward": 2,
-            "threshold_inward": 3,
-            # stoich defines product chemistry/formula
-            "stoich": {"Al": 2, "O": 3},
-            "outward_element": "Al",
-            "inward_element": "O",
-            "priority": 1,
-            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
-        },
-        {
-            "key": "nial2o4",
-            "element": "NiAl2O4",
-            "jm_identifier": "SPINEL_AB2O4",
-            "threshold_outward": 2,
-            "threshold_inward": 4,
-            "stoich": {"Ni": 1, "Al": 2, "O": 4},
-            "outward_element": "Al",
-            "inward_element": "O",
-            "priority": 2,
-            "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
-        },
+        # {
+        #     "key": "al2o3",
+        #     "element": "Al2O3",
+        #     "jm_identifier": "M2O3",
+        #     # thresholds define nucleation cell consumption
+        #     "threshold_outward": 2,
+        #     "threshold_inward": 3,
+        #     # stoich defines product chemistry/formula
+        #     "stoich": {"Al": 2, "O": 3},
+        #     "outward_element": "Al",
+        #     "inward_element": "O",
+        #     "priority": 1,
+        #     "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
+        # },
+        # {
+        #     "key": "nial2o4",
+        #     "element": "NiAl2O4",
+        #     "jm_identifier": "SPINEL_AB2O4",
+        #     "threshold_outward": 2,
+        #     "threshold_inward": 4,
+        #     "stoich": {"Ni": 1, "Al": 2, "O": 4},
+        #     "outward_element": "Al",
+        #     "inward_element": "O",
+        #     "priority": 2,
+        #     "probabilities": dict(DEFAULT_PRODUCT_PROBABILITIES)
+        # },
         {
             "key": "nio",
             "element": "NiO",
@@ -196,6 +196,11 @@ class Config:
     #   stoich_prob_owner   -> threshold-based probabilistic nucleation with owner-phase exclusion
     #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
     NUCLEATION_MODE = "stoich_simple_owner"
+    # If True, use fold nucleation kernels: new product is placed on the fullest non-full cell
+    # among center + 6 face neighbours of the reaction cell (snapshot neighbour logic unchanged).
+    # When flat_count == 0 (no product in neighbour stencil on product_init), placement stays on the oxidant cell.
+    # Only supported for legacy_prob_owner and stoich_prob_owner (including no-outward _SPEC variants).
+    NUCLEATION_APPLY_FOLD = False
     # If True, precipitation stages are executed sequentially by product PRIORITY
     # using entries from PRODUCTS list.
     USE_PRODUCT_STAGE_SEQUENCE = True

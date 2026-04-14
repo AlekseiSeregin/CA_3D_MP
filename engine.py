@@ -121,7 +121,7 @@ class SimulationConfigurator:
             if self.worker_pools is not None:
                 self.worker_pools.close()
                 self.worker_pools = None
-            self.save_results()
+            self.save_results_product_only()
             self.insert_last_it()
             self.db.insert_product_plane0_tracking(self.c_automata.product_plane0_tracking)
             self.db.conn.commit()
@@ -391,8 +391,23 @@ class SimulationConfigurator:
         )
         no_outward = (not bool(str(getattr(product_config, "OUTWARD_ELEMENT", "")).strip())) or int(getattr(product_config, "THRESHOLD_OUTWARD", 0)) <= 0
         case_mp.no_outward_nucleation = bool(no_outward)
+        case_mp.severe_dissolution_indexes = []
         case_mp.nucleation_mode = mode
-        case_mp.nucleation_kernel_runner = get_nucleation_kernel_runner(mode, no_outward=case_mp.no_outward_nucleation)
+        fold = bool(getattr(Config, "NUCLEATION_APPLY_FOLD", False))
+        case_mp.nucleation_apply_fold = fold
+        if fold:
+            if mode not in ("legacy_prob_owner", "stoich_prob_owner"):
+                raise ValueError(
+                    "NUCLEATION_APPLY_FOLD=True requires NUCLEATION_MODE to be "
+                    "'legacy_prob_owner' or 'stoich_prob_owner'; got %r" % (mode,)
+                )
+            case_mp.nucleation_kernel_runner = get_nucleation_kernel_runner_fold(
+                mode, no_outward=case_mp.no_outward_nucleation
+            )
+        else:
+            case_mp.nucleation_kernel_runner = get_nucleation_kernel_runner(
+                mode, no_outward=case_mp.no_outward_nucleation
+            )
         case_mp.product_key = product_key
         case_mp.product_cfg = product_config
         case_mp.matrix_moles_per_cell = float(getattr(product_config, "MATRIX_MOLES_PER_CELL", 0.0))
