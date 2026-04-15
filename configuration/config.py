@@ -7,7 +7,7 @@ class Config:
             "element": "O",
             "diffusion_condition": "O in Ni Krupp",
             "diffusion_condition_gb": "O in Ni Krupp 100",
-            "cells_concentration": 3,
+            "cells_concentration": 20,
             "diffusion_max_per_cell": 100,
         },
         # {
@@ -23,7 +23,7 @@ class Config:
             "element": "Cr",
             "diffusion_condition": "Cr in Ni Krupp",
             "mass_concentration": 0.25,
-            "cells_concentration": 10,
+            "cells_concentration": 15,
             "conc_precision": "rand",
             "space_fill": "full",
             "diffusion_max_per_cell": 100,
@@ -42,11 +42,11 @@ class Config:
 
     DEFAULT_PRODUCT_PROBABILITIES = {
         # nucleation
-        "p0": 0.001,
+        "p0": 0.0001,
         "p0_f": 1,
         "p0_A_const": 1,
         "p0_B_const": 1,
-        "p1": 0.03,
+        "p1": 0.3,
         "p1_f": 1,
         "p1_A_const": 1,
         "p1_B_const": 1,
@@ -56,15 +56,15 @@ class Config:
         "max_neigh_numb": None,
         "nucl_adapt_function": 5,
         # dissolution
-        "p0_d": 0.9,
+        "p0_d": 0.3,
         "p0_d_f": 1,
         "p0_d_A_const": 1,
         "p0_d_B_const": 5,
-        "p1_d": 0.3,
+        "p1_d": 0.1,
         "p1_d_f": 1,
         "p1_d_A_const": 1,
         "p1_d_B_const": 10,
-        "p6_d": 1e-1,
+        "p6_d": 1e-8,
         "p6_d_f": 0.99,
         "p6_d_A_const": 1,
         "p6_d_B_const": 20,
@@ -151,7 +151,7 @@ class Config:
     MATRIX.ELEMENT = "Ni"
 
     TEMPERATURE = 1100  # °C
-    N_CELLS_PER_AXIS = 102  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
+    N_CELLS_PER_AXIS = 100  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
     N_ITERATIONS = 1000000  # must be >= n_cells_per_axis
     STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
@@ -175,8 +175,8 @@ class Config:
     INWARD_DIFFUSION = True
     OUTWARD_DIFFUSION = True
 
-    OUTWARD_DIFFUSION_WORKERS = 5
-    INWARD_DIFFUSION_WORKERS = 2
+    OUTWARD_DIFFUSION_WORKERS = 8
+    INWARD_DIFFUSION_WORKERS = 3
 
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
@@ -195,12 +195,12 @@ class Config:
     #   legacy_simple_owner -> legacy simplified with owner-phase exclusion
     #   stoich_prob_owner   -> threshold-based probabilistic nucleation with owner-phase exclusion
     #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
-    NUCLEATION_MODE = "stoich_simple_owner"
+    NUCLEATION_MODE = "stoich_prob_owner"
     # If True, use fold nucleation kernels: new product is placed on the fullest non-full cell
     # among center + 6 face neighbours of the reaction cell (snapshot neighbour logic unchanged).
     # When flat_count == 0 (no product in neighbour stencil on product_init), placement stays on the oxidant cell.
     # Only supported for legacy_prob_owner and stoich_prob_owner (including no-outward _SPEC variants).
-    NUCLEATION_APPLY_FOLD = False
+    NUCLEATION_APPLY_FOLD = True
     # If True, precipitation stages are executed sequentially by product PRIORITY
     # using entries from PRODUCTS list.
     USE_PRODUCT_STAGE_SEQUENCE = True
@@ -214,6 +214,14 @@ class Config:
     #   JMATPRO_WORKER_RATIO = 0.5  # 50/50 split
     #   JMATPRO_WORKER_RATIO = None  # Auto: 40% JMatPro, 60% CA
     JMATPRO_WORKER_RATIO = 0.4  # None = auto allocation
+
+    # JMatPro composition sampling mode:
+    # If True, compute compositions per 3D subblock (blocks_per_axis^3 total) but only for
+    # ignited blocks along x up to the furthest inward particle. Non-ignited blocks are left unchanged.
+    USE_JMATPRO_BLOCKS_IGNITED = True
+    # Total blocks are (JMATPRO_BLOCKS_PER_AXIS^3). For the requested 1000 blocks, keep this at 10.
+    # Requires: N_CELLS_PER_AXIS % JMATPRO_BLOCKS_PER_AXIS == 0
+    JMATPRO_BLOCKS_PER_AXIS = 5
     NUMBER_OF_DIVS_PER_PAGE = 1
     DEPTH_PER_DIV = 1
     MAX_TASK_PER_CHILD = 50000

@@ -12,6 +12,18 @@ from utils.numba_functions import (
     nucleation_subblock_kernel_stoich_owner_fold,
     nucleation_subblock_kernel_owner_spec_fold,
     nucleation_subblock_kernel_stoich_owner_spec_fold,
+    nucleation_subblock_kernel_owner_blockmask,
+    nucleation_subblock_kernel_simple_owner_blockmask,
+    nucleation_subblock_kernel_stoich_owner_blockmask,
+    nucleation_subblock_kernel_simple_stoich_owner_blockmask,
+    nucleation_subblock_kernel_owner_spec_blockmask,
+    nucleation_subblock_kernel_simple_owner_spec_blockmask,
+    nucleation_subblock_kernel_stoich_owner_spec_blockmask,
+    nucleation_subblock_kernel_simple_stoich_owner_spec_blockmask,
+    nucleation_subblock_kernel_owner_fold_blockmask,
+    nucleation_subblock_kernel_stoich_owner_fold_blockmask,
+    nucleation_subblock_kernel_owner_spec_fold_blockmask,
+    nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask,
 )
 from multiprocessing import shared_memory
 from .neigh_indexes import *
@@ -57,6 +69,53 @@ def _run_nucleation_legacy_simple_owner(
         active_check_offsets,
         n_cells,
         seed,
+    )
+
+
+def _run_nucleation_legacy_simple_owner_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_simple_owner_blockmask(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
     )
 
 
@@ -109,6 +168,59 @@ def _run_nucleation_legacy_prob_owner(
     )
 
 
+def _run_nucleation_legacy_prob_owner_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_owner_blockmask(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
+    )
+
+
 def _run_nucleation_legacy_prob_owner_fold(
     oxidant,
     oxidant_dirs,
@@ -158,6 +270,59 @@ def _run_nucleation_legacy_prob_owner_fold(
     )
 
 
+def _run_nucleation_legacy_prob_owner_fold_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_owner_fold_blockmask(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
+    )
+
+
 def _run_nucleation_stoich_simple_owner(
     oxidant,
     oxidant_dirs,
@@ -200,6 +365,55 @@ def _run_nucleation_stoich_simple_owner(
         active_check_offsets,
         n_cells,
         seed,
+    )
+
+
+def _run_nucleation_stoich_simple_owner_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_simple_stoich_owner_blockmask(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
     )
 
 
@@ -254,6 +468,61 @@ def _run_nucleation_stoich_prob_owner(
     )
 
 
+def _run_nucleation_stoich_prob_owner_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_stoich_owner_blockmask(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
+    )
+
+
 def _run_nucleation_stoich_prob_owner_fold(
     oxidant,
     oxidant_dirs,
@@ -305,6 +574,61 @@ def _run_nucleation_stoich_prob_owner_fold(
     )
 
 
+def _run_nucleation_stoich_prob_owner_fold_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_stoich_owner_fold_blockmask(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
+    )
+
+
 def _run_nucleation_legacy_simple_owner_spec(
     oxidant,
     oxidant_dirs,
@@ -341,6 +665,49 @@ def _run_nucleation_legacy_simple_owner_spec(
         plane_indexes,
         n_cells,
         seed,
+    )
+
+
+def _run_nucleation_legacy_simple_owner_spec_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_simple_owner_spec_blockmask(
+        oxidant,
+        oxidant_dirs,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
     )
 
 
@@ -390,6 +757,56 @@ def _run_nucleation_legacy_prob_owner_spec(
     )
 
 
+def _run_nucleation_legacy_prob_owner_spec_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_owner_spec_blockmask(
+        oxidant,
+        oxidant_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
+    )
+
+
 def _run_nucleation_legacy_prob_owner_spec_fold(
     oxidant,
     oxidant_dirs,
@@ -436,6 +853,56 @@ def _run_nucleation_legacy_prob_owner_spec_fold(
     )
 
 
+def _run_nucleation_legacy_prob_owner_spec_fold_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_owner_spec_fold_blockmask(
+        oxidant,
+        oxidant_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
+    )
+
+
 def _run_nucleation_stoich_simple_owner_spec(
     oxidant,
     oxidant_dirs,
@@ -473,6 +940,50 @@ def _run_nucleation_stoich_simple_owner_spec(
         plane_indexes,
         n_cells,
         seed,
+    )
+
+
+def _run_nucleation_stoich_simple_owner_spec_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_simple_stoich_owner_spec_blockmask(
+        oxidant,
+        oxidant_dirs,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        seed_slab_k,
+        plane_indexes,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
     )
 
 
@@ -523,6 +1034,57 @@ def _run_nucleation_stoich_prob_owner_spec(
     )
 
 
+def _run_nucleation_stoich_prob_owner_spec_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_stoich_owner_spec_blockmask(
+        oxidant,
+        oxidant_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        seed_slab_k,
+        plane_indexes,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
+    )
+
+
 def _run_nucleation_stoich_prob_owner_spec_fold(
     oxidant,
     oxidant_dirs,
@@ -570,6 +1132,57 @@ def _run_nucleation_stoich_prob_owner_spec_fold(
     )
 
 
+def _run_nucleation_stoich_prob_owner_spec_fold_blockmask(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_size,
+):
+    nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask(
+        oxidant,
+        oxidant_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        seed_slab_k,
+        plane_indexes,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_size,
+    )
+
+
 _NUCLEATION_KERNEL_RUNNERS = {
     "legacy_simple_owner": _run_nucleation_legacy_simple_owner,
     "legacy_prob_owner": _run_nucleation_legacy_prob_owner,
@@ -592,6 +1205,30 @@ _NUCLEATION_KERNEL_RUNNERS_FOLD = {
 _NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD = {
     "legacy_prob_owner": _run_nucleation_legacy_prob_owner_spec_fold,
     "stoich_prob_owner": _run_nucleation_stoich_prob_owner_spec_fold,
+}
+
+_NUCLEATION_KERNEL_RUNNERS_BLOCKMASK = {
+    "legacy_simple_owner": _run_nucleation_legacy_simple_owner_blockmask,
+    "legacy_prob_owner": _run_nucleation_legacy_prob_owner_blockmask,
+    "stoich_simple_owner": _run_nucleation_stoich_simple_owner_blockmask,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner_blockmask,
+}
+
+_NUCLEATION_KERNEL_RUNNERS_SPEC_BLOCKMASK = {
+    "legacy_simple_owner": _run_nucleation_legacy_simple_owner_spec_blockmask,
+    "legacy_prob_owner": _run_nucleation_legacy_prob_owner_spec_blockmask,
+    "stoich_simple_owner": _run_nucleation_stoich_simple_owner_spec_blockmask,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner_spec_blockmask,
+}
+
+_NUCLEATION_KERNEL_RUNNERS_FOLD_BLOCKMASK = {
+    "legacy_prob_owner": _run_nucleation_legacy_prob_owner_fold_blockmask,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner_fold_blockmask,
+}
+
+_NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_BLOCKMASK = {
+    "legacy_prob_owner": _run_nucleation_legacy_prob_owner_spec_fold_blockmask,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner_spec_fold_blockmask,
 }
 
 
@@ -629,7 +1266,14 @@ def precip_step_subblock_worker(task):
     plane_indexes = x-axis (i) indices; worker's z range is [k_lo, k_hi].
     If seed_slab_k_prepared is provided, it is used directly (after bounds clamp).
     """
-    if len(task) == 8:
+    block_mask_bits = None
+    block_size = 0
+    if len(task) == 10:
+        cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form, block_mask_bits, block_size, seed_slab_k_prepared = task
+    elif len(task) == 9:
+        cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form, block_mask_bits, block_size = task
+        seed_slab_k_prepared = None
+    elif len(task) == 8:
         cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form, seed_slab_k_prepared = task
     else:
         cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form = task
@@ -722,40 +1366,92 @@ def precip_step_subblock_worker(task):
     threshold_outward = int(getattr(cur_case_mp, "threshold_outward", 1))
     phase_id = int(getattr(cur_case_mp, "product_phase_id", 0))
     kernel_runner = getattr(cur_case_mp, "nucleation_kernel_runner", None)
+    # If block-mask mode is active, always resolve a compatible runner (the cached
+    # cur_case_mp.nucleation_kernel_runner is the legacy signature).
+    if block_mask_bits is not None:
+        kernel_runner = None
     if kernel_runner is None:
         mode = resolve_nucleation_mode(
             getattr(cur_case_mp, "nucleation_mode", None),
             getattr(cur_case_mp, "use_simple_nucleation", False),
         )
         no_outward = bool(getattr(cur_case_mp, "no_outward_nucleation", False))
-        kernel_runner = get_nucleation_kernel_runner(mode, no_outward=no_outward)
+        use_fold = bool(getattr(getattr(cur_case_mp, "nucleation_apply_fold", None), "value", False))
+        # Fallback to Config if cur_case_mp doesn't carry the switch
+        if not use_fold:
+            try:
+                from configuration import Config
+                use_fold = bool(getattr(Config, "NUCLEATION_APPLY_FOLD", False))
+            except Exception:
+                use_fold = False
+        if block_mask_bits is not None:
+            if use_fold:
+                kernel_runner = (_NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_BLOCKMASK if no_outward else _NUCLEATION_KERNEL_RUNNERS_FOLD_BLOCKMASK)[mode]
+            else:
+                kernel_runner = (_NUCLEATION_KERNEL_RUNNERS_SPEC_BLOCKMASK if no_outward else _NUCLEATION_KERNEL_RUNNERS_BLOCKMASK)[mode]
+        else:
+            if use_fold:
+                kernel_runner = get_nucleation_kernel_runner_fold(mode, no_outward=no_outward)
+            else:
+                kernel_runner = get_nucleation_kernel_runner(mode, no_outward=no_outward)
 
-    kernel_runner(
-        oxidant,
-        oxidant_dirs,
-        active,
-        active_dirs,
-        product_init,
-        product_init,
-        product_init,
-        product_init,
-        ox_num,
-        threshold_inward,
-        threshold_outward,
-        seed_slab_k,
-        plane_indexes,
-        active_check_offsets,
-        flat_neigh_offsets,
-        values_pp,
-        const_a_pp,
-        const_b_pp,
-        const_c_pp,
-        const_d_pp,
-        n_cells,
-        seed,
-        product_state,
-        phase_id,
-    )
+    if block_mask_bits is None:
+        kernel_runner(
+            oxidant,
+            oxidant_dirs,
+            active,
+            active_dirs,
+            product_init,
+            product_init,
+            product_init,
+            product_init,
+            ox_num,
+            threshold_inward,
+            threshold_outward,
+            seed_slab_k,
+            plane_indexes,
+            active_check_offsets,
+            flat_neigh_offsets,
+            values_pp,
+            const_a_pp,
+            const_b_pp,
+            const_c_pp,
+            const_d_pp,
+            n_cells,
+            seed,
+            product_state,
+            phase_id,
+        )
+    else:
+        block_mask_bits = np.asarray(block_mask_bits, dtype=np.uint16)
+        kernel_runner(
+            oxidant,
+            oxidant_dirs,
+            active,
+            active_dirs,
+            product_init,
+            product_init,
+            product_init,
+            product_init,
+            ox_num,
+            threshold_inward,
+            threshold_outward,
+            seed_slab_k,
+            plane_indexes,
+            active_check_offsets,
+            flat_neigh_offsets,
+            values_pp,
+            const_a_pp,
+            const_b_pp,
+            const_c_pp,
+            const_d_pp,
+            n_cells,
+            seed,
+            product_state,
+            phase_id,
+            block_mask_bits,
+            int(block_size),
+        )
 
     shm_o.close()
     if shm_a is not None:

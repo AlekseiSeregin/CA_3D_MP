@@ -11,7 +11,10 @@ if __name__ == '__main__':
             
             self.c_automata.get_cur_ioz_bound = self.c_automata.ioz_depth_furthest_inward
 
-            self.c_automata.get_combi_ind = self.c_automata.get_comb_ind_jmatpro_generic
+            if bool(getattr(Config, "USE_JMATPRO_BLOCKS_IGNITED", False)):
+                self.c_automata.get_combi_ind = self.c_automata.get_comb_ind_jmatpro_blocks_ignited
+            else:
+                self.c_automata.get_combi_ind = self.c_automata.get_comb_ind_jmatpro_generic
 
             self.save_function = self.save_results_product_only
         
