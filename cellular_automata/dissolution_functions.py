@@ -3,7 +3,8 @@ import numpy as np
 from utils.numba_functions import (
     dissolution_subblock_kernel_snapshot_owner,
     dissolution_subblock_kernel_snapshot_with_blocks_owner,
-
+    dissolution_subblock_kernel_snapshot_owner_blockmask,
+    dissolution_subblock_kernel_snapshot_with_blocks_owner_blockmask,
 )
 from .neigh_indexes import (
     OFFSETS_26,
@@ -162,6 +163,153 @@ def dissolution_subblock_worker(task):
             max_per_cell_oxidant,
             max_per_cell_active,
             packed_dirs,
+        )
+
+    if shm_a is not None:
+        shm_a.close()
+    shm_ox_w.close()
+    shm_state.close()
+    return None
+
+
+def dissolution_subblock_worker_blockmask(task):
+    """
+    Dissolution V2 on ignited x-range with per-(bx,by,bz) dissolution_block_mask_bits (uint16 z bits).
+    Same SHM layout as dissolution_subblock_worker; plane_indexes are contiguous i in ignited x.
+    """
+    (
+        cur_case_mp,
+        k_lo,
+        k_hi,
+        plane_indexes,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        oxidant_write_shm_mdata,
+        max_per_cell_oxidant,
+        max_per_cell_active,
+        packed_dirs_oxidant,
+        block_patterns,
+        bsf,
+        dissolution_block_mask_bits,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
+    ) = task
+    plane_indexes = np.asarray(plane_indexes, dtype=np.intp).ravel()
+    k_lo = int(k_lo)
+    k_hi = int(k_hi)
+    threshold_inward = int(getattr(cur_case_mp, "threshold_inward", 1))
+    threshold_outward = int(getattr(cur_case_mp, "threshold_outward", 1))
+    dissolution_thresholds = np.array([threshold_inward, threshold_outward], dtype=np.int32)
+
+    n_i, n_j, n_z = cur_case_mp.oxidant_c3d_shm_mdata.shape
+    shm_a = None
+    if getattr(cur_case_mp, "active_c3d_shm_mdata", None) is not None and int(max_per_cell_active) > 0:
+        shm_a = shared_memory.SharedMemory(name=cur_case_mp.active_c3d_shm_mdata.name)
+        active_count, active_dirs = _views_from_segment_dissol(shm_a, n_i, max_per_cell_active)
+    else:
+        active_count = np.zeros((n_i * n_j * n_z,), dtype=np.int8)
+        active_dirs = np.zeros((n_i * n_j * n_z, 1), dtype=np.uint8)
+        max_per_cell_active = 0
+    shm_ox_w = shared_memory.SharedMemory(name=oxidant_write_shm_mdata.name)
+    n_ox = oxidant_write_shm_mdata.shape[0]
+    oxidant_count, oxidant_dirs = _views_from_segment_dissol(shm_ox_w, n_ox, max_per_cell_oxidant)
+    packed_dirs = np.asarray(packed_dirs_oxidant, dtype=np.uint8).ravel()
+    shm_state = shared_memory.SharedMemory(name=cur_case_mp.product_state_shm_mdata.name)
+    product_state = np.ndarray(
+        cur_case_mp.product_state_shm_mdata.shape,
+        dtype=cur_case_mp.product_state_shm_mdata.dtype,
+        buffer=shm_state.buf,
+    )
+    phase_id = int(getattr(cur_case_mp, "product_phase_id", 0))
+
+    n_cells = n_i
+    offsets_26 = np.asarray(OFFSETS_26, dtype=np.int8)
+
+    def _extend_to_nz(arr, nz):
+        arr = np.asarray(arr, dtype=np.float64)
+        if len(arr) >= nz:
+            return arr
+        out = np.empty(nz, dtype=np.float64)
+        out[: len(arr)] = arr
+        out[len(arr) :] = arr[-1]
+        return out
+
+    values_pp = _extend_to_nz(values_pp, n_z)
+    const_a_pp = _extend_to_nz(const_a_pp, n_z)
+    const_b_pp = _extend_to_nz(const_b_pp, n_z)
+    const_c_pp = _extend_to_nz(const_c_pp, n_z)
+    const_d_pp = _extend_to_nz(const_d_pp, n_z)
+    seed = np.random.randint(0, 2**31)
+
+    dissolution_block_mask_bits = np.asarray(dissolution_block_mask_bits, dtype=np.uint16)
+
+    use_blocks = (
+        block_patterns is not None
+        and getattr(block_patterns, "shape", (0,))[0] > 0
+        and float(bsf) > 1.0
+    )
+    if use_blocks:
+        block_pat = np.asarray(block_patterns, dtype=np.int8)
+        dissolution_subblock_kernel_snapshot_with_blocks_owner_blockmask(
+            product_state,
+            phase_id,
+            oxidant_count,
+            oxidant_dirs,
+            active_count,
+            active_dirs,
+            plane_indexes,
+            offsets_26,
+            k_lo,
+            k_hi,
+            block_pat,
+            float(bsf),
+            values_pp,
+            const_a_pp,
+            const_b_pp,
+            const_c_pp,
+            const_d_pp,
+            n_cells,
+            seed,
+            dissolution_thresholds,
+            max_per_cell_oxidant,
+            max_per_cell_active,
+            packed_dirs,
+            dissolution_block_mask_bits,
+            int(block_cells_x),
+            int(block_cells_y),
+            int(block_cells_z),
+        )
+    else:
+        dissolution_subblock_kernel_snapshot_owner_blockmask(
+            product_state,
+            phase_id,
+            oxidant_count,
+            oxidant_dirs,
+            active_count,
+            active_dirs,
+            plane_indexes,
+            offsets_26,
+            k_lo,
+            k_hi,
+            values_pp,
+            const_a_pp,
+            const_b_pp,
+            const_c_pp,
+            const_d_pp,
+            n_cells,
+            seed,
+            dissolution_thresholds,
+            max_per_cell_oxidant,
+            max_per_cell_active,
+            packed_dirs,
+            dissolution_block_mask_bits,
+            int(block_cells_x),
+            int(block_cells_y),
+            int(block_cells_z),
         )
 
     if shm_a is not None:

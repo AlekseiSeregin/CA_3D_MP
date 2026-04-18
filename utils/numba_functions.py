@@ -47,8 +47,13 @@ def product_counts_blocks_ignited_from_state(
     state_count,
     pid_to_row,
     n_products,
-    blocks_per_axis,
-    block_size,
+    Bx,
+    By,
+    Bz,
+    n_blocks,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
     x_hi,
 ):
     """
@@ -57,35 +62,35 @@ def product_counts_blocks_ignited_from_state(
     - owner_phase, state_count: unified product_state views (shape (n,n,n), dtype uint8)
     - pid_to_row: int16 array of length 256 mapping phase_id -> row index in [0, n_products), else -1
     - n_products: number of tracked product phases (rows in output)
-    - blocks_per_axis: e.g. 10
-    - block_size: N // blocks_per_axis
-    - x_hi: exclusive upper bound in x to scan; should be multiple of block_size
+    - Bx,By,Bz: number of blocks along each axis
+    - n_blocks: total blocks Bx*By*Bz (second dimension of output); must match Bx,By,Bz
+    - block_cells_x/y/z: cells per block along each axis
+    - x_hi: exclusive upper bound in x to scan; should be multiple of block_cells_x
 
-    Returns: uint32 array shape (n_products, blocks_per_axis**3), flattened block id order:
-      block_id = (bx * blocks_per_axis + by) * blocks_per_axis + bz
-    Only blocks with bx < x_hi//block_size receive non-zero counts.
+    Returns: uint32 array shape (n_products, n_blocks), flattened block id order:
+      block_id = (bx * By + by) * Bz + bz
+    Only blocks with bx < x_hi//block_cells_x receive non-zero counts.
     """
     n = owner_phase.shape[0]
-    bpa = int(blocks_per_axis)
-    bsz = int(block_size)
+    By_tot = int(By)
+    Bz_tot = int(Bz)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
     xh = int(x_hi)
-    if xh > n:
-        xh = n
-    if xh < 0:
-        xh = 0
-    n_blocks = bpa * bpa * bpa
-    out = np.zeros((int(n_products), n_blocks), dtype=np.uint32)
+    n_blk = int(n_blocks)
+    out = np.zeros((int(n_products), n_blk), dtype=np.uint32)
     for i in range(xh):
-        bx = i // bsz
+        bx = i // cx
         for j in range(n):
-            by = j // bsz
+            by = j // cy
             for k in range(n):
-                bz = k // bsz
+                bz = k // cz
                 pid = int(owner_phase[i, j, k])
                 row = int(pid_to_row[pid])
                 if row < 0:
                     continue
-                blk = (bx * bpa + by) * bpa + bz
+                blk = (bx * By_tot + by) * Bz_tot + bz
                 out[row, blk] += np.uint32(state_count[i, j, k])
     return out
 
@@ -292,8 +297,11 @@ def severe_blocks_clear_product_release(
     max_per_cell_active,
     packed_dirs,
     seed,
-    blocks_per_axis,
-    block_size,
+    By,
+    Bz,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """
     Clear product within each block_id subvolume and release inward/outward particles per unit state_count.
@@ -304,33 +312,24 @@ def severe_blocks_clear_product_release(
     threshold_inward = int(dissolution_thresholds[0])
     threshold_outward = int(dissolution_thresholds[1])
     pid8 = np.uint8(pid)
-    bpa = int(blocks_per_axis)
-    bsz = int(block_size)
+    By_tot = int(By)
+    Bz_tot = int(Bz)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
     n_packed = packed_dirs.shape[0]
     for bi in range(block_ids.shape[0]):
         bid = int(block_ids[bi])
-        bx = bid // (bpa * bpa)
-        rem = bid - bx * (bpa * bpa)
-        by = rem // bpa
-        bz = rem - by * bpa
-        i_lo = bx * bsz
-        i_hi = i_lo + bsz
-        j_lo = by * bsz
-        j_hi = j_lo + bsz
-        k_lo = bz * bsz
-        k_hi = k_lo + bsz
-        if i_lo < 0:
-            i_lo = 0
-        if j_lo < 0:
-            j_lo = 0
-        if k_lo < 0:
-            k_lo = 0
-        if i_hi > n_i:
-            i_hi = n_i
-        if j_hi > n_j:
-            j_hi = n_j
-        if k_hi > n_z:
-            k_hi = n_z
+        bx = bid // (By_tot * Bz_tot)
+        rem = bid - bx * (By_tot * Bz_tot)
+        by = rem // Bz_tot
+        bz = rem - by * Bz_tot
+        i_lo = bx * cx
+        i_hi = i_lo + cx
+        j_lo = by * cy
+        j_hi = j_lo + cy
+        k_lo = bz * cz
+        k_hi = k_lo + cz
         for i in range(i_lo, i_hi):
             for j in range(j_lo, j_hi):
                 for k in range(k_lo, k_hi):
@@ -355,6 +354,7 @@ def severe_blocks_clear_product_release(
                                 r = np.random.randint(0, n_packed)
                                 active_dirs[nidx, slot] = packed_dirs[r]
                                 active_count[nidx] = slot + 1
+
 
 @numba.njit(fastmath=True, cache=_CACHE)
 def _nucleation_subblock_apply_pbc(ii, jj, kk, n_cells):
@@ -483,7 +483,9 @@ def nucleation_subblock_kernel_owner_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Owner-aware legacy probabilistic nucleation gated by (bx,by,bz) bitmask."""
     np.random.seed(seed)
@@ -492,14 +494,16 @@ def nucleation_subblock_kernel_owner_blockmask(
     owner_phase = product_state[0]
     state_count = product_state[1]
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -642,7 +646,9 @@ def nucleation_subblock_kernel_simple_owner_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Owner-aware legacy simplified nucleation gated by (bx,by,bz) bitmask."""
     np.random.seed(seed)
@@ -651,14 +657,16 @@ def nucleation_subblock_kernel_simple_owner_blockmask(
     owner_phase = product_state[0]
     state_count = product_state[1]
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -837,7 +845,9 @@ def nucleation_subblock_kernel_stoich_owner_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Threshold probabilistic nucleation gated by (bx,by,bz) bitmask."""
     np.random.seed(seed)
@@ -848,14 +858,16 @@ def nucleation_subblock_kernel_stoich_owner_blockmask(
     thr_in = int(threshold_inward)
     thr_out = int(threshold_outward)
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -1032,7 +1044,9 @@ def nucleation_subblock_kernel_simple_stoich_owner_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Threshold simplified nucleation gated by (bx,by,bz) bitmask."""
     np.random.seed(seed)
@@ -1043,14 +1057,16 @@ def nucleation_subblock_kernel_simple_stoich_owner_blockmask(
     thr_in = int(threshold_inward)
     thr_out = int(threshold_outward)
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -1190,7 +1206,9 @@ def nucleation_subblock_kernel_owner_spec_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Owner-aware legacy probabilistic nucleation for no-outward products gated by block bitmask."""
     np.random.seed(seed)
@@ -1198,14 +1216,16 @@ def nucleation_subblock_kernel_owner_spec_blockmask(
     owner_phase = product_state[0]
     state_count = product_state[1]
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -1295,7 +1315,9 @@ def nucleation_subblock_kernel_simple_owner_spec_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Owner-aware legacy simplified nucleation for no-outward products gated by block bitmask."""
     np.random.seed(seed)
@@ -1303,14 +1325,16 @@ def nucleation_subblock_kernel_simple_owner_spec_blockmask(
     owner_phase = product_state[0]
     state_count = product_state[1]
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -1419,7 +1443,9 @@ def nucleation_subblock_kernel_stoich_owner_spec_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Owner-aware threshold probabilistic nucleation for no-outward products gated by block bitmask."""
     np.random.seed(seed)
@@ -1428,14 +1454,16 @@ def nucleation_subblock_kernel_stoich_owner_spec_blockmask(
     state_count = product_state[1]
     pid = np.uint8(phase_id)
     thr_in = int(threshold_inward)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -1531,7 +1559,9 @@ def nucleation_subblock_kernel_simple_stoich_owner_spec_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Owner-aware threshold simplified nucleation for no-outward products gated by block bitmask."""
     np.random.seed(seed)
@@ -1540,14 +1570,16 @@ def nucleation_subblock_kernel_simple_stoich_owner_spec_blockmask(
     state_count = product_state[1]
     pid = np.uint8(phase_id)
     thr_in = int(threshold_inward)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -1745,7 +1777,9 @@ def nucleation_subblock_kernel_owner_fold_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Fold owner nucleation gated by (bx,by,bz) bitmask."""
     np.random.seed(seed)
@@ -1754,14 +1788,16 @@ def nucleation_subblock_kernel_owner_fold_blockmask(
     owner_phase = product_state[0]
     state_count = product_state[1]
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -1979,7 +2015,9 @@ def nucleation_subblock_kernel_stoich_owner_fold_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Fold stoich owner nucleation gated by (bx,by,bz) bitmask."""
     np.random.seed(seed)
@@ -1990,14 +2028,16 @@ def nucleation_subblock_kernel_stoich_owner_fold_blockmask(
     thr_in = int(threshold_inward)
     thr_out = int(threshold_outward)
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -2173,7 +2213,9 @@ def nucleation_subblock_kernel_owner_spec_fold_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Fold owner nucleation (no outward) gated by block bitmask."""
     np.random.seed(seed)
@@ -2181,14 +2223,16 @@ def nucleation_subblock_kernel_owner_spec_fold_blockmask(
     owner_phase = product_state[0]
     state_count = product_state[1]
     pid = np.uint8(phase_id)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -2332,7 +2376,9 @@ def nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask(
     n_cells,
     seed,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     """Fold stoich nucleation (no outward) gated by block bitmask."""
     np.random.seed(seed)
@@ -2341,14 +2387,16 @@ def nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask(
     state_count = product_state[1]
     pid = np.uint8(phase_id)
     thr_in = int(threshold_inward)
-    bsz = int(block_size)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
 
     for k in seed_slab_k:
-        bz = k // bsz
+        bz = k // cz
         for i in plane_indexes:
-            bx = i // bsz
+            bx = i // cx
             for j in range(n_cells):
-                by = j // bsz
+                by = j // cy
                 if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
                     continue
                 owner = owner_phase[i, j, k]
@@ -2581,6 +2629,198 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner(
                     dk = int(offsets_26[ni, 2])
                     ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
                     # Dissolution neighbourhood is phase-local: only same product owner counts.
+                    has_neigh = valid and owner_phase[ii, jj, kk] == pid
+                    neigh26[ni] = has_neigh
+                    if ni < 6 and has_neigh:
+                        flat_count += 1
+                is_block = block_patterns.shape[0] > 0 and _dissolution_is_block_cell(neigh26, block_patterns)
+                if flat_count == 0:
+                    prob = values_pp[k]
+                else:
+                    prob = (
+                        const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
+                        + const_d_pp[k]
+                    )
+                if is_block:
+                    prob *= bsf_inv
+                for _ in range(n_p):
+                    if np.random.random() < prob:
+                        state_count[i, j, k] -= 1
+                        coords_list.append((i, j, k))
+                if state_count[i, j, k] <= 0 and owner_phase[i, j, k] == pid:
+                    owner_phase[i, j, k] = np.uint8(0)
+
+    if len(coords_list) == 0:
+        return
+    _dissolution_add_particles_at_cell(
+        oxidant_count,
+        oxidant_dirs,
+        active_count,
+        active_dirs,
+        coords_list,
+        n_cells,
+        dissolution_thresholds,
+        max_per_cell_ox,
+        max_per_cell_active,
+        packed_dirs,
+    )
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def dissolution_subblock_kernel_snapshot_owner_blockmask(
+    product_state,
+    phase_id,
+    oxidant_count,
+    oxidant_dirs,
+    active_count,
+    active_dirs,
+    plane_indexes,
+    offsets_26,
+    k_lo,
+    k_hi,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    dissolution_thresholds,
+    max_per_cell_ox,
+    max_per_cell_active,
+    packed_dirs,
+    dissolution_block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    """Like dissolution_subblock_kernel_snapshot_owner but only at (bx,by,bz) with a dissolution mask bit."""
+    np.random.seed(seed)
+    n_i = n_cells
+    n_j = n_cells
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
+    coords_list = [(0, 0, 0) for _ in range(0)]
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
+
+    for k in range(k_lo, k_hi + 1):
+        bz = k // cz
+        for idx_i in range(plane_indexes.shape[0]):
+            i = int(plane_indexes[idx_i])
+            bx = i // cx
+            for j in range(n_j):
+                by = j // cy
+                if (int(dissolution_block_mask_bits[bx, by]) >> bz) & 1 == 0:
+                    continue
+                if owner_phase[i, j, k] != pid:
+                    continue
+                n_p = int(state_count[i, j, k])
+                if n_p <= 0:
+                    continue
+                flat_count = 0
+                for ni in range(6):
+                    di = int(offsets_26[ni, 0])
+                    dj = int(offsets_26[ni, 1])
+                    dk = int(offsets_26[ni, 2])
+                    ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                    if valid and owner_phase[ii, jj, kk] == pid:
+                        flat_count += 1
+                if flat_count == 0:
+                    prob = values_pp[k]
+                else:
+                    prob = (
+                        const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
+                        + const_d_pp[k]
+                    )
+                for _ in range(n_p):
+                    if np.random.random() < prob:
+                        state_count[i, j, k] -= 1
+                        coords_list.append((i, j, k))
+                if state_count[i, j, k] <= 0 and owner_phase[i, j, k] == pid:
+                    owner_phase[i, j, k] = np.uint8(0)
+
+    if len(coords_list) == 0:
+        return
+    _dissolution_add_particles_at_cell(
+        oxidant_count,
+        oxidant_dirs,
+        active_count,
+        active_dirs,
+        coords_list,
+        n_cells,
+        dissolution_thresholds,
+        max_per_cell_ox,
+        max_per_cell_active,
+        packed_dirs,
+    )
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def dissolution_subblock_kernel_snapshot_with_blocks_owner_blockmask(
+    product_state,
+    phase_id,
+    oxidant_count,
+    oxidant_dirs,
+    active_count,
+    active_dirs,
+    plane_indexes,
+    offsets_26,
+    k_lo,
+    k_hi,
+    block_patterns,
+    bsf,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    dissolution_thresholds,
+    max_per_cell_ox,
+    max_per_cell_active,
+    packed_dirs,
+    dissolution_block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    """Like dissolution_subblock_kernel_snapshot_with_blocks_owner with per-block dissolution mask."""
+    np.random.seed(seed)
+    n_i, n_j, _ = n_cells, n_cells, n_cells
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
+    bsf_inv = 1.0 / bsf if bsf > 0.0 else 1.0
+    coords_list = [(0, 0, 0) for _ in range(0)]
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
+
+    for k in range(k_lo, k_hi + 1):
+        bz = k // cz
+        for idx_i in range(plane_indexes.shape[0]):
+            i = int(plane_indexes[idx_i])
+            bx = i // cx
+            for j in range(n_j):
+                by = j // cy
+                if (int(dissolution_block_mask_bits[bx, by]) >> bz) & 1 == 0:
+                    continue
+                if owner_phase[i, j, k] != pid:
+                    continue
+                n_p = int(state_count[i, j, k])
+                if n_p <= 0:
+                    continue
+                neigh26 = np.zeros(26, dtype=np.bool_)
+                flat_count = 0
+                for ni in range(26):
+                    di = int(offsets_26[ni, 0])
+                    dj = int(offsets_26[ni, 1])
+                    dk = int(offsets_26[ni, 2])
+                    ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
                     has_neigh = valid and owner_phase[ii, jj, kk] == pid
                     neigh26[ni] = has_neigh
                     if ni < 6 and has_neigh:

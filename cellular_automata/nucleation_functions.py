@@ -98,7 +98,9 @@ def _run_nucleation_legacy_simple_owner_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_simple_owner_blockmask(
         oxidant,
@@ -115,7 +117,9 @@ def _run_nucleation_legacy_simple_owner_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -194,7 +198,9 @@ def _run_nucleation_legacy_prob_owner_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_owner_blockmask(
         oxidant,
@@ -217,7 +223,9 @@ def _run_nucleation_legacy_prob_owner_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -296,7 +304,9 @@ def _run_nucleation_legacy_prob_owner_fold_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_owner_fold_blockmask(
         oxidant,
@@ -319,7 +329,9 @@ def _run_nucleation_legacy_prob_owner_fold_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -394,7 +406,9 @@ def _run_nucleation_stoich_simple_owner_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_simple_stoich_owner_blockmask(
         oxidant,
@@ -413,7 +427,9 @@ def _run_nucleation_stoich_simple_owner_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -494,7 +510,9 @@ def _run_nucleation_stoich_prob_owner_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_stoich_owner_blockmask(
         oxidant,
@@ -519,7 +537,9 @@ def _run_nucleation_stoich_prob_owner_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -600,7 +620,9 @@ def _run_nucleation_stoich_prob_owner_fold_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_stoich_owner_fold_blockmask(
         oxidant,
@@ -625,7 +647,9 @@ def _run_nucleation_stoich_prob_owner_fold_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -694,7 +718,9 @@ def _run_nucleation_legacy_simple_owner_spec_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_simple_owner_spec_blockmask(
         oxidant,
@@ -707,7 +733,9 @@ def _run_nucleation_legacy_simple_owner_spec_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -783,7 +811,9 @@ def _run_nucleation_legacy_prob_owner_spec_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_owner_spec_blockmask(
         oxidant,
@@ -803,7 +833,9 @@ def _run_nucleation_legacy_prob_owner_spec_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -879,7 +911,9 @@ def _run_nucleation_legacy_prob_owner_spec_fold_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_owner_spec_fold_blockmask(
         oxidant,
@@ -899,7 +933,9 @@ def _run_nucleation_legacy_prob_owner_spec_fold_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -969,7 +1005,9 @@ def _run_nucleation_stoich_simple_owner_spec_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_simple_stoich_owner_spec_blockmask(
         oxidant,
@@ -983,7 +1021,9 @@ def _run_nucleation_stoich_simple_owner_spec_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -1060,7 +1100,9 @@ def _run_nucleation_stoich_prob_owner_spec_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_stoich_owner_spec_blockmask(
         oxidant,
@@ -1081,7 +1123,9 @@ def _run_nucleation_stoich_prob_owner_spec_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -1158,7 +1202,9 @@ def _run_nucleation_stoich_prob_owner_spec_fold_blockmask(
     product_state,
     phase_id,
     block_mask_bits,
-    block_size,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
 ):
     nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask(
         oxidant,
@@ -1179,7 +1225,9 @@ def _run_nucleation_stoich_prob_owner_spec_fold_blockmask(
         n_cells,
         seed,
         block_mask_bits,
-        block_size,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
     )
 
 
@@ -1263,15 +1311,44 @@ def precip_step_subblock_worker(task):
     task:
       - legacy: (cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_oxidant, max_per_cell_active, ind_form)
       - with explicit z list: (..., ind_form, seed_slab_k_prepared)
+      - block mask (heterogeneous blocks): (..., ind_form, block_mask_bits, cx, cy, cz)
+      - block mask + explicit z list: (..., ind_form, block_mask_bits, cx, cy, cz, seed_slab_k_prepared)
     plane_indexes = x-axis (i) indices; worker's z range is [k_lo, k_hi].
     If seed_slab_k_prepared is provided, it is used directly (after bounds clamp).
     """
     block_mask_bits = None
-    block_size = 0
-    if len(task) == 10:
-        cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form, block_mask_bits, block_size, seed_slab_k_prepared = task
-    elif len(task) == 9:
-        cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form, block_mask_bits, block_size = task
+    block_cells_x = 0
+    block_cells_y = 0
+    block_cells_z = 0
+    if len(task) == 12:
+        (
+            cur_case_mp,
+            k_lo,
+            k_hi,
+            plane_indexes,
+            max_per_cell_o,
+            max_per_cell_a,
+            ind_form,
+            block_mask_bits,
+            block_cells_x,
+            block_cells_y,
+            block_cells_z,
+            seed_slab_k_prepared,
+        ) = task
+    elif len(task) == 11:
+        (
+            cur_case_mp,
+            k_lo,
+            k_hi,
+            plane_indexes,
+            max_per_cell_o,
+            max_per_cell_a,
+            ind_form,
+            block_mask_bits,
+            block_cells_x,
+            block_cells_y,
+            block_cells_z,
+        ) = task
         seed_slab_k_prepared = None
     elif len(task) == 8:
         cur_case_mp, k_lo, k_hi, plane_indexes, max_per_cell_o, max_per_cell_a, ind_form, seed_slab_k_prepared = task
@@ -1450,7 +1527,9 @@ def precip_step_subblock_worker(task):
             product_state,
             phase_id,
             block_mask_bits,
-            int(block_size),
+            int(block_cells_x),
+            int(block_cells_y),
+            int(block_cells_z),
         )
 
     shm_o.close()

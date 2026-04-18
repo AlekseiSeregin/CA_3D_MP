@@ -61,7 +61,6 @@ class CaseSetUpMP:
 
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
 
-        self.use_simple_nucleation = Config.USE_SIMPLE_NUCLEATION
         self.nucleation_mode = Config.NUCLEATION_MODE
         self.nucleation_kernel_runner = None
         self.product_key = None
@@ -75,6 +74,8 @@ class CaseSetUpMP:
 
         self.plane_indexes = []
         self.dissolution_plane_indexes = []
+        # JMatPro block mode: uint16 (bx, by) with z bit bz — where CA fraction exceeds equilibrium (dissolve).
+        self.dissolution_block_mask_bits = None
 
 
 class CaseRef:

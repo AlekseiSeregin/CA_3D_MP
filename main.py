@@ -16,7 +16,7 @@ if __name__ == '__main__':
             else:
                 self.c_automata.get_combi_ind = self.c_automata.get_comb_ind_jmatpro_generic
 
-            self.save_function = self.save_results_product_only
+            self.save_function = self.save_results_inward_only
         
             self.c_automata.decomposition = self.c_automata.dissolve
 

@@ -1,3 +1,4 @@
+from pandas.core.arrays.datetimelike import F
 from .config_utils_classes import ElemInput, GeneratedValues
 
 
@@ -7,7 +8,7 @@ class Config:
             "element": "O",
             "diffusion_condition": "O in Ni Krupp",
             "diffusion_condition_gb": "O in Ni Krupp 100",
-            "cells_concentration": 20,
+            "cells_concentration": 5,
             "diffusion_max_per_cell": 100,
         },
         # {
@@ -23,10 +24,10 @@ class Config:
             "element": "Cr",
             "diffusion_condition": "Cr in Ni Krupp",
             "mass_concentration": 0.25,
-            "cells_concentration": 15,
+            "cells_concentration": 10,
             "conc_precision": "rand",
             "space_fill": "full",
-            "diffusion_max_per_cell": 100,
+            "diffusion_max_per_cell": 200,
         },
         # {
         #     "element": "Al",
@@ -42,7 +43,7 @@ class Config:
 
     DEFAULT_PRODUCT_PROBABILITIES = {
         # nucleation
-        "p0": 0.0001,
+        "p0": 0.000001,
         "p0_f": 1,
         "p0_A_const": 1,
         "p0_B_const": 1,
@@ -64,7 +65,7 @@ class Config:
         "p1_d_f": 1,
         "p1_d_A_const": 1,
         "p1_d_B_const": 10,
-        "p6_d": 1e-8,
+        "p6_d": 1e-3,
         "p6_d_f": 0.99,
         "p6_d_A_const": 1,
         "p6_d_B_const": 20,
@@ -152,7 +153,7 @@ class Config:
 
     TEMPERATURE = 1100  # °C
     N_CELLS_PER_AXIS = 100  # ONLY MULTIPLES OF 3+(neigh_range-1)*2 ARE ALLOWED
-    N_ITERATIONS = 1000000  # must be >= n_cells_per_axis
+    N_ITERATIONS = 100000  # must be >= n_cells_per_axis
     STRIDE = 100  # n_iterations / stride = n_iterations for outward diffusion
     STRIDE_MULTIPLIER = 50
     SIM_TIME = 7200  # [sek]
@@ -160,23 +161,21 @@ class Config:
 
     SOL_PROD = 6.25 * 10 ** -31  # 5.621 * 10 ** -10
     PHASE_FRACTION_LIMIT = 0.036
-    THRESHOLD_INWARD = 1
-    THRESHOLD_OUTWARD = 1
     NEIGH_RANGE = 1   # neighbouring ranges    1, 2, 3, 4, 5,  6,  7,  8,  9,  10
                       #          and           |  |  |  |  |   |   |   |   |   |
                       # corresponding divisors 3, 5, 7, 9, 11, 13, 15, 17, 19, 21
     N_BOOST_STEPS = 1
 
     PROD_INCR_CONST = 1 * 10 ** -5
-    PROD_ERROR = 0.05
+    PROD_ERROR = 0.01
     ZETTA_ZERO = 10 * (10 ** -6)  # [m]
     ZETTA_FINAL = 43 * (10 ** -6)  # [m]
 
     INWARD_DIFFUSION = True
     OUTWARD_DIFFUSION = True
 
-    OUTWARD_DIFFUSION_WORKERS = 8
-    INWARD_DIFFUSION_WORKERS = 3
+    OUTWARD_DIFFUSION_WORKERS = 10
+    INWARD_DIFFUSION_WORKERS = 10
 
     # Per-side x boundary (left = x<0, right = x>=n). Read once by diffusion module from Config.
     DIFFUSION_BOUNDARY_X_OUTWARD_LEFT = "deletion"   # periodic | reflection | deletion
@@ -184,27 +183,26 @@ class Config:
     DIFFUSION_BOUNDARY_X_INWARD_LEFT = "deletion"
     DIFFUSION_BOUNDARY_X_INWARD_RIGHT = "deletion"
     COMPUTE_PRECIPITATION = True
+    PRECIPITATION_STRIDE = 10
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = False
     FULL_CELLS = False
     SAVE_PATH = 'C:/test_runs_data/'
     SAVE_POST_PROCESSED_INPUT = True
-    USE_SIMPLE_NUCLEATION = False # Legacy switch (kept for backward compatibility)
+
     # Nucleation kernel mode:
     #   legacy_prob_owner   -> legacy probabilistic with owner-phase exclusion
     #   legacy_simple_owner -> legacy simplified with owner-phase exclusion
     #   stoich_prob_owner   -> threshold-based probabilistic nucleation with owner-phase exclusion
     #   stoich_simple_owner -> threshold-based simplified nucleation with owner-phase exclusion
     NUCLEATION_MODE = "stoich_prob_owner"
+
     # If True, use fold nucleation kernels: new product is placed on the fullest non-full cell
     # among center + 6 face neighbours of the reaction cell (snapshot neighbour logic unchanged).
     # When flat_count == 0 (no product in neighbour stencil on product_init), placement stays on the oxidant cell.
     # Only supported for legacy_prob_owner and stoich_prob_owner (including no-outward _SPEC variants).
     NUCLEATION_APPLY_FOLD = True
-    # If True, precipitation stages are executed sequentially by product PRIORITY
-    # using entries from PRODUCTS list.
-    USE_PRODUCT_STAGE_SEQUENCE = True
-
+    
     # Execution___________________________________________________________________
     NUMBER_OF_PROCESSES = 10  # Total workers to allocate (split between CA and JMatPro)
     # JMatPro worker allocation ratio (0.0-1.0): fraction of NUMBER_OF_PROCESSES allocated to JMatPro
@@ -213,19 +211,23 @@ class Config:
     #   JMATPRO_WORKER_RATIO = 0.4  # 40% JMatPro, 60% CA (recommended for balanced workload)
     #   JMATPRO_WORKER_RATIO = 0.5  # 50/50 split
     #   JMATPRO_WORKER_RATIO = None  # Auto: 40% JMatPro, 60% CA
-    JMATPRO_WORKER_RATIO = 0.4  # None = auto allocation
+    JMATPRO_WORKER_RATIO = 1 # None = auto allocation
 
     # JMatPro composition sampling mode:
     # If True, compute compositions per 3D subblock (blocks_per_axis^3 total) but only for
     # ignited blocks along x up to the furthest inward particle. Non-ignited blocks are left unchanged.
-    USE_JMATPRO_BLOCKS_IGNITED = True
-    # Total blocks are (JMATPRO_BLOCKS_PER_AXIS^3). For the requested 1000 blocks, keep this at 10.
-    # Requires: N_CELLS_PER_AXIS % JMATPRO_BLOCKS_PER_AXIS == 0
-    JMATPRO_BLOCKS_PER_AXIS = 5
-    NUMBER_OF_DIVS_PER_PAGE = 1
-    DEPTH_PER_DIV = 1
-    MAX_TASK_PER_CHILD = 50000
+    USE_JMATPRO_BLOCKS_IGNITED = False
+
+    # --- JMatPro block geometry (two modes; code prefers explicit cell sizes when set) ---
+    # Preferred: cells per block along each axis. If X, Y, and Z are all > 0, the grid uses
+    #   Bx = N_CELLS_PER_AXIS / X,  By = N / Y,  Bz = N / Z
+    # and JMATPRO_BLOCKS_PER_AXIS is ignored. Requires N divisible by each of X,Y,Z.
+    # Z-bitmask storage requires Bz <= 16 (raise if violated).
+    JMATPRO_BLOCK_CELLS_X = 1
+    JMATPRO_BLOCK_CELLS_Y = 20
+    JMATPRO_BLOCK_CELLS_Z = 20
+
+    MAX_TASK_PER_CHILD = 5000
     TERMINATION_COMMAND = 'd+g+m'
     GENERATED_VALUES = GeneratedValues()
-    COMMENT = """NO COMMENTS"""
     INITIAL_SCRIPT = "\n"

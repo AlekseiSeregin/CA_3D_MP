@@ -77,6 +77,7 @@ class SimulationConfigurator:
         self.save_function = None  # must be defined elsewhere
 
         self.termination_command = Config.TERMINATION_COMMAND
+        self.c_automata._init_jmatpro_product_scan_cache()
         self.print_config()
 
     def print_config(self):
@@ -121,7 +122,7 @@ class SimulationConfigurator:
             if self.worker_pools is not None:
                 self.worker_pools.close()
                 self.worker_pools = None
-            self.save_results_product_only()
+            self.save_results()
             self.insert_last_it()
             self.db.insert_product_plane0_tracking(self.c_automata.product_plane0_tracking)
             self.db.conn.commit()
@@ -440,9 +441,9 @@ class SimulationConfigurator:
         if Config.INWARD_DIFFUSION:
             for oxidant in self.cases.all_oxidants:
                 self.db.insert_particle_data(str(oxidant.elem_name), self.c_automata.iteration, oxidant.cells)
-        if Config.OUTWARD_DIFFUSION:
-            for active in self.cases.all_actives:
-                self.db.insert_particle_data(str(active.elem_name), self.c_automata.iteration, active.get_cells_coords())
+        # if Config.OUTWARD_DIFFUSION:
+        #     for active in self.cases.all_actives:
+        #         self.db.insert_particle_data(str(active.elem_name), self.c_automata.iteration, active.get_cells_coords())
         if Config.COMPUTE_PRECIPITATION:
             for case, case_mp in self.cases.product_case_pairs:
                 if case_mp.product_phase_id > 0:

@@ -78,7 +78,6 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
             jmpSetSolverCalculationType,
             jmpSetTemperatureUnit,
             jmpSetSolverTemperature,
-            jmpSetDefaultPhases,
             jmpRunSolverCalculation,
             jmpGetFoundPhases,
             jmpGetThermodynamicPropertyAt,
@@ -124,6 +123,7 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
     jmpSetSolverCalculationType(calculation_type)
     jmpSetTemperatureUnit(unit_temperature)
     jmpSetSolverTemperature(temperature)
+    jmpSetSolverPhases(["GAMMA", "M2O3", "MO_B2", "SPINEL_AB2O4"])   
     jmpSetScreenOutput(0)
 
     # Signal worker is ready
@@ -138,135 +138,73 @@ def _worker_process(worker_id: int, task_queue: multiprocessing.Queue,
 
     # Main worker loop
     while True:
+        # try:
+        # Get task from queue (blocking with timeout to allow periodic health checks)
         try:
-            # Get task from queue (blocking with timeout to allow periodic health checks)
-            try:
-                task_data = task_queue.get(timeout=0.005)
-            except:
-                continue
-            
-            # Check for termination signal
-            if task_data is None:
-                break
-            
-            task_id = task_data['task_id']
-            composition = task_data['composition']
-            elements = task_data['elements']
-            
-            start_time = time.time()
-            composition = list(composition)
-            elements = list(elements)
-            composition_key = tuple(round(float(x), _cache_round_digits) for x in composition)
-            elements_key = tuple(elements)
-            cache_key = (composition_key, elements_key)
-
-            try:
-                # Return cached result if present
-                if cache_key in _cache:
-                    result_queue.put({
-                        'worker_id': worker_id,
-                        'task_id': task_id,
-                        'status': 'completed',
-                        'result': _cache[cache_key],
-                        'duration': time.time() - start_time,
-                        'cached': True,
-                    })
-                    continue
-
-                # Set up JMatPro calculation
-                # jmpSetMaterialType(material_type)
-                jmpSetAlloyElements(elements)
-                # jmpSetCompositionUnit(unit)
-                jmpSetAlloyComposition(composition)
-                # jmpSetSolverCalculationType(calculation_type)
-                # jmpSetTemperatureUnit(unit_temperature)
-                # jmpSetSolverTemperature(temperature)
-                # jmpSetDefaultPhases()
-                jmpSetSolverPhases(["GAMMA", "M2O3", "MO_B2", "SPINEL_AB2O4"])
-                
-                # Run calculation with timeout check
-                jmpRunSolverCalculation()
-                
-                # Get found phases; return molar_fraction and phase composition per phase
-                try:
-                    found_phases = jmpGetFoundPhases()
-                except JMPError:
-                    found_phases = []
-                
-                def get_phase_fraction(phase_name):
-                    if phase_name not in found_phases:
-                        return 0.0
-                    try:
-                        f = jmpGetThermodynamicPropertyAt(
-                            JMP_THERMODYNAMIC_PROPERTY_MOLAR_FRACTION,
-                            phase_name,
-                            temperature
-                        )
-                        return max(0.0, f)
-                    except (JMPError, ValueError, TypeError):
-                        return 0.0
-                
-                def get_phase_composition(phase_name):
-                    try:
-                        el_list, comp_list = jmpGetPhaseCompositionAt(phase_name, temperature)
-                        return list(el_list), list(comp_list)
-                    except (JMPError, ValueError, TypeError):
-                        return [], []
-                
-                result = {}
-                for p in found_phases:
-                    frac = get_phase_fraction(p)
-                    elements_phase, composition_phase = get_phase_composition(p)
-                    sum_non_ox = 0.0
-                    for elem, comp in zip(elements_phase, composition_phase):
-                        sum_non_ox += comp if elem not in ["O", "N", "Ni", "H", "Fe"] else 0.0
-
-                    result[p] = {
-                        "molar_fraction": frac,
-                        "elements": elements_phase,
-                        "composition": composition_phase,
-                        "sum_non_ox": sum_non_ox,
-                    }
- 
-                _cache[cache_key] = result
-                result_queue.put({
-                    'worker_id': worker_id,
-                    'task_id': task_id,
-                    'status': 'completed',
-                    'result': result,
-                    'duration': time.time() - start_time
-                })
-                
-            except JMPError as e:
-                # JMatPro calculation error
-                result_queue.put({
-                    'worker_id': worker_id,
-                    'task_id': task_id,
-                    'status': 'failed',
-                    'error': str(e),
-                    'duration': time.time() - start_time
-                })
-            except Exception as e:
-                # Unexpected error
-                result_queue.put({
-                    'worker_id': worker_id,
-                    'task_id': task_id,
-                    'status': 'failed',
-                    'error': f"{type(e).__name__}: {str(e)}",
-                    'traceback': traceback.format_exc(),
-                    'duration': time.time() - start_time
-                })
-                
-        except KeyboardInterrupt:
+            task_data = task_queue.get()
+        except:
+            continue
+        
+        # Check for termination signal
+        if task_data is None:
             break
-        except Exception as e:
-            # Critical error in worker
+        
+        task_id = task_data['task_id']
+        composition = task_data['composition']
+        elements = task_data['elements']
+        
+        start_time = time.time()
+        composition = list(composition)
+        elements = list(elements)
+        composition_key = tuple(round(float(x), _cache_round_digits) for x in composition)
+        elements_key = tuple(elements)
+        cache_key = (composition_key, elements_key)
+
+        # Return cached result if present
+        if cache_key in _cache:
             result_queue.put({
                 'worker_id': worker_id,
-                'error': f"Worker critical error: {type(e).__name__}: {str(e)}",
-                'fatal': True
+                'task_id': task_id,
+                'status': 'completed',
+                'result': _cache[cache_key],
+                'duration': time.time() - start_time,
+                'cached': True,
             })
-            break
+            continue
+
+        jmpSetAlloyElements(elements)
+        jmpSetAlloyComposition(composition)
+        jmpRunSolverCalculation()
+        found_phases = jmpGetFoundPhases()
+        result = {}
+        for p in found_phases:
+            frac = jmpGetThermodynamicPropertyAt(
+                JMP_THERMODYNAMIC_PROPERTY_MOLAR_FRACTION,
+                p,
+                temperature
+            )
+            elements_phase, composition_phase = jmpGetPhaseCompositionAt(p, temperature)
+            sum_non_ox = sum(
+                comp
+                for elem, comp in zip(elements_phase, composition_phase)
+                if elem not in {"O", "N", "Ni", "H", "Fe"}
+            )
+
+            result[p] = {
+                "molar_fraction": frac,
+                "elements": elements_phase,
+                "composition": composition_phase,
+                "sum_non_ox": sum_non_ox,
+            }
+
+        _cache[cache_key] = result
+        result_queue.put({
+            'worker_id': worker_id,
+            'task_id': task_id,
+            'status': 'completed',
+            'result': result,
+            'duration': time.time() - start_time
+        })
     
     # Signal worker termination
     result_queue.put({
@@ -518,19 +456,15 @@ class JMatProWorkerPool:
         while self.pending_tasks:
             task_id = self.pending_tasks.pop(0)
             task = self.tasks[task_id]
-            try:
-                self.task_queue.put({
-                    'task_id': task_id,
-                    'composition': list(task.composition),
-                    'elements': list(task.elements)
-                }, timeout=1.0)
-                task.status = TaskStatus.RUNNING
-                task.start_time = time.time()
-                task.worker_id = None  # unknown until result comes back
-            except Exception as e:
-                print(f"Error queuing task {task_id}: {e}")
-                self.pending_tasks.insert(0, task_id)
-                break
+            self.task_queue.put({
+                'task_id': task_id,
+                'composition': list(task.composition),
+                'elements': list(task.elements)
+            }, timeout=1.0)
+            task.status = TaskStatus.RUNNING
+            task.start_time = time.time()
+            task.worker_id = None  # unknown until result comes back
+            
     
     def submit_tasks(self, compositions: List[List[float]], 
                     elements: List[str]) -> List[int]:

@@ -7,6 +7,7 @@ from multiprocessing import shared_memory
 from .nes_for_mp import *
 from .dissolution_functions import (
     dissolution_subblock_worker,
+    dissolution_subblock_worker_blockmask,
     get_block_patterns_from_aggregated,
     _views_from_segment_dissol,
 )
@@ -40,6 +41,15 @@ class CellularAutomata:
 
         # simulated space parameters
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
+        # JMatPro / precip block geometry from Config; fixed for the run.
+        self._jmatpro_block_params = self._compute_jmatpro_block_params(int(self.cells_per_axis))
+        _bx, _by, _bz = (
+            int(self._jmatpro_block_params[3]),
+            int(self._jmatpro_block_params[4]),
+            int(self._jmatpro_block_params[5]),
+        )
+        self._jmatpro_n_blocks = _bx * _by * _bz
+        # self._init_jmatpro_product_scan_cache()
         self.cells_per_page = self.cells_per_axis ** 2
         self.matrix_moles_per_page = self.cells_per_page * Config.MATRIX.MOLES_PER_CELL
         self.n_iter = Config.N_ITERATIONS
@@ -134,9 +144,6 @@ class CellularAutomata:
             'max_configured': _max_workers
         }
 
-        self.threshold_inward = Config.THRESHOLD_INWARD
-        self.threshold_outward = Config.THRESHOLD_OUTWARD
-
         self.comb_indexes = None
         self.rel_prod_fraction = None
         self.gamma_primes = None
@@ -230,7 +237,7 @@ class CellularAutomata:
         self.jmatpro_pool = self.worker_pools.get_jmatpro_pool(
             num_workers=j_workers,
             temperature=float(Config.TEMPERATURE),
-            task_timeout=3.0,
+            task_timeout=30.0,
             max_retries=3,
         )
 
@@ -325,84 +332,112 @@ class CellularAutomata:
         return out
 
     @staticmethod
-    def _blocks10_params(n_cells):
-        bpa = int(getattr(Config, "JMATPRO_BLOCKS_PER_AXIS", 10))
-        if bpa <= 0:
-            bpa = 10
-        if n_cells % bpa != 0:
-            raise ValueError(
-                f"N_CELLS_PER_AXIS={n_cells} must be divisible by blocks_per_axis={bpa} "
-                "for equal-size 3D subblocks."
-            )
-        bsz = n_cells // bpa
-        return bpa, bsz
+    def _compute_jmatpro_block_params(n_cells):
+        """
+        Resolve heterogeneous JMatPro block dimensions from Config.
+
+        Call once at init; ``cells_per_axis`` and block config do not change mid-simulation.
+
+        Returns:
+            (cx, cy, cz, Bx, By, Bz)
+        where:
+            cx,cy,cz = cells per block along x,y,z
+            Bx,By,Bz = number of blocks along x,y,z
+        """
+        cx = int(getattr(Config, "JMATPRO_BLOCK_CELLS_X", 0) or 0)
+        cy = int(getattr(Config, "JMATPRO_BLOCK_CELLS_Y", 0) or 0)
+        cz = int(getattr(Config, "JMATPRO_BLOCK_CELLS_Z", 0) or 0)
+        if cx > 0 and cy > 0 and cz > 0:
+            if n_cells % cx != 0 or n_cells % cy != 0 or n_cells % cz != 0:
+                raise ValueError(
+                    f"N_CELLS_PER_AXIS={n_cells} must be divisible by "
+                    f"JMATPRO_BLOCK_CELLS_X/Y/Z={cx}/{cy}/{cz}."
+                )
+            Bx = n_cells // cx
+            By = n_cells // cy
+            Bz = n_cells // cz
+        else:
+            bpa = int(getattr(Config, "JMATPRO_BLOCKS_PER_AXIS", 10) or 10)
+            if bpa <= 0:
+                bpa = 10
+            if n_cells % bpa != 0:
+                raise ValueError(
+                    f"N_CELLS_PER_AXIS={n_cells} must be divisible by blocks_per_axis={bpa} "
+                    "for equal-size 3D subblocks."
+                )
+            cx = cy = cz = n_cells // bpa
+            Bx = By = Bz = bpa
+        # For bitmask representation we must keep Bz <= 16.
+        if Bz > 16:
+            raise ValueError(f"JMatPro block grid has Bz={Bz} > 16; too many z-blocks for uint16 bitmask.")
+        return cx, cy, cz, Bx, By, Bz
+
+    def _init_jmatpro_product_scan_cache(self):
+        """
+        (case_mp, product_cfg) list and phase_id -> row map for product_counts_blocks_ignited_from_state.
+        Built once; product_case_pairs and phase ids are fixed for the run.
+        """
+        product_cases = [
+            (case_mp, case_mp.product_cfg) for _, case_mp in self.cases.product_case_pairs
+        ]
+        pid_to_row = np.full(256, -1, dtype=np.int16)
+        row_ix = 0
+        for case_mp, _p_cfg in product_cases:
+            pid = int(getattr(case_mp, "product_phase_id", 0))
+            if pid <= 0:
+                continue
+            if pid_to_row[pid] >= 0:
+                continue
+            pid_to_row[pid] = np.int16(row_ix)
+            row_ix += 1
+        self._jmatpro_product_cases = product_cases
+        self._jmatpro_pid_to_row = pid_to_row
+        self._jmatpro_n_products = int(row_ix)
 
     @staticmethod
-    def _sum_grid_into_blocks_ignited(grid3d, blocks_per_axis, block_size, x_hi):
+    def _sum_grid_into_blocks_ignited(grid3d, By, Bz, cx, cy, cz, x_hi):
         """
         Sum a cubic (N,N,N) grid into ignited blocks along x in [0, x_hi).
-        Returns float64 vector of length (x_hi//block_size) * blocks_per_axis^2.
-        Flatten order matches block_id = (bx*bpa + by)*bpa + bz (bx-major).
+        Returns float64 vector of length (Bx_ignited * By * Bz).
+        Flatten order matches block_id = (bx*By + by)*Bz + bz (bx-major).
         """
-        n = int(grid3d.shape[0])
-        bpa = int(blocks_per_axis)
-        bsz = int(block_size)
-        xh = int(x_hi)
-        if xh > n:
-            xh = n
-        if xh < 0:
-            xh = 0
-        if bsz <= 0 or bpa <= 0:
-            return np.zeros(0, dtype=np.float64)
-        if xh == 0:
-            return np.zeros(0, dtype=np.float64)
-        # xh is expected to be a multiple of bsz (constructed from bx_max).
-        bx_cnt = xh // bsz
-        if bx_cnt <= 0:
-            return np.zeros(0, dtype=np.float64)
-        sub = grid3d[: bx_cnt * bsz, :, :]
-        resh = sub.reshape(bx_cnt, bsz, bpa, bsz, bpa, bsz)
-        blk = np.sum(resh, axis=(1, 3, 5), dtype=np.uint32)  # (bx_cnt, bpa, bpa)
+        # xh is expected to be a multiple of cx (constructed from bx_max).
+        bx_cnt = x_hi // cx
+        sub = grid3d[: bx_cnt * cx, :, :]
+        resh = sub.reshape(bx_cnt, cx, By, cy, Bz, cz)
+        blk = np.sum(resh, axis=(1, 3, 5), dtype=np.uint32)  # (bx_cnt, By, Bz)
         return blk.reshape(-1).astype(np.float64)
 
-    def _gather_species_block_counts_by_element_ignited(self, x_hi, species_objs, blocks_per_axis, block_size):
+    def _gather_species_block_counts_by_element_ignited(self, x_hi, species_objs, By, Bz, cx, cy, cz):
         out = {}
         for obj in species_objs:
             elem = obj.elem_name
             grid = obj.get_3d_grid()[0]
-            out[elem] = self._sum_grid_into_blocks_ignited(grid, blocks_per_axis, block_size, x_hi)
+            out[elem] = self._sum_grid_into_blocks_ignited(grid, By, Bz, cx, cy, cz, x_hi)
         return out
 
     def get_comb_ind_jmatpro_blocks_ignited(self):
         """
-        Block-wise composition (10x10x10 by default) and JMatPro lookup for *ignited* x-blocks only.
-        Ignited means bx <= floor(max_inward_x / block_size). Non-ignited blocks are left unchanged.
+        Block-wise composition (sizes from Config) and JMatPro lookup for *ignited* x-blocks only.
+        Ignited means bx <= floor(max_inward_x / cx) where cx is the x block thickness in cells.
+        Non-ignited blocks are left unchanged.
         """
         self.ensure_jmatpro_pool()
         n = int(self.cells_per_axis)
-        bpa, bsz = self._blocks10_params(n)
-
+        cx, cy, cz, Bx, By, Bz = self._jmatpro_block_params
         max_x = int(self.get_cur_ioz_bound())
-        if max_x < 0:
-            max_x = 0
-        if max_x >= n:
-            max_x = n - 1
-        bx_max = max_x // bsz
-        x_hi = min(n, (bx_max + 1) * bsz)
-        if x_hi <= 0:
-            return
-
-        n_ignited_blocks = (x_hi // bsz) * (bpa * bpa)
-        if n_ignited_blocks <= 0:
-            return
+        bx_max = max_x // cx
+        x_hi = min(n, (bx_max + 1) * cx)
+        Bx_ignited = x_hi // cx
+        n_ignited_blocks = Bx_ignited * (By * Bz)
         block_ids = np.arange(n_ignited_blocks, dtype=np.intp)
 
-        matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", "Ni"))
+        matrix_elem = Config.MATRIX.ELEMENT
         oxid_counts = self._gather_species_block_counts_by_element_ignited(
-            x_hi, self.cases.all_oxidants, bpa, bsz
+            x_hi, self.cases.all_oxidants, By, Bz, cx, cy, cz
         )
         act_counts = self._gather_species_block_counts_by_element_ignited(
-            x_hi, self.cases.all_actives, bpa, bsz
+            x_hi, self.cases.all_actives, By, Bz, cx, cy, cz
         )
 
         elem_free_moles = {}
@@ -420,53 +455,29 @@ class CellularAutomata:
         product_matrix_pull_moles = np.zeros(n_ignited_blocks, dtype=np.float64)
         elem_pure_moles = dict(elem_free_moles)
 
-        # One-scan product counting for all products in product_case_pairs
-        product_cases = [(case_mp, case_mp.product_cfg) for _, case_mp in self.cases.product_case_pairs]
-        pids = []
-        for case_mp, _p_cfg in product_cases:
-            pid = int(getattr(case_mp, "product_phase_id", 0))
-            if pid > 0:
-                pids.append(pid)
-            else:
-                pids.append(0)
+        product_cases = self._jmatpro_product_cases
+        pid_to_row = self._jmatpro_pid_to_row
+        n_products = self._jmatpro_n_products
 
-        pid_to_row = np.full(256, -1, dtype=np.int16)
-        row_to_case_idx = []
-        for idx, pid in enumerate(pids):
-            if pid <= 0:
-                continue
-            if pid_to_row[pid] >= 0:
-                # If duplicated pid appears, map to the first occurrence.
-                continue
-            pid_to_row[pid] = np.int16(len(row_to_case_idx))
-            row_to_case_idx.append(idx)
-        n_products = int(len(row_to_case_idx))
-
-        if n_products > 0 and getattr(self.cases, "product_state", None) is not None:
-            state = self.cases.product_state
-            owner = state[0]
-            st_count = state[1]
-            prod_counts_rows = product_counts_blocks_ignited_from_state(
-                owner,
-                st_count,
-                pid_to_row,
-                n_products,
-                bpa,
-                bsz,
-                x_hi,
-            )
-        else:
-            prod_counts_rows = np.zeros((0, bpa * bpa * bpa), dtype=np.uint32)
+        prod_counts_rows = product_counts_blocks_ignited_from_state(
+            self.cases.product_state[0],
+            self.cases.product_state[1],
+            pid_to_row,
+            n_products,
+            Bx,
+            By,
+            Bz,
+            self._jmatpro_n_blocks,
+            cx,
+            cy,
+            cz,
+            x_hi,
+        )
 
         product_runtime = []
         product_moles_by_identifier = {}
         for case_idx, (case_mp, p_cfg) in enumerate(product_cases):
-            pid = int(getattr(case_mp, "product_phase_id", 0))
-            if pid <= 0:
-                continue
-            row = int(pid_to_row[pid])
-            if row < 0:
-                continue
+            row = pid_to_row[case_mp.product_phase_id]
             # Flattened full block vector, but only the ignited prefix is meaningful.
             p_counts = prod_counts_rows[row, :n_ignited_blocks].astype(np.float64)
             p_moles = p_counts * p_cfg.MOLES_PER_CELL
@@ -482,7 +493,7 @@ class CellularAutomata:
             product_matrix_pull_moles += p_counts * float(getattr(case_mp, "matrix_moles_per_cell", 0.0))
             product_runtime.append((case_mp, p_cfg.ELEMENT))
 
-        matrix_moles_per_block = float(getattr(Config.MATRIX, "MOLES_PER_CELL", 0.0)) * float(bsz ** 3)
+        matrix_moles_per_block = float(getattr(Config.MATRIX, "MOLES_PER_CELL", 0.0)) * float(cx * cy * cz)
         matrix_moles = (
             np.full(n_ignited_blocks, matrix_moles_per_block, dtype=np.float64)
             - outward_eq_mat_moles
@@ -532,15 +543,12 @@ class CellularAutomata:
         self._merge_jmatpro_results_with_block_memory(raw_list, task_ids, block_ids)
 
         # Block-wise decision of where to nucleate / severe-collapse.
-        bx_cnt = x_hi // bsz
+        bx_cnt = Bx_ignited
         for case_mp, product_ident in product_runtime:
-            # reset legacy plane state (kept for backward compatibility)
-            case_mp.plane_indexes = []
-            case_mp.dissolution_plane_indexes = []
-            case_mp.severe_dissolution_indexes = []
-
             # new block state
-            case_mp.block_mask_bits = np.zeros((bx_cnt, bpa), dtype=np.uint16)
+            case_mp.block_mask_bits = np.zeros((bx_cnt, By), dtype=np.uint16)
+            case_mp.dissolution_block_mask_bits = np.zeros((bx_cnt, By), dtype=np.uint16)
+            case_mp.dissolution_plane_indexes = []
             case_mp.severe_dissolution_block_ids = []
             case_mp.ignited_block_ids = block_ids.tolist()
 
@@ -549,6 +557,7 @@ class CellularAutomata:
             if not jm_identifier:
                 continue
             jm_block0 = None
+            prod_row = int(pid_to_row[int(case_mp.product_phase_id)])
 
             for local_idx, tid in enumerate(task_ids):
                 bid = int(block_ids[local_idx])
@@ -557,17 +566,17 @@ class CellularAutomata:
                     continue
                 phased = phases.get(jm_identifier)
                 if not phased:
-                    case_mp.severe_dissolution_block_ids.append(bid)
+                    if int(prod_counts_rows[prod_row, bid]) > 0:
+                        case_mp.severe_dissolution_block_ids.append(bid)
                     continue
 
                 product_c_jm = 0.0
                 if out_elem_ref:
                     sum_non_ox = float(phased.get("sum_non_ox", 0.0))
-                    if sum_non_ox > 0.0:
-                        for jm_elem, jm_comp in zip(phased["elements"], phased["composition"]):
-                            if jm_elem == out_elem_ref:
-                                product_c_jm = (float(jm_comp) / sum_non_ox) * float(phased.get("molar_fraction", 0.0))
-                                break
+                    for jm_elem, jm_comp in zip(phased["elements"], phased["composition"]):
+                        if jm_elem == out_elem_ref:
+                            product_c_jm = (float(jm_comp) / sum_non_ox) * float(phased.get("molar_fraction", 0.0))
+                            break
                 else:
                     product_c_jm = float(phased.get("molar_fraction", 0.0))
 
@@ -575,13 +584,27 @@ class CellularAutomata:
                     jm_block0 = float(product_c_jm)
 
                 existing_c = float(product_c_by_identifier.get(product_ident, np.zeros(1))[bid]) if product_ident in product_c_by_identifier else 0.0
-                if product_c_jm > 0.0 and (product_c_jm - existing_c) / product_c_jm > Config.PROD_ERROR:
-                    bx = bid // (bpa * bpa)
-                    rem = bid - bx * (bpa * bpa)
-                    by = rem // bpa
-                    bz = rem - by * bpa
-                    if 0 <= bx < bx_cnt:
-                        case_mp.block_mask_bits[bx, by] = np.uint16(int(case_mp.block_mask_bits[bx, by]) | (1 << int(bz)))
+                bx = bid // (By * Bz)
+                rem = bid - bx * (By * Bz)
+                by = rem // Bz
+                bz = rem - by * Bz
+                if not (0 <= bx < bx_cnt):
+                    continue
+                pe = float(Config.PROD_ERROR)
+                if product_c_jm > 0.0:
+                    rel = (product_c_jm - existing_c) / product_c_jm
+                    if rel > pe:
+                        case_mp.block_mask_bits[bx, by] = np.uint16(
+                            int(case_mp.block_mask_bits[bx, by]) | (1 << int(bz))
+                        )
+                    elif rel < -pe:
+                        case_mp.dissolution_block_mask_bits[bx, by] = np.uint16(
+                            int(case_mp.dissolution_block_mask_bits[bx, by]) | (1 << int(bz))
+                        )
+                elif existing_c > 0.0:
+                    case_mp.dissolution_block_mask_bits[bx, by] = np.uint16(
+                        int(case_mp.dissolution_block_mask_bits[bx, by]) | (1 << int(bz))
+                    )
 
             # Track "first plane" analogue: block_id==0 (x in [0,bsz), y in [0,bsz), z in [0,bsz))
             if jm_block0 is not None:
@@ -840,11 +863,18 @@ class CellularAutomata:
         Dissolution V2: product snapshot for consistent neighbour reads; workers write directly
         to oxidant write buffer (count + dirs grid) and active. No flat cells/dirs; oxidant is
         in shared memory. Optional block logic via aggregated_ind and bsf.
+
+        When ``dissolution_block_mask_bits`` is present and has any bit set, uses per-block
+        ignited-x dissolution (new worker/kernels); otherwise uses ``dissolution_plane_indexes``.
         """
         dp = getattr(self.cur_case_mp, "dissolution_probabilities", None)
         if dp is None:
             dp = getattr(self.cur_case, "dissolution_probabilities", None)
         if dp is None:
+            return
+        dbm = getattr(self.cur_case_mp, "dissolution_block_mask_bits", None)
+        if dbm is not None and isinstance(dbm, np.ndarray) and dbm.size > 0 and np.any(dbm):
+            self._dissolution_mp_subblock_blockmask(dp)
             return
         comb_src = getattr(self.cur_case_mp, "dissolution_plane_indexes", None)
         if comb_src is None or len(comb_src) == 0:
@@ -918,6 +948,84 @@ class CellularAutomata:
         pool = self.worker_pools.dissolution_pool
         pool.map(dissolution_subblock_worker, tasks)
 
+    def _dissolution_mp_subblock_blockmask(self, dp):
+        """Dissolution limited to (bx,by,bz) cells marked in ``dissolution_block_mask_bits``."""
+        oxidant_elem = self.cur_case.oxidant
+        if not hasattr(oxidant_elem, "get_current_c3d_shm_mdata"):
+            return
+        if getattr(self.cur_case_mp, "oxidant_c3d_shm_mdata", None) is None:
+            return
+        n_workers = max(
+            1,
+            getattr(
+                self.worker_pools,
+                "n_outward_workers",
+                getattr(self.diffusion_engine, "n_outward_workers", 4),
+            ),
+        )
+        n_z = self.cur_case_mp.oxidant_c3d_shm_mdata.shape[2]
+        base = n_z // n_workers
+        extra = n_z % n_workers
+        z_ranges = []
+        k = 0
+        for w in range(n_workers):
+            size = base + (1 if w < extra else 0)
+            if size <= 0:
+                break
+            k_hi = min(k + size - 1, n_z - 1)
+            z_ranges.append((k, k_hi))
+            k = k_hi + 1
+        if not z_ranges:
+            return
+        block_patterns = get_block_patterns_from_aggregated(getattr(self, "aggregated_ind", None))
+        bsf = float(getattr(dp, "bsf", 1.0))
+        if bsf < 1.0:
+            bsf = 1.0
+
+        oxidant_write_mdata = oxidant_elem.get_current_c3d_shm_mdata()
+        max_per_cell_oxidant = oxidant_elem.max_per_cell
+        active_elem = self.cur_case.active
+        max_per_cell_active = active_elem.max_per_cell if active_elem is not None else 0
+        packed_dirs = np.asarray(_DIRS_6_PACKED, dtype=np.uint8)
+
+        values_pp = np.asarray(dp.dissol_prob.values_pp, dtype=np.float64)
+        const_a_pp = np.asarray(dp.const_a_pp, dtype=np.float64)
+        const_b_pp = np.asarray(dp.const_b_pp, dtype=np.float64)
+        const_c_pp = np.asarray(dp.const_c_pp, dtype=np.float64)
+        const_d_pp = np.asarray(dp.const_d_pp, dtype=np.float64)
+
+        cx, cy, cz, _Bx, _By, _Bz = self._jmatpro_block_params
+        dbm = self.cur_case_mp.dissolution_block_mask_bits
+        x_hi = int(dbm.shape[0]) * int(cx)
+        plane_indexes = np.arange(0, min(int(self.cells_per_axis), x_hi), dtype=np.intp)
+
+        tasks = [
+            (
+                self.cur_case_mp,
+                k_lo,
+                k_hi,
+                plane_indexes,
+                values_pp,
+                const_a_pp,
+                const_b_pp,
+                const_c_pp,
+                const_d_pp,
+                oxidant_write_mdata,
+                max_per_cell_oxidant,
+                max_per_cell_active,
+                packed_dirs,
+                block_patterns,
+                bsf,
+                dbm,
+                int(cx),
+                int(cy),
+                int(cz),
+            )
+            for (k_lo, k_hi) in z_ranges
+        ]
+        pool = self.worker_pools.dissolution_pool
+        pool.map(dissolution_subblock_worker_blockmask, tasks)
+
     def apply_severe_plane_collapse(self, case, case_mp):
         """
         JMatPro no longer reports the product phase on these x-planes: strip that product from
@@ -988,9 +1096,7 @@ class CellularAutomata:
         Block analogue of severe plane collapse: clear product only inside severe blocks and
         release inward/outward particles per state_count unit.
         """
-        block_ids = np.asarray(getattr(case_mp, "severe_dissolution_block_ids", []), dtype=np.intp).ravel()
-        if block_ids.size == 0:
-            return
+        block_ids = np.asarray(case_mp.severe_dissolution_block_ids, dtype=np.intp).ravel()
 
         oxidant_elem = case.oxidant
         n_i, n_j, n_z = case_mp.oxidant_c3d_shm_mdata.shape
@@ -1023,7 +1129,7 @@ class CellularAutomata:
         seed = int(np.random.randint(0, 2**31))
         pid = int(getattr(case_mp, "product_phase_id", 0))
 
-        bpa, bsz = self._blocks10_params(int(self.cells_per_axis))
+        cx, cy, cz, Bx, By, Bz = self._jmatpro_block_params
         severe_blocks_clear_product_release(
             owner_phase,
             state_count,
@@ -1041,8 +1147,11 @@ class CellularAutomata:
             max_act,
             packed_dirs,
             seed,
-            bpa,
-            bsz,
+            By,
+            Bz,
+            cx,
+            cy,
+            cz,
         )
 
         shm_ox.close()
@@ -1152,12 +1261,12 @@ class CellularAutomata:
         # Legacy path uses explicit plane indexes; block path uses contiguous x-range + block mask.
         block_mask_bits = getattr(cur_case_mp, "block_mask_bits", None)
         if block_mask_bits is not None and isinstance(block_mask_bits, np.ndarray) and block_mask_bits.size > 0:
-            bpa, bsz = self._blocks10_params(int(self.cells_per_axis))
-            x_hi = int(block_mask_bits.shape[0]) * int(bsz)
+            cx, cy, cz, Bx, By, Bz = self._jmatpro_block_params
+            x_hi = int(block_mask_bits.shape[0]) * int(cx)
             plane_indexes = np.arange(0, min(int(self.cells_per_axis), x_hi), dtype=np.intp)
         else:
             block_mask_bits = None
-            bsz = 0
+            cx, cy, cz = 0, 0, 0
             plane_indexes = np.asarray(cur_case_mp.plane_indexes, dtype=np.intp)
         ind_form = np.asarray(ind_formation, dtype=np.int8)
 
@@ -1171,7 +1280,21 @@ class CellularAutomata:
                 if block_mask_bits is None:
                     tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form))
                 else:
-                    tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form, block_mask_bits, bsz))
+                    tasks_std.append(
+                        (
+                            cur_case_mp,
+                            k_lo,
+                            k_hi,
+                            plane_indexes,
+                            cur_case.oxidant.max_per_cell,
+                            max_per_cell_active,
+                            ind_form,
+                            block_mask_bits,
+                            cx,
+                            cy,
+                            cz,
+                        )
+                    )
             else:
                 # Use the largest segment in the parallel pass; defer the remaining
                 # wrapped segment(s) to a short sequential tail pass.
@@ -1183,12 +1306,40 @@ class CellularAutomata:
                 if block_mask_bits is None:
                     tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form))
                 else:
-                    tasks_std.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form, block_mask_bits, bsz))
+                    tasks_std.append(
+                        (
+                            cur_case_mp,
+                            k_lo,
+                            k_hi,
+                            plane_indexes,
+                            cur_case.oxidant.max_per_cell,
+                            max_per_cell_active,
+                            ind_form,
+                            block_mask_bits,
+                            cx,
+                            cy,
+                            cz,
+                        )
+                    )
                 for k_lo, k_hi in tail_segs:
                     if block_mask_bits is None:
                         tasks_tail_seq.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form))
                     else:
-                        tasks_tail_seq.append((cur_case_mp, k_lo, k_hi, plane_indexes, cur_case.oxidant.max_per_cell, max_per_cell_active, ind_form, block_mask_bits, bsz))
+                        tasks_tail_seq.append(
+                            (
+                                cur_case_mp,
+                                k_lo,
+                                k_hi,
+                                plane_indexes,
+                                cur_case.oxidant.max_per_cell,
+                                max_per_cell_active,
+                                ind_form,
+                                block_mask_bits,
+                                cx,
+                                cy,
+                                cz,
+                            )
+                        )
         if tasks_std:
             self.worker_pools.nucleation_pool.map(precip_step_subblock_worker, tasks_std)
         for task in tasks_tail_seq:
@@ -1207,43 +1358,62 @@ class CellularAutomata:
                 gap_seed_slab_k,
             )]
         else:
-            gap_task = [(
-                cur_case_mp,
-                0,
-                int(cur_case_mp.oxidant_c3d_shm_mdata.shape[2]) - 1,
-                plane_indexes,
-                cur_case.oxidant.max_per_cell,
-                (cur_case.active.max_per_cell if cur_case.active is not None else 0),
-                ind_form,
-                block_mask_bits,
-                bsz,
-                gap_seed_slab_k,
-            )]
+            gap_task = [
+                (
+                    cur_case_mp,
+                    0,
+                    int(cur_case_mp.oxidant_c3d_shm_mdata.shape[2]) - 1,
+                    plane_indexes,
+                    cur_case.oxidant.max_per_cell,
+                    (cur_case.active.max_per_cell if cur_case.active is not None else 0),
+                    ind_form,
+                    block_mask_bits,
+                    cx,
+                    cy,
+                    cz,
+                    gap_seed_slab_k,
+                )
+            ]
         self.worker_pools.nucleation_pool.map(precip_step_subblock_worker, gap_task)
     
     def nucleate(self):
-        self.get_combi_ind()
+        if self.iteration % Config.PRECIPITATION_STRIDE == 0:
+            self.get_combi_ind()
 
-        # Apply severe plane collapse first to ensure correct product release
-        for case, case_mp in self.cases.product_case_pairs:
-            if case_mp.severe_dissolution_indexes:
-                self.apply_severe_plane_collapse(case, case_mp)
-            if getattr(case_mp, "severe_dissolution_block_ids", None):
-                self.apply_severe_block_collapse(case, case_mp)
+            # Apply severe plane collapse first to ensure correct product release
+            for case, case_mp in self.cases.product_case_pairs:
+                if case_mp.severe_dissolution_indexes:
+                    self.apply_severe_plane_collapse(case, case_mp)
+                if getattr(case_mp, "severe_dissolution_block_ids", None):
+                    self.apply_severe_block_collapse(case, case_mp)
 
-        for case, case_mp in self.cases.product_case_pairs:
-            if getattr(case_mp, "block_mask_bits", None) is not None and isinstance(case_mp.block_mask_bits, np.ndarray) and case_mp.block_mask_bits.size > 0:
-                self.precip_mp_subblock(case, case_mp)
-            elif case_mp.plane_indexes:
-                self.precip_mp_subblock(case, case_mp)
-            if case_mp.dissolution_plane_indexes:
-                self.cur_case = case
-                self.cur_case_mp = case_mp
-                self.dissolution_mp_subblock()
+            for case, case_mp in self.cases.product_case_pairs:
+                if getattr(case_mp, "block_mask_bits", None) is not None and isinstance(case_mp.block_mask_bits, np.ndarray) and case_mp.block_mask_bits.size > 0:
+                    self.precip_mp_subblock(case, case_mp)
+                elif case_mp.plane_indexes:
+                    self.precip_mp_subblock(case, case_mp)
+                _dbm = getattr(case_mp, "dissolution_block_mask_bits", None)
+                _has_block_diss = (
+                    _dbm is not None
+                    and isinstance(_dbm, np.ndarray)
+                    and _dbm.size > 0
+                    and np.any(_dbm)
+                )
+                if case_mp.dissolution_plane_indexes or _has_block_diss:
+                    self.cur_case = case
+                    self.cur_case_mp = case_mp
+                    self.dissolution_mp_subblock()
     
     def dissolve(self):
         for case, case_mp in self.cases.product_case_pairs:
-            if case_mp.dissolution_plane_indexes:
+            _dbm = getattr(case_mp, "dissolution_block_mask_bits", None)
+            _has_block_diss = (
+                _dbm is not None
+                and isinstance(_dbm, np.ndarray)
+                and _dbm.size > 0
+                and np.any(_dbm)
+            )
+            if case_mp.dissolution_plane_indexes or _has_block_diss:
                 self.cur_case = case
                 self.cur_case_mp = case_mp
                 self.dissolution_mp_subblock()
