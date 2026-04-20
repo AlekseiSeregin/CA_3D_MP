@@ -92,16 +92,6 @@ class CellularAutomata:
         self.coord_buffer = None
         self.to_dissol_pn_buffer = None
 
-        product_defs = self._configured_products()
-        first_oxid_numb = 1
-        if len(product_defs) > 0 and isinstance(product_defs[0], dict):
-            first_oxid_numb = int(product_defs[0].get("OXIDATION_NUMBER", 1))
-        self.primary_oxid_numb = max(1, first_oxid_numb)
-        self.max_inside_neigh_number = 6 * self.primary_oxid_numb
-        self.max_block_neigh_number = 7
-
-        self.primary_fetch_ind = []
-        self.secondary_fetch_ind = []
         self.fetch_ind = None
 
         self.aggregated_ind = np.array([[7, 0, 1, 2, 19, 16, 14],
@@ -196,6 +186,7 @@ class CellularAutomata:
         # self.powers = utils.physical_data.POWERS
 
         self.all_phases = []
+        self.elem_counts_from_product = {"Ni":0, "O":0, "Cr":0, "Al":0, "N":0}
 
     def _jmatpro_raw_to_phase_array(self, raw_list):
         """Postprocess raw JMatPro output to (5, n) phase fraction array. raw_list: list of dicts from TdDATA.get_look_up_data.
@@ -597,6 +588,9 @@ class CellularAutomata:
                         case_mp.block_mask_bits[bx, by] = np.uint16(
                             int(case_mp.block_mask_bits[bx, by]) | (1 << int(bz))
                         )
+                        case_mp.dissolution_block_mask_bits[bx, by] = np.uint16(
+                            int(case_mp.dissolution_block_mask_bits[bx, by]) | (1 << int(bz))
+                        )
                     elif rel < -pe:
                         case_mp.dissolution_block_mask_bits[bx, by] = np.uint16(
                             int(case_mp.dissolution_block_mask_bits[bx, by]) | (1 << int(bz))
@@ -646,16 +640,36 @@ class CellularAutomata:
             inward = set(stoich.keys()) - outward
         return stoich, outward, inward
 
+    def recalc_elem_counts_from_product(self):
+        self.ioz_bound = 0
+        for _, case_mp in self.cases.product_case_pairs:
+            p_cfg = case_mp.product_cfg
+            p_counts = self._get_product_counts_upto_bound_for_case(case_mp, self.ioz_bound).astype(np.float64)
+           
+            for elem, _ in case_mp.stoich_frac_items:
+                self.elem_counts_from_product[elem] += int(p_counts[0] * p_cfg.THRESHOLD_INWARD)
+            
+        for oxidant in self.cases.all_oxidants:
+            for elem, counts in self.elem_counts_from_product.items():
+                if elem == oxidant.elem_name:
+                    oxidant.from_product_counts = counts
+        
+        self.elem_counts_from_product = {"Ni":0, "O":0, "Cr":0, "Al":0, "N":0}
+
     def get_comb_ind_jmatpro_generic(self):
         self.ioz_bound = self.get_cur_ioz_bound()
         matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", "Ni"))
         oxid_counts = self._gather_species_counts_by_element(self.ioz_bound, self.cases.all_oxidants)
         act_counts = self._gather_species_counts_by_element(self.ioz_bound, self.cases.all_actives)
         elem_free_moles = {}
+        # elem_counts_from_product = {"Ni":0}
+
         for elem, counts in oxid_counts.items():
             elem_free_moles[elem] = counts * self._oxid_cfg_map[elem].MOLES_PER_CELL
+            # elem_counts_from_product[elem] = 0
         for elem, counts in act_counts.items():
             elem_free_moles[elem] = counts * self._act_cfg_map[elem].MOLES_PER_CELL
+            # elem_counts_from_product[elem] = 0
 
         outward_eq_mat_moles = np.zeros(self.ioz_bound + 1, dtype=np.float64)
         for elem, counts in act_counts.items():
@@ -667,6 +681,7 @@ class CellularAutomata:
         elem_pure_moles = dict(elem_free_moles)
         product_moles_by_identifier = {}
         product_runtime = []
+        
         for _, case_mp in self.cases.product_case_pairs:
             p_cfg = case_mp.product_cfg
             p_counts = self._get_product_counts_upto_bound_for_case(case_mp, self.ioz_bound).astype(np.float64)
@@ -676,12 +691,18 @@ class CellularAutomata:
 
             for elem, frac in case_mp.stoich_frac_items:
                 elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * frac
+                # elem_counts_from_product[elem] += int(p_counts[0] * p_cfg.THRESHOLD_INWARD)
             out_elem_case = str(getattr(case_mp, "outward_element", ""))
             thr_out_case = int(getattr(p_cfg, "THRESHOLD_OUTWARD", 0))
             if out_elem_case and thr_out_case > 0:
                 product_eq_mat_moles += p_counts * self._act_eq_matrix_map[out_elem_case] * thr_out_case
             product_matrix_pull_moles += p_counts * float(getattr(case_mp, "matrix_moles_per_cell", 0.0))
             product_runtime.append((case_mp, p_cfg.ELEMENT))
+
+        # for oxidant in self.cases.all_oxidants:
+        #     for elem, counts in elem_counts_from_product.items():
+        #         if elem == oxidant.elem_name:
+        #             oxidant.from_product_counts = counts
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles - product_matrix_pull_moles
         whole_moles = matrix_moles + product_moles_total
@@ -726,15 +747,15 @@ class CellularAutomata:
         raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=10.0)
         self._merge_jmatpro_results_with_plane_memory(raw_list, task_ids)
 
-        totals = 0
-        for ind, phases in raw_list.items():
-            for phase, data in phases.items():
-                if phase not in self.all_phases:
-                    self.all_phases.append(phase)
-                if phase != "GAMMA" and phase != "BCC":
-                    totals += data.get("molar_fraction", 0.0)
-        if totals == 0:
-            print(f"totals: {totals}")
+        # totals = 0
+        # for ind, phases in raw_list.items():
+        #     for phase, data in phases.items():
+        #         if phase not in self.all_phases:
+        #             self.all_phases.append(phase)
+        #         if phase != "GAMMA" and phase != "BCC":
+        #             totals += data.get("molar_fraction", 0.0)
+        # if totals == 0:
+        #     print(f"totals: {totals}")
 
         for case_mp, product_ident in product_runtime:
             case_mp.plane_indexes = []
@@ -768,8 +789,8 @@ class CellularAutomata:
                 existing_c = float(product_c_by_identifier[product_ident][plane_idx])
                 if (product_c_jm - existing_c)/product_c_jm > Config.PROD_ERROR:
                     case_mp.plane_indexes.append(plane_idx)
-                    # case_mp.dissolution_plane_indexes.append(plane_idx)
-                elif (product_c_jm - existing_c)/product_c_jm < Config.PROD_ERROR:
+                    case_mp.dissolution_plane_indexes.append(plane_idx)
+                elif (product_c_jm - existing_c)/product_c_jm < -Config.PROD_ERROR:
                     case_mp.dissolution_plane_indexes.append(plane_idx)
             if len(case_mp.plane_indexes) > 1:
                 case_mp.plane_indexes = sorted(set(case_mp.plane_indexes))
@@ -784,6 +805,11 @@ class CellularAutomata:
             )
 
     def diffuse_all(self):
+        self.recalc_elem_counts_from_product()
+        # for elem in self.cases.all_oxidants:
+        #     elem.fill_first_page()
+        # return
+
         run_outward = (self.iteration + 1) % Config.STRIDE == 0
         for e in self.cases.all_actives:
             e.skip_diffusion_this_step = not run_outward
@@ -795,23 +821,6 @@ class CellularAutomata:
         if run_outward:
             for elem in self.cases.all_actives:
                 elem.fill_last_page()
-
-    def calc_precipitation_front_only_cells(self):
-        """
-        Calculating a position of a precipitation front, considering only cells concentrations without any scaling!
-        As a boundary a product fraction of 0,1% is used.
-        """
-        product = np.array([np.sum(self.primary_product.c3d[:, :, plane_ind]) for plane_ind
-                            in range(self.cells_per_axis)], dtype=np.uint32)
-        product = product / (self.cells_per_axis ** 2)
-        threshold = Config.ACTIVES.PRIMARY.CELLS_CONCENTRATION
-        for rev_index, precip_conc in enumerate(np.flip(product)):
-            if precip_conc > threshold / 100:
-                position = (len(product) - 1 - rev_index) * Config.SIZE * 10 ** 6 \
-                           / self.cells_per_axis
-                sqr_time = ((self.iteration + 1) * Config.SIM_TIME / (self.n_iter * 3600)) ** (1 / 2)
-                self.utils.db.insert_precipitation_front(sqr_time, position, "p")
-                break
 
     def fix_init_precip_bool(self, u_bound, l_bound=0):
         if u_bound == self.cells_per_axis - 1:
@@ -858,6 +867,34 @@ class CellularAutomata:
                 n_fetch_batch.append(all_coord[:, t_ind])
         return n_fetch_batch
 
+    def _map_dissolution_pool(self, worker_fn, tasks):
+        """
+        Run dissolution workers via mp.Pool.map.
+
+        On some Windows setups, Pool can report zero workers and map() raises ZeroDivisionError.
+        Fall back to sequential in-process execution so dissolution still completes.
+        """
+        if not tasks:
+            return
+        pool = getattr(self.worker_pools, "dissolution_pool", None)
+        if pool is None:
+            for t in tasks:
+                worker_fn(t)
+            return
+        try:
+            internal = getattr(pool, "_pool", None)
+            if internal is not None and len(internal) == 0:
+                for t in tasks:
+                    worker_fn(t)
+                return
+        except Exception:
+            pass
+        try:
+            pool.map(worker_fn, tasks)
+        except ZeroDivisionError:
+            for t in tasks:
+                worker_fn(t)
+
     def dissolution_mp_subblock(self):
         """
         Dissolution V2: product snapshot for consistent neighbour reads; workers write directly
@@ -879,7 +916,18 @@ class CellularAutomata:
         comb_src = getattr(self.cur_case_mp, "dissolution_plane_indexes", None)
         if comb_src is None or len(comb_src) == 0:
             comb_src = self.comb_indexes
-        comb = np.asarray(comb_src, dtype=np.intp).ravel()
+        if comb_src is None:
+            return
+        # Lists may contain None placeholders; np.asarray(..., dtype=np.intp) fails on None.
+        comb_flat = []
+        for x in np.asarray(comb_src, dtype=object).ravel():
+            if x is None:
+                continue
+            try:
+                comb_flat.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        comb = np.asarray(comb_flat, dtype=np.intp).ravel()
         if comb.size == 0:
             return
         oxidant_elem = self.cur_case.oxidant
@@ -945,8 +993,7 @@ class CellularAutomata:
             for (k_lo, k_hi) in z_ranges
         ]
 
-        pool = self.worker_pools.dissolution_pool
-        pool.map(dissolution_subblock_worker, tasks)
+        self._map_dissolution_pool(dissolution_subblock_worker, tasks)
 
     def _dissolution_mp_subblock_blockmask(self, dp):
         """Dissolution limited to (bx,by,bz) cells marked in ``dissolution_block_mask_bits``."""
@@ -1023,8 +1070,7 @@ class CellularAutomata:
             )
             for (k_lo, k_hi) in z_ranges
         ]
-        pool = self.worker_pools.dissolution_pool
-        pool.map(dissolution_subblock_worker_blockmask, tasks)
+        self._map_dissolution_pool(dissolution_subblock_worker_blockmask, tasks)
 
     def apply_severe_plane_collapse(self, case, case_mp):
         """
@@ -1048,7 +1094,7 @@ class CellularAutomata:
             active_count, active_dirs = _views_from_segment_dissol(shm_a, n_i, max_act)
         else:
             max_act = 0
-            active_count = np.zeros((n_i * n_j * n_z,), dtype=np.int8)
+            active_count = np.zeros((n_i * n_j * n_z,), dtype=np.uint16)
             active_dirs = np.zeros((n_i * n_j * n_z, 1), dtype=np.uint8)
 
         shm_state = shared_memory.SharedMemory(name=case_mp.product_state_shm_mdata.name)
@@ -1111,7 +1157,7 @@ class CellularAutomata:
             active_count, active_dirs = _views_from_segment_dissol(shm_a, n_i, max_act)
         else:
             max_act = 0
-            active_count = np.zeros((n_i * n_j * n_z,), dtype=np.int8)
+            active_count = np.zeros((n_i * n_j * n_z,), dtype=np.uint16)
             active_dirs = np.zeros((n_i * n_j * n_z, 1), dtype=np.uint8)
 
         shm_state = shared_memory.SharedMemory(name=case_mp.product_state_shm_mdata.name)
@@ -1248,6 +1294,13 @@ class CellularAutomata:
         self._precip_gap_z_groups_neg = gap_z_groups_neg
 
     def precip_mp_subblock(self, cur_case, cur_case_mp):
+        # IMPORTANT: oxidant/active diffusion buffers are ping-ponged (swap each diffusion step).
+        # Nucleation/precipitation workers must attach to the *current* diffusion read buffer,
+        # otherwise they will consume/react in the wrong SHM segment every other iteration.
+        cur_case_mp.oxidant_c3d_shm_mdata = cur_case.oxidant.get_current_c3d_shm_mdata()
+        if cur_case.active is not None:
+            cur_case_mp.active_c3d_shm_mdata = cur_case.active.get_current_c3d_shm_mdata()
+
         cur_case.fix_init_precip_func_ref(self.ioz_bound)
 
         # Two-state strategy only: even iterations -> base, odd iterations -> mirrored.
@@ -1389,8 +1442,13 @@ class CellularAutomata:
 
             for case, case_mp in self.cases.product_case_pairs:
                 if getattr(case_mp, "block_mask_bits", None) is not None and isinstance(case_mp.block_mask_bits, np.ndarray) and case_mp.block_mask_bits.size > 0:
+                    self.cur_case = case
+                    self.cur_case_mp = case_mp
+                    # self.dissolution_mp_subblock()
                     self.precip_mp_subblock(case, case_mp)
+                    
                 elif case_mp.plane_indexes:
+                    self.dissolution_mp_subblock()
                     self.precip_mp_subblock(case, case_mp)
                 _dbm = getattr(case_mp, "dissolution_block_mask_bits", None)
                 _has_block_diss = (

@@ -14,8 +14,10 @@ class WorkerPools:
     """
 
     def __init__(self, n_outward_workers: int, n_inward_workers: int):
-        self.n_outward_workers = int(n_outward_workers)
-        self.n_inward_workers = int(n_inward_workers)
+        # mp.Pool(0) is invalid: map() divides by len(pool) and raises ZeroDivisionError.
+        # Inward-only runs often set outward workers to 0; nucleation/dissolution still need a pool.
+        self.n_outward_workers = max(1, int(n_outward_workers))
+        self.n_inward_workers = max(1, int(n_inward_workers))
 
         # These are used by precips/dissolution when using the shared-memory subblock kernels.
         self.nucleation_pool = mp.Pool(
@@ -57,7 +59,9 @@ class WorkerPools:
                 p.join()
 
         maxtasks = int(getattr(Config, "MAX_TASK_PER_CHILD", 0)) or None
-        self._diffusion_pools = [mp.Pool(sz, maxtasksperchild=maxtasks) for sz in needed_sizes]
+        self._diffusion_pools = [
+            mp.Pool(max(1, int(sz)), maxtasksperchild=maxtasks) for sz in needed_sizes
+        ]
         self._diffusion_signature = signature
         return self._diffusion_pools
 

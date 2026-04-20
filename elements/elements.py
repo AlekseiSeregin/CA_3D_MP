@@ -32,7 +32,9 @@ def create_diffusion_buffers(n, max_per_cell):
     DiffusionEngine only operates on already-initialized buffers.
     """
     n3 = n * n * n
-    count_dtype = np.int8
+    # NOTE: count stores per-cell occupancy up to max_per_cell (often > 127).
+    # int8 would overflow and corrupt both counts and dirs indexing.
+    count_dtype = np.uint16
     count_bytes = n3 * np.dtype(count_dtype).itemsize
     dirs_bytes = n3 * max_per_cell * 1
     segment_bytes = count_bytes + dirs_bytes
@@ -74,7 +76,6 @@ class ActiveElem:
         self.shms_unlinked = False
         self.skip_diffusion_this_step = False  # set by CA diffuse_all when STRIDE says skip outward this step
 
-        # 3D diffusion grid (count + packed dirs) is now PRIMARY storage (no flat arrays)
         self.max_per_cell = settings.DIFFUSION_MAX_PER_CELL
         self._diff_shm_A = self._diff_shm_B = None
         self._diff_A_count = self._diff_A_dirs = self._diff_B_count = self._diff_B_dirs = None
@@ -98,7 +99,7 @@ class ActiveElem:
         self._diff_write_name = self._diff_shm_B.name
         # Expose count buffer as c3d_shm_mdata for nucleation/precipitation (same shm, first segment)
         self.c3d_shm_mdata = SharedMetaData(
-            self._diff_shm_A.name, (n, n, n), np.int8
+            self._diff_shm_A.name, (n, n, n), np.uint16
         )
         self.cells_shm_mdata = None  # legacy flat cells; not used when USE_NEW_DIFFUSION_ENGINE
         self.dirs_shm_mdata = None
@@ -107,7 +108,7 @@ class ActiveElem:
         """Return SharedMetaData for the current diffusion *read* buffer (after swap). Use for nucleation so it reads up-to-date grid."""
         n = self.cells_per_axis
         name = self._diff_shm_A.name if self._diff_read_name == self._diff_shm_A.name else self._diff_shm_B.name
-        return SharedMetaData(name, (n, n, n), np.int8)
+        return SharedMetaData(name, (n, n, n), np.uint16)
 
     def _init_particles_in_grid(self, settings):
         """Initialize particles directly in the 3D grid (no flat arrays). CONC_PRECISION: 'rand' or 'exact'. SPACE_FILL: 'full' or 'half'. Uses Numba JIT for speed."""
@@ -262,7 +263,6 @@ class OxidantElem:
         self.utils = utils
         self.microstructure = None
 
-        # 3D diffusion grid (inward) is now PRIMARY storage (no flat arrays)
         self.max_per_cell = settings.DIFFUSION_MAX_PER_CELL
         self._diff_shm_A = self._diff_shm_B = None
         self._diff_A_count = self._diff_A_dirs = self._diff_B_count = self._diff_B_dirs = None
@@ -272,6 +272,8 @@ class OxidantElem:
         self._init_diffusion_buffers_oxidant()
         # Initialize with empty grid (fill_first_page will add particles)
         self.current_count = 0
+        self.from_product_counts = 0
+        self.numbs_to_add = []
         self.fill_first_page()
 
         # self.microstructure = voronoi.VoronoiMicrostructure(self.cells_per_axis)
@@ -654,10 +656,12 @@ class OxidantElem:
         count_3d = count.reshape(n, n, n, order="F")
         # Same layout as diffusion (i,j,k)=(x,y,z): x=0 plane is count_3d[0, :, :], linear index n*j + n2*k
         current_count = int(count_3d[0, :, :].sum())
-        if current_count >= self.n_per_page:
+
+        if current_count + self.from_product_counts >= self.n_per_page:
             return
 
-        num_to_add = self.n_per_page - current_count
+        num_to_add = self.n_per_page - (current_count + self.from_product_counts)
+        self.numbs_to_add.append(num_to_add)
         rng = np.random.default_rng()
         j_coords = rng.integers(0, n, size=num_to_add, dtype=np.intp)
         k_coords = rng.integers(0, n, size=num_to_add, dtype=np.intp)
@@ -682,13 +686,13 @@ class OxidantElem:
         self._diff_read_name = self._diff_shm_A.name
         self._diff_write_name = self._diff_shm_B.name
         # Expose count buffer as c3d_shm_mdata for engine/case_mp (same shm, first segment)
-        self.c3d_shm_mdata = SharedMetaData(self._diff_shm_A.name, (n, n, n), np.int8)
+        self.c3d_shm_mdata = SharedMetaData(self._diff_shm_A.name, (n, n, n), np.uint16)
 
     def get_current_c3d_shm_mdata(self):
         """Return SharedMetaData for the current diffusion *read* buffer (after swap). Use for nucleation so it reads up-to-date grid."""
         n = self.cells_per_axis
         name = self._diff_shm_A.name if self._diff_read_name == self._diff_shm_A.name else self._diff_shm_B.name
-        return SharedMetaData(name, (n, n, n), np.int8)
+        return SharedMetaData(name, (n, n, n), np.uint16)
 
     def _get_current_grid(self):
         """Get current read buffer (count, dirs) from grid."""

@@ -59,32 +59,6 @@ class ElemInput:
     def __bool__(self):
         return True
 
-
-class ProdGroups:
-    def __init__(self):
-        self.PRIMARY = None
-        self.SECONDARY = None
-        self.TERNARY = None
-        self.QUATERNARY = None
-        self.QUINT = None
-
-    def __bool__(self):
-        return True
-
-
-class ProdInput:
-    def __init__(self):
-        self.PHASE_FRACTION_LIMIT = 0
-        self.THRESHOLD_INWARD = 0
-        self.THRESHOLD_OUTWARD = 0
-        self.ELEMENT = "None"
-        self.COMPONENTS = []
-        self.STOICH = {}
-        self.OUTWARD_ELEMENTS = []
-        self.INWARD_ELEMENTS = []
-        self.PRIORITY = None
-
-
 class GeneratedValues:
     pass
 

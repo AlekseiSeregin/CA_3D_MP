@@ -1,4 +1,3 @@
-from pandas.core.arrays.datetimelike import F
 from .config_utils_classes import ElemInput, GeneratedValues
 
 
@@ -8,7 +7,7 @@ class Config:
             "element": "O",
             "diffusion_condition": "O in Ni Krupp",
             "diffusion_condition_gb": "O in Ni Krupp 100",
-            "cells_concentration": 5,
+            "cells_concentration": 7,
             "diffusion_max_per_cell": 100,
         },
         # {
@@ -23,8 +22,8 @@ class Config:
         {
             "element": "Cr",
             "diffusion_condition": "Cr in Ni Krupp",
-            "mass_concentration": 0.25,
-            "cells_concentration": 10,
+            "mass_concentration": 0.05,
+            "cells_concentration": 80,
             "conc_precision": "rand",
             "space_fill": "full",
             "diffusion_max_per_cell": 200,
@@ -43,11 +42,11 @@ class Config:
 
     DEFAULT_PRODUCT_PROBABILITIES = {
         # nucleation
-        "p0": 0.000001,
+        "p0": 0.01,
         "p0_f": 1,
         "p0_A_const": 1,
         "p0_B_const": 1,
-        "p1": 0.3,
+        "p1": 0.7,
         "p1_f": 1,
         "p1_A_const": 1,
         "p1_B_const": 1,
@@ -57,15 +56,15 @@ class Config:
         "max_neigh_numb": None,
         "nucl_adapt_function": 5,
         # dissolution
-        "p0_d": 0.3,
+        "p0_d": 0.5,
         "p0_d_f": 1,
         "p0_d_A_const": 1,
         "p0_d_B_const": 5,
-        "p1_d": 0.1,
+        "p1_d": 0.2,
         "p1_d_f": 1,
         "p1_d_A_const": 1,
         "p1_d_B_const": 10,
-        "p6_d": 1e-3,
+        "p6_d": 1e-4,
         "p6_d_f": 0.99,
         "p6_d_A_const": 1,
         "p6_d_B_const": 20,
@@ -73,7 +72,7 @@ class Config:
         "global_d_B": None,
         "global_d_B_f": -0.33,
         "n": 2,
-        "bsf": 0,
+        "bsf": 3,
         "dissol_adapt_function": 3,
     }
 
@@ -183,7 +182,7 @@ class Config:
     DIFFUSION_BOUNDARY_X_INWARD_LEFT = "deletion"
     DIFFUSION_BOUNDARY_X_INWARD_RIGHT = "deletion"
     COMPUTE_PRECIPITATION = True
-    PRECIPITATION_STRIDE = 10
+    PRECIPITATION_STRIDE = 1
     SAVE_WHOLE = False
     DECOMPOSE_PRECIPITATIONS = False
     FULL_CELLS = False
@@ -227,7 +226,7 @@ class Config:
     JMATPRO_BLOCK_CELLS_Y = 20
     JMATPRO_BLOCK_CELLS_Z = 20
 
-    MAX_TASK_PER_CHILD = 5000
+    MAX_TASK_PER_CHILD = 2500
     TERMINATION_COMMAND = 'd+g+m'
     GENERATED_VALUES = GeneratedValues()
     INITIAL_SCRIPT = "\n"

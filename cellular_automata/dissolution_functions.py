@@ -27,11 +27,11 @@ def get_block_patterns_from_aggregated(aggregated_ind):
 # ---------------------------------------------------------------------------
 
 def _views_from_segment_dissol(shm, n, max_per_cell):
-    """Same layout as diffusion: [count (n³ int8)][dirs (n³×max_per_cell uint8)]. Returns (count, dirs) flat views."""
+    """Same layout as diffusion: [count (n³ uint16)][dirs (n³×max_per_cell uint8)]. Returns (count, dirs) flat views."""
     n3 = n * n * n
-    count_bytes = n3 * np.dtype(np.int8).itemsize
+    count_bytes = n3 * np.dtype(np.uint16).itemsize
     dirs_bytes = n3 * max_per_cell * np.dtype(np.uint8).itemsize
-    count = np.ndarray((n3,), dtype=np.int8, buffer=shm.buf, offset=0)
+    count = np.ndarray((n3,), dtype=np.uint16, buffer=shm.buf, offset=0)
     dirs = np.ndarray((n3, max_per_cell), dtype=np.uint8, buffer=shm.buf, offset=count_bytes)
     return count, dirs
 
@@ -74,7 +74,7 @@ def dissolution_subblock_worker(task):
         active_count, active_dirs = _views_from_segment_dissol(shm_a, n_i, max_per_cell_active)
     else:
         # No-outward product path: keep outward buffers inert.
-        active_count = np.zeros((n_i * n_j * n_z,), dtype=np.int8)
+        active_count = np.zeros((n_i * n_j * n_z,), dtype=np.uint16)
         active_dirs = np.zeros((n_i * n_j * n_z, 1), dtype=np.uint8)
         max_per_cell_active = 0
     shm_ox_w = shared_memory.SharedMemory(name=oxidant_write_shm_mdata.name)
@@ -211,7 +211,7 @@ def dissolution_subblock_worker_blockmask(task):
         shm_a = shared_memory.SharedMemory(name=cur_case_mp.active_c3d_shm_mdata.name)
         active_count, active_dirs = _views_from_segment_dissol(shm_a, n_i, max_per_cell_active)
     else:
-        active_count = np.zeros((n_i * n_j * n_z,), dtype=np.int8)
+        active_count = np.zeros((n_i * n_j * n_z,), dtype=np.uint16)
         active_dirs = np.zeros((n_i * n_j * n_z, 1), dtype=np.uint8)
         max_per_cell_active = 0
     shm_ox_w = shared_memory.SharedMemory(name=oxidant_write_shm_mdata.name)

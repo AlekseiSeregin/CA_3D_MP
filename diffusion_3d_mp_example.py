@@ -87,14 +87,23 @@ def _compute_x_max_from_count(read_count, n):
 
 
 # ---------------------------------------------------------------------------
-# Shared buffer layout: one segment = [count (n³ int8)][dirs (n³·max_per_cell uint8 packed)]
+# Shared buffer layout: one segment = [count (n³ uint16)][dirs (n³·max_per_cell uint8 packed)]
 # Packed dirs: one byte per (dx,dy,dz) with dx,dy,dz in {-1,0,1}: byte = (dx+1)|((dy+1)<<2)|((dz+1)<<4)
 # ---------------------------------------------------------------------------
 
 def _views_from_segment(shm, n, max_per_cell, count_bytes, dirs_bytes):
     """Return (count, dirs) as numpy views on the shared segment (zero-copy). dirs are packed: (n3, max_per_cell) uint8."""
     n3 = n * n * n
-    count_dtype = np.int8 if count_bytes == n3 else np.int32
+    # Infer dtype from byte size. (count_bytes is always n3 * itemsize for the count dtype.)
+    itemsize = int(count_bytes // n3)
+    if itemsize == 1:
+        count_dtype = np.int8
+    elif itemsize == 2:
+        count_dtype = np.uint16
+    elif itemsize == 4:
+        count_dtype = np.int32
+    else:
+        raise ValueError(f"Unsupported count dtype itemsize={itemsize} (count_bytes={count_bytes}, n3={n3}).")
     count = np.ndarray((n3,), dtype=count_dtype, buffer=shm.buf, offset=0)
     dirs = np.ndarray((n3, max_per_cell), dtype=np.uint8, buffer=shm.buf, offset=count_bytes)
     return count, dirs
@@ -971,7 +980,9 @@ def prepare_diffusion_run(n, n_workers, max_per_cell, boundary_x_left, boundary_
         gap_z_set = set(range(n)) - {k for a, b in z_ranges for k in range(a, b + 1)}
     gap_z_groups = _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=n)
     n3 = n * n * n
-    count_bytes = n3 * 1
+    # Must match the actual shared-memory layout used by elements.create_diffusion_buffers().
+    # count stores per-cell occupancy up to max_per_cell and is uint16.
+    count_bytes = n3 * np.dtype(np.uint16).itemsize
     dirs_bytes = n3 * max_per_cell * 1
     p2_val = 2 * p1
     p3_val = 3 * p1

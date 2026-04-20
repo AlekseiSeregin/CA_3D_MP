@@ -27,8 +27,6 @@ class Database:
         self.conn.commit()
 
     def insert_particle_data(self, particle_type, iteration, data):
-        """Particle types allowed: primary_oxidant, secondary_oxidant, primary_active, secondary_active,
-        primary_product, secondary_product, ternary_product, quaternary_product"""
         query = """CREATE TABLE {}_iter_{} (z int, y int, x int)""".format(particle_type, str(iteration))
         self.c.execute(query)
         query = "INSERT INTO {}_iter_{} VALUES(?, ?, ?);".format(particle_type, str(iteration))
@@ -42,8 +40,6 @@ class Database:
             self.c.execute("""CREATE TABLE precip_front_s (sqrt_time int, position int)""")
 
     def insert_precipitation_front(self, sqrt_time, position, sign):
-        """sign p for primary product
-            sign s for secondary product"""
         self.c.execute("INSERT INTO precip_front_{} VALUES ({}, {})".format(sign, sqrt_time, position))
 
     def create_time_parameters_table(self):

@@ -136,11 +136,6 @@ def init_particles_exact(count, dirs, n, n2, max_per_cell, n_per, i_lo, packed_d
 
 @numba.njit(fastmath=True, cache=_CACHE)
 def fill_first_page_kernel(count, dirs, n, n2, max_per_cell, j_coords, k_coords, dir_packed):
-    """
-    For each (j_coords[i], k_coords[i]) on the x=0 plane: if the cell is not full, add one particle
-    with direction dir_packed[i]. If full, do nothing. In place. Same layout as diffusion.
-    Returns number of particles not inserted.
-    """
     not_inserted = 0
     for i in range(len(j_coords)):
         j = j_coords[i]

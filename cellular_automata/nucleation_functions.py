@@ -1363,11 +1363,11 @@ def precip_step_subblock_worker(task):
     if k_lo > k_hi:
         k_lo, k_hi = k_hi, k_lo
     n3 = n_i * n_j * n_z
-    count_bytes_o = n3 * np.dtype(np.int8).itemsize
-    # Diffusion segment: [count (n³ int8)][dirs (n³ × max_per_cell uint8)]; count view F-order
+    count_bytes_o = n3 * np.dtype(np.uint16).itemsize
+    # Diffusion segment: [count (n³ uint16)][dirs (n³ × max_per_cell uint8)]; count view F-order
     oxidant = np.ndarray(
         (n_i, n_j, n_z),
-        dtype=np.int8,
+        dtype=np.uint16,
         buffer=shm_o.buf,
         offset=0,
         order="F",
@@ -1381,10 +1381,10 @@ def precip_step_subblock_worker(task):
     shm_a = None
     if getattr(cur_case_mp, "active_c3d_shm_mdata", None) is not None and int(max_per_cell_a) > 0:
         shm_a = shared_memory.SharedMemory(name=cur_case_mp.active_c3d_shm_mdata.name)
-        count_bytes_a = n3 * np.dtype(np.int8).itemsize
+        count_bytes_a = n3 * np.dtype(np.uint16).itemsize
         active = np.ndarray(
             (n_i, n_j, n_z),
-            dtype=np.int8,
+            dtype=np.uint16,
             buffer=shm_a.buf,
             offset=0,
             order="F",
@@ -1396,7 +1396,7 @@ def precip_step_subblock_worker(task):
             offset=count_bytes_a,
         )
     else:
-        active = np.zeros((1, 1, 1), dtype=np.int8)
+        active = np.zeros((1, 1, 1), dtype=np.uint16)
         active_dirs = np.zeros((1, 1), dtype=np.uint8)
     
     shm_product_init = shared_memory.SharedMemory(name=cur_case_mp.precip_3d_init_shm_mdata.name)

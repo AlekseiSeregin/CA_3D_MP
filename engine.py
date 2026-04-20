@@ -324,13 +324,13 @@ class SimulationConfigurator:
 
     def init_product(self):
         # c3d_init
-        tmp = np.zeros((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), dtype=np.ubyte)
+        tmp = np.zeros((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), dtype=np.ubyte)
         self.cases.precip_3d_init_shm = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
         self.cases.precip_3d_init = np.ndarray(tmp.shape, dtype=tmp.dtype, buffer=self.cases.precip_3d_init_shm.buf)
         np.copyto(self.cases.precip_3d_init, tmp)
         self.cases.precip_3d_init_shm_mdata = SharedMetaData(self.cases.precip_3d_init_shm.name, tmp.shape, tmp.dtype)
 
-        state_tmp = np.zeros((2, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS + 1), dtype=np.uint8)
+        state_tmp = np.zeros((2, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), dtype=np.uint8)
         self.cases.product_state_shm = shared_memory.SharedMemory(create=True, size=state_tmp.nbytes)
         self.cases.product_state = np.ndarray(state_tmp.shape, dtype=state_tmp.dtype, buffer=self.cases.product_state_shm.buf)
         np.copyto(self.cases.product_state, state_tmp)
@@ -493,18 +493,6 @@ class SimulationConfigurator:
     def save_microstructure(self, microstructure):
         self.db.save_pickled_microstructure(microstructure)
 
-    def save_results_custom(self):
-        self.db.insert_particle_data("primary_oxidant", self.c_automata.iteration, self.cases.first.oxidant.cells)
-
-        self.db.insert_particle_data("primary_active", self.c_automata.iteration, self.cases.first.active.get_cells_coords())
-        self.db.insert_particle_data("secondary_active", self.c_automata.iteration, self.cases.second.active.get_cells_coords())
-
-        self.db.insert_particle_data("primary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.first, self.cases.first_mp))
-        self.db.insert_particle_data("secondary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.second, self.cases.second_mp))
-        self.db.insert_particle_data("ternary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.third, self.cases.third_mp))
-        self.db.insert_particle_data("quaternary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.fourth, self.cases.fourth_mp))
-        self.db.insert_particle_data("quint_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.fifth, self.cases.fifth_mp))
-
     def calc_precipitation_front_only_cells(self):
         """
         Calculating a position of a precipitation front, considering only cells concentrations without any scaling!
@@ -535,26 +523,6 @@ class SimulationConfigurator:
     def unlink(self):
         self.cases.close_shms()
         print("UNLINKED PROPERLY!")
-
-    def save_results_only_prod_prime(self):
-        self.db.insert_particle_data("primary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.first, self.cases.first_mp))
-
-    def save_results_only_prod(self):
-        self.db.insert_particle_data("primary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.first, self.cases.first_mp))
-        self.db.insert_particle_data("secondary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.second, self.cases.second_mp))
-        self.db.insert_particle_data("ternary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.third, self.cases.third_mp))
-        self.db.insert_particle_data("quaternary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.fourth, self.cases.fourth_mp))
-        self.db.insert_particle_data("quint_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.fifth, self.cases.fifth_mp))
-
-    def save_results_only_prod_secondary(self):
-        self.db.insert_particle_data("secondary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.second, self.cases.second_mp))
-
-    def save_results_prod_and_inw(self):
-        self.db.insert_particle_data("primary_product", self.c_automata.iteration, self._get_product_save_coords(self.cases.first, self.cases.first_mp))
-        self.db.insert_particle_data("primary_oxidant", self.c_automata.iteration, self.cases.first.oxidant.cells)
-
-    def save_results_only_inw(self):
-        self.db.insert_particle_data("primary_oxidant", self.c_automata.iteration, self.cases.first.oxidant.cells)
 
     def insert_last_it(self):
         self.db.insert_last_iteration(self.c_automata.iteration)
