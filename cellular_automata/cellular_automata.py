@@ -163,9 +163,23 @@ class CellularAutomata:
         self.curr_look_up = None
 
         self.prev_stab_count = 0
-        # Tracks plane-0 concentrations per product and iteration:
-        # key=(iteration, product_name), value=(jmatpro_conc, existing_conc, diff)
-        self.product_plane0_tracking = {}
+        # Tracks concentrations per slab (oxidation-plane index or ignited block id) per product:
+        # key=(iteration, product_name, plane_index),
+        # value=(jmatpro_conc, existing_conc, diff, cells_conc).
+        self.product_plane_tracking = {}
+
+        self._per_iter_log_path = self._resolve_per_iter_log_path()
+        if self._per_iter_log_path is not None:
+            try:
+                os.makedirs(os.path.dirname(self._per_iter_log_path), exist_ok=True)
+                with open(self._per_iter_log_path, "w", encoding="utf-8") as f:
+                    f.write("# Per-iteration JMatPro state log\n")
+                    f.write(f"# matrix={getattr(Config.MATRIX, 'ELEMENT', '?')} ")
+                    f.write(f"cells_per_axis={self.cells_per_axis} ")
+                    f.write(f"PRECIPITATION_STRIDE={getattr(Config, 'PRECIPITATION_STRIDE', 1)}\n")
+            except OSError as exc:
+                print(f"[per_iter_log] could not create '{self._per_iter_log_path}': {exc}")
+                self._per_iter_log_path = None
 
         self.precipitation_stride = Config.STRIDE * Config.STRIDE_MULTIPLIER
 
@@ -321,6 +335,135 @@ class CellularAutomata:
             counts = np.sum(grid[:u_bound + 1, :, :], axis=(1, 2)).astype(np.float64)
             out[elem] = counts
         return out
+
+    @staticmethod
+    def _resolve_per_iter_log_path():
+        if not bool(getattr(Config, "LOG_PER_ITER_TEXT", False)):
+            return None
+        path = str(getattr(Config, "LOG_PER_ITER_PATH", "") or "").strip()
+        if path:
+            return os.path.abspath(path)
+        save_dir = str(getattr(Config, "SAVE_PATH", "") or "").strip() or "."
+        return os.path.abspath(os.path.join(save_dir, "per_iter_jmatpro_log.txt"))
+
+    def _log_per_iter_jmatpro_state(
+        self,
+        oxid_counts,
+        act_counts,
+        product_counts_by_identifier,
+        product_runtime,
+        compositions,
+        elements,
+        product_c_by_identifier,
+        jm_target_by_ident,
+    ):
+        """Append a per-iteration block to the text log.
+
+        The block reports, plane by plane (x = depth):
+        - free atoms per element (oxidant/active);
+        - atoms bound in products per element (sum over products of cells * stoich);
+        - cells per product;
+        - composition fed to JMatPro (at%);
+        - existing product concentration (p_moles / whole_moles, see line ~705);
+        - JMatPro target concentration for the same product identifier.
+        """
+        if self._per_iter_log_path is None:
+            return
+
+        n_planes = int(self.ioz_bound) + 1
+        free_elem_names = sorted(set(list(oxid_counts.keys()) + list(act_counts.keys())))
+        free_table = np.zeros((n_planes, len(free_elem_names)), dtype=np.float64)
+        for j, elem in enumerate(free_elem_names):
+            arr = oxid_counts.get(elem, act_counts.get(elem))
+            if arr is None:
+                continue
+            arr = np.asarray(arr, dtype=np.float64)
+            n = min(arr.shape[0], n_planes)
+            free_table[:n, j] = arr[:n]
+
+        product_idents = [pi for _, pi in product_runtime]
+        bound_elem_set = set()
+        stoich_per_prod = {}
+        for case_mp, ident in product_runtime:
+            stoich = dict(getattr(case_mp.product_cfg, "STOICH", {}) or {})
+            stoich_per_prod[ident] = {str(k): float(v) for k, v in stoich.items() if float(v) > 0.0}
+            bound_elem_set.update(stoich_per_prod[ident].keys())
+        bound_elem_names = sorted(bound_elem_set)
+        bound_table = np.zeros((n_planes, len(bound_elem_names)), dtype=np.float64)
+        for ident in product_idents:
+            counts = np.asarray(product_counts_by_identifier.get(ident, np.zeros(n_planes)), dtype=np.float64)
+            n = min(counts.shape[0], n_planes)
+            for j, elem in enumerate(bound_elem_names):
+                nu = stoich_per_prod[ident].get(elem, 0.0)
+                if nu > 0.0:
+                    bound_table[:n, j] += counts[:n] * nu
+
+        prod_count_table = np.zeros((n_planes, len(product_idents)), dtype=np.float64)
+        for j, ident in enumerate(product_idents):
+            counts = np.asarray(product_counts_by_identifier.get(ident, np.zeros(n_planes)), dtype=np.float64)
+            n = min(counts.shape[0], n_planes)
+            prod_count_table[:n, j] = counts[:n]
+
+        comp_arr = np.asarray(compositions, dtype=np.float64)
+        if comp_arr.ndim != 2 or comp_arr.shape[0] != n_planes or comp_arr.shape[1] != len(elements):
+            comp_arr = np.zeros((n_planes, len(elements)), dtype=np.float64)
+
+        existing_table = np.zeros((n_planes, len(product_idents)), dtype=np.float64)
+        for j, ident in enumerate(product_idents):
+            arr = np.asarray(product_c_by_identifier.get(ident, np.zeros(n_planes)), dtype=np.float64)
+            n = min(arr.shape[0], n_planes)
+            existing_table[:n, j] = arr[:n]
+
+        jm_table = np.zeros((n_planes, len(product_idents)), dtype=np.float64)
+        for j, ident in enumerate(product_idents):
+            arr = np.asarray(jm_target_by_ident.get(ident, np.zeros(n_planes)), dtype=np.float64)
+            n = min(arr.shape[0], n_planes)
+            jm_table[:n, j] = arr[:n]
+
+        def _fmt_table(headers, table, fmt):
+            head = "  plane  " + "  ".join(f"{h:>10s}" for h in headers)
+            sep = "  -----  " + "  ".join("-" * 10 for _ in headers)
+            lines = [head, sep]
+            for k in range(table.shape[0]):
+                row = "  ".join(format(table[k, j], fmt) for j in range(table.shape[1]))
+                lines.append(f"  {k:>5d}  {row}")
+            return "\n".join(lines)
+
+        try:
+            with open(self._per_iter_log_path, "a", encoding="utf-8") as f:
+                f.write("\n")
+                f.write("=" * 90 + "\n")
+                f.write(
+                    f"ITERATION {int(self.iteration):>8d}    "
+                    f"ioz_bound={int(self.ioz_bound):<4d}    "
+                    f"matrix={elements[0] if elements else '?'}\n"
+                )
+                f.write("=" * 90 + "\n")
+
+                if free_elem_names:
+                    f.write("\n[ Free atoms per plane (cell counts) ]\n")
+                    f.write(_fmt_table(free_elem_names, free_table, ">10.0f") + "\n")
+
+                if bound_elem_names:
+                    f.write("\n[ Bound atoms in products per plane (cells x stoich) ]\n")
+                    f.write(_fmt_table(bound_elem_names, bound_table, ">10.0f") + "\n")
+
+                if product_idents:
+                    f.write("\n[ Product cells per plane ]\n")
+                    f.write(_fmt_table(product_idents, prod_count_table, ">10.0f") + "\n")
+
+                if elements:
+                    f.write("\n[ Composition fed to JMatPro (at%, matrix first) ]\n")
+                    f.write(_fmt_table(elements, comp_arr, ">10.4f") + "\n")
+
+                if product_idents:
+                    f.write("\n[ Existing product concentration (p_moles / whole_moles) ]\n")
+                    f.write(_fmt_table(product_idents, existing_table, ">10.6f") + "\n")
+                    f.write("\n[ JMatPro target product concentration ]\n")
+                    f.write(_fmt_table(product_idents, jm_table, ">10.6f") + "\n")
+        except OSError as exc:
+            print(f"[per_iter_log] write failed: {exc}")
+            self._per_iter_log_path = None
 
     @staticmethod
     def _compute_jmatpro_block_params(n_cells):
@@ -547,7 +690,7 @@ class CellularAutomata:
             jm_identifier = getattr(case_mp, "jm_identifier", None)
             if not jm_identifier:
                 continue
-            jm_block0 = None
+            jm_snap_blocks = np.zeros(n_ignited_blocks, dtype=np.float64)
             prod_row = int(pid_to_row[int(case_mp.product_phase_id)])
 
             for local_idx, tid in enumerate(task_ids):
@@ -556,7 +699,7 @@ class CellularAutomata:
                 if not phases:
                     continue
                 phased = phases.get(jm_identifier)
-                if not phased:
+                if not phased or phased.get("molar_fraction", 0.0) == 0:
                     if int(prod_counts_rows[prod_row, bid]) > 0:
                         case_mp.severe_dissolution_block_ids.append(bid)
                     continue
@@ -571,8 +714,7 @@ class CellularAutomata:
                 else:
                     product_c_jm = float(phased.get("molar_fraction", 0.0))
 
-                if bid == 0:
-                    jm_block0 = float(product_c_jm)
+                jm_snap_blocks[local_idx] = float(product_c_jm)
 
                 existing_c = float(product_c_by_identifier.get(product_ident, np.zeros(1))[bid]) if product_ident in product_c_by_identifier else 0.0
                 bx = bid // (By * Bz)
@@ -600,16 +742,18 @@ class CellularAutomata:
                         int(case_mp.dissolution_block_mask_bits[bx, by]) | (1 << int(bz))
                     )
 
-            # Track "first plane" analogue: block_id==0 (x in [0,bsz), y in [0,bsz), z in [0,bsz))
-            if jm_block0 is not None:
-                existing_block0 = 0.0
-                if product_ident in product_c_by_identifier and product_c_by_identifier[product_ident].shape[0] > 0:
-                    existing_block0 = float(product_c_by_identifier[product_ident][0])
-                diff_block0 = float(jm_block0) - float(existing_block0)
-                self.product_plane0_tracking[(int(self.iteration), str(product_ident))] = (
-                    float(jm_block0),
-                    float(existing_block0),
-                    float(diff_block0),
+            cells_pb = float(int(cx) * int(cy) * int(cz)) or 1.0
+            p_c = product_c_by_identifier.get(product_ident)
+            for bid in range(n_ignited_blocks):
+                jm_b = float(jm_snap_blocks[bid])
+                existing_b = float(p_c[bid]) if p_c is not None and bid < p_c.shape[0] else 0.0
+                diff_b = jm_b - existing_b
+                cells_conc_b = float(prod_counts_rows[prod_row, bid]) / cells_pb
+                self.product_plane_tracking[(int(self.iteration), str(product_ident), int(bid))] = (
+                    jm_b,
+                    existing_b,
+                    diff_b,
+                    cells_conc_b,
                 )
 
     def _resolve_product_stoich_roles(self, case, case_mp, product_cfg):
@@ -641,10 +785,9 @@ class CellularAutomata:
         return stoich, outward, inward
 
     def recalc_elem_counts_from_product(self):
-        self.ioz_bound = 0
         for _, case_mp in self.cases.product_case_pairs:
             p_cfg = case_mp.product_cfg
-            p_counts = self._get_product_counts_upto_bound_for_case(case_mp, self.ioz_bound).astype(np.float64)
+            p_counts = self._get_product_counts_upto_bound_for_case(case_mp, 0).astype(np.float64)
            
             for elem, _ in case_mp.stoich_frac_items:
                 self.elem_counts_from_product[elem] += int(p_counts[0] * p_cfg.THRESHOLD_INWARD)
@@ -656,20 +799,61 @@ class CellularAutomata:
         
         self.elem_counts_from_product = {"Ni":0, "O":0, "Cr":0, "Al":0, "N":0}
 
+    def recalc_elem_counts_from_product2(self):
+        act_counts = self._gather_species_counts_by_element(0, self.cases.all_actives)
+        elem_free_moles = {}
+        total_outward_moles = 0.0
+
+        for elem, counts in act_counts.items():
+            moles = counts[0] * self._act_cfg_map[elem].MOLES_PER_CELL
+            elem_free_moles[elem] = moles
+            total_outward_moles += moles
+
+
+        outward_eq_mat_moles = 0
+        for elem, counts in act_counts.items():
+            outward_eq_mat_moles += counts[0] * self._act_eq_matrix_map[elem]
+
+        product_moles_total = 0
+        product_eq_mat_moles = 0
+        product_matrix_pull_moles = 0
+        elem_pure_moles = dict(elem_free_moles)
+        product_moles_by_identifier = {}
+        product_counts_by_identifier = {}
+        product_runtime = []
+        
+        for _, case_mp in self.cases.product_case_pairs:
+            p_cfg = case_mp.product_cfg
+            p_counts = self._get_product_counts_upto_bound_for_case(case_mp, 0).astype(np.float64)[0]
+            product_counts_by_identifier[p_cfg.ELEMENT] = p_counts
+            p_moles = p_counts * p_cfg.MOLES_PER_CELL
+            product_moles_by_identifier[p_cfg.ELEMENT] = p_moles
+            product_moles_total += p_moles
+
+            for elem, frac in case_mp.stoich_frac_items:
+                elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * frac
+            out_elem_case = str(getattr(case_mp, "outward_element", ""))
+            thr_out_case = int(getattr(p_cfg, "THRESHOLD_OUTWARD", 0))
+            if out_elem_case and thr_out_case > 0:
+                product_eq_mat_moles += p_counts * self._act_eq_matrix_map[out_elem_case] * thr_out_case
+            product_matrix_pull_moles += p_counts * float(getattr(case_mp, "matrix_moles_per_cell", 0.0))
+            product_runtime.append((case_mp, p_cfg.ELEMENT))
+        
+        b_const = total_outward_moles + product_moles_total + self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles - product_matrix_pull_moles
+        for oxidant in self.cases.all_oxidants:
+            oxidant.adjusted_cells = int(b_const * oxidant.k_const)
+
     def get_comb_ind_jmatpro_generic(self):
         self.ioz_bound = self.get_cur_ioz_bound()
         matrix_elem = str(getattr(Config.MATRIX, "ELEMENT", "Ni"))
         oxid_counts = self._gather_species_counts_by_element(self.ioz_bound, self.cases.all_oxidants)
         act_counts = self._gather_species_counts_by_element(self.ioz_bound, self.cases.all_actives)
         elem_free_moles = {}
-        # elem_counts_from_product = {"Ni":0}
 
         for elem, counts in oxid_counts.items():
             elem_free_moles[elem] = counts * self._oxid_cfg_map[elem].MOLES_PER_CELL
-            # elem_counts_from_product[elem] = 0
         for elem, counts in act_counts.items():
             elem_free_moles[elem] = counts * self._act_cfg_map[elem].MOLES_PER_CELL
-            # elem_counts_from_product[elem] = 0
 
         outward_eq_mat_moles = np.zeros(self.ioz_bound + 1, dtype=np.float64)
         for elem, counts in act_counts.items():
@@ -680,29 +864,25 @@ class CellularAutomata:
         product_matrix_pull_moles = np.zeros(self.ioz_bound + 1, dtype=np.float64)
         elem_pure_moles = dict(elem_free_moles)
         product_moles_by_identifier = {}
+        product_counts_by_identifier = {}
         product_runtime = []
         
         for _, case_mp in self.cases.product_case_pairs:
             p_cfg = case_mp.product_cfg
             p_counts = self._get_product_counts_upto_bound_for_case(case_mp, self.ioz_bound).astype(np.float64)
+            product_counts_by_identifier[p_cfg.ELEMENT] = p_counts
             p_moles = p_counts * p_cfg.MOLES_PER_CELL
             product_moles_by_identifier[p_cfg.ELEMENT] = p_moles
             product_moles_total += p_moles
 
             for elem, frac in case_mp.stoich_frac_items:
                 elem_pure_moles[elem] = elem_pure_moles.get(elem, 0.0) + p_moles * frac
-                # elem_counts_from_product[elem] += int(p_counts[0] * p_cfg.THRESHOLD_INWARD)
             out_elem_case = str(getattr(case_mp, "outward_element", ""))
             thr_out_case = int(getattr(p_cfg, "THRESHOLD_OUTWARD", 0))
             if out_elem_case and thr_out_case > 0:
                 product_eq_mat_moles += p_counts * self._act_eq_matrix_map[out_elem_case] * thr_out_case
             product_matrix_pull_moles += p_counts * float(getattr(case_mp, "matrix_moles_per_cell", 0.0))
             product_runtime.append((case_mp, p_cfg.ELEMENT))
-
-        # for oxidant in self.cases.all_oxidants:
-        #     for elem, counts in elem_counts_from_product.items():
-        #         if elem == oxidant.elem_name:
-        #             oxidant.from_product_counts = counts
 
         matrix_moles = self.matrix_moles_per_page - outward_eq_mat_moles - product_eq_mat_moles - product_matrix_pull_moles
         whole_moles = matrix_moles + product_moles_total
@@ -747,21 +927,13 @@ class CellularAutomata:
         raw_list = self.jmatpro_pool.get_results(task_ids, wait=True, timeout=10.0)
         self._merge_jmatpro_results_with_plane_memory(raw_list, task_ids)
 
-        # totals = 0
-        # for ind, phases in raw_list.items():
-        #     for phase, data in phases.items():
-        #         if phase not in self.all_phases:
-        #             self.all_phases.append(phase)
-        #         if phase != "GAMMA" and phase != "BCC":
-        #             totals += data.get("molar_fraction", 0.0)
-        # if totals == 0:
-        #     print(f"totals: {totals}")
+        n_planes_log = self.ioz_bound + 1
+        jm_target_by_ident = {ident: np.zeros(n_planes_log, dtype=np.float64) for _, ident in product_runtime}
 
         for case_mp, product_ident in product_runtime:
             case_mp.plane_indexes = []
             case_mp.dissolution_plane_indexes = []
             case_mp.severe_dissolution_indexes = []
-            jm_plane0 = 0.0
             out_elem_ref = case_mp.outward_element
             jm_identifier = case_mp.jm_identifier
             for plane_idx, tid in enumerate(task_ids):
@@ -769,8 +941,10 @@ class CellularAutomata:
                 if not phases:
                     continue
                 phased = phases.get(jm_identifier)
-                if not phased:
-                    case_mp.severe_dissolution_indexes.append(plane_idx)
+                if not phased or phased.get("molar_fraction", 0.0) == 0:
+                    plane_counts = product_counts_by_identifier.get(product_ident, None)
+                    if int(plane_counts[plane_idx]) > 0:
+                        case_mp.severe_dissolution_indexes.append(plane_idx)
                     continue
                 product_c_jm = 0.0
                 if out_elem_ref:
@@ -783,32 +957,52 @@ class CellularAutomata:
                 else:
                     # No outward reactant: use phase fraction directly.
                     product_c_jm = float(phased.get("molar_fraction", 0.0))
-
-                if plane_idx == 0:
-                    jm_plane0 = float(product_c_jm)
+                jm_target_by_ident[product_ident][plane_idx] = float(product_c_jm)
                 existing_c = float(product_c_by_identifier[product_ident][plane_idx])
-                if (product_c_jm - existing_c)/product_c_jm > Config.PROD_ERROR:
+                
+                if (product_c_jm - existing_c)/product_c_jm > Config.PROD_ERROR and oxid_counts[case_mp.product_cfg.INWARD_ELEMENT][plane_idx] > 10000:
                     case_mp.plane_indexes.append(plane_idx)
                     case_mp.dissolution_plane_indexes.append(plane_idx)
                 elif (product_c_jm - existing_c)/product_c_jm < -Config.PROD_ERROR:
                     case_mp.dissolution_plane_indexes.append(plane_idx)
+               
+                # elif case_mp.dissolution_counter[plane_idx] < case_mp.dissolution_n_iterations:
+                #     case_mp.plane_indexes.append(plane_idx)
+                #     case_mp.dissolution_plane_indexes.append(plane_idx)
+                #     case_mp.dissolution_counter[plane_idx] += 1
+
             if len(case_mp.plane_indexes) > 1:
                 case_mp.plane_indexes = sorted(set(case_mp.plane_indexes))
             if len(case_mp.dissolution_plane_indexes) > 1:
                 case_mp.dissolution_plane_indexes = sorted(set(case_mp.dissolution_plane_indexes))
-            existing_plane0 = float(product_c_by_identifier[product_ident][0])
-            diff_plane0 = jm_plane0 - existing_plane0
-            self.product_plane0_tracking[(int(self.iteration), str(product_ident))] = (
-                jm_plane0,
-                existing_plane0,
-                diff_plane0,
+            cells_per_plane = float(self.cells_per_page) if self.cells_per_page else 1.0
+            for plane_idx in range(n_planes_log):
+                jm_i = float(jm_target_by_ident[product_ident][plane_idx])
+                existing_i = float(product_c_by_identifier[product_ident][plane_idx])
+                diff_i = jm_i - existing_i
+                cells_conc_i = float(product_counts_by_identifier[product_ident][plane_idx]) / cells_per_plane
+                self.product_plane_tracking[(int(self.iteration), str(product_ident), int(plane_idx))] = (
+                    jm_i,
+                    existing_i,
+                    diff_i,
+                    cells_conc_i,
+                )
+
+        if self._per_iter_log_path is not None:
+            self._log_per_iter_jmatpro_state(
+                oxid_counts=oxid_counts,
+                act_counts=act_counts,
+                product_counts_by_identifier=product_counts_by_identifier,
+                product_runtime=product_runtime,
+                compositions=compositions,
+                elements=elements,
+                product_c_by_identifier=product_c_by_identifier,
+                jm_target_by_ident=jm_target_by_ident,
             )
 
     def diffuse_all(self):
-        self.recalc_elem_counts_from_product()
-        # for elem in self.cases.all_oxidants:
-        #     elem.fill_first_page()
-        # return
+        if Config.RECALC_ELEM_COUNTS_FROM_PRODUCT:
+            self.recalc_elem_counts_from_product2()
 
         run_outward = (self.iteration + 1) % Config.STRIDE == 0
         for e in self.cases.all_actives:
@@ -909,6 +1103,14 @@ class CellularAutomata:
             dp = getattr(self.cur_case, "dissolution_probabilities", None)
         if dp is None:
             return
+        # Diffusion buffers ping-pong between A/B every step. Dissolution workers must read/write
+        # the *current* read buffer; otherwise released particles land in the stale buffer and
+        # are lost on the next swap.
+        if self.cur_case is not None and self.cur_case_mp is not None:
+            if getattr(self.cur_case, "oxidant", None) is not None and hasattr(self.cur_case.oxidant, "get_current_c3d_shm_mdata"):
+                self.cur_case_mp.oxidant_c3d_shm_mdata = self.cur_case.oxidant.get_current_c3d_shm_mdata()
+            if getattr(self.cur_case, "active", None) is not None and hasattr(self.cur_case.active, "get_current_c3d_shm_mdata"):
+                self.cur_case_mp.active_c3d_shm_mdata = self.cur_case.active.get_current_c3d_shm_mdata()
         dbm = getattr(self.cur_case_mp, "dissolution_block_mask_bits", None)
         if dbm is not None and isinstance(dbm, np.ndarray) and dbm.size > 0 and np.any(dbm):
             self._dissolution_mp_subblock_blockmask(dp)
@@ -1441,26 +1643,27 @@ class CellularAutomata:
                     self.apply_severe_block_collapse(case, case_mp)
 
             for case, case_mp in self.cases.product_case_pairs:
+                self.cur_case = case
+                self.cur_case_mp = case_mp
+
                 if getattr(case_mp, "block_mask_bits", None) is not None and isinstance(case_mp.block_mask_bits, np.ndarray) and case_mp.block_mask_bits.size > 0:
-                    self.cur_case = case
-                    self.cur_case_mp = case_mp
-                    # self.dissolution_mp_subblock()
+                    self.dissolution_mp_subblock()
                     self.precip_mp_subblock(case, case_mp)
                     
-                elif case_mp.plane_indexes:
+                elif case_mp.plane_indexes or case_mp.dissolution_plane_indexes:
                     self.dissolution_mp_subblock()
                     self.precip_mp_subblock(case, case_mp)
-                _dbm = getattr(case_mp, "dissolution_block_mask_bits", None)
-                _has_block_diss = (
-                    _dbm is not None
-                    and isinstance(_dbm, np.ndarray)
-                    and _dbm.size > 0
-                    and np.any(_dbm)
-                )
-                if case_mp.dissolution_plane_indexes or _has_block_diss:
-                    self.cur_case = case
-                    self.cur_case_mp = case_mp
-                    self.dissolution_mp_subblock()
+                # _dbm = getattr(case_mp, "dissolution_block_mask_bits", None)
+                # _has_block_diss = (
+                #     _dbm is not None
+                #     and isinstance(_dbm, np.ndarray)
+                #     and _dbm.size > 0
+                #     and np.any(_dbm)
+                # )
+                # if _has_block_diss:
+                #     self.cur_case = case
+                #     self.cur_case_mp = case_mp
+                #     self.dissolution_mp_subblock()
     
     def dissolve(self):
         for case, case_mp in self.cases.product_case_pairs:

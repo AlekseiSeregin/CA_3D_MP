@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
             self.save_function = self.save_results_inward_only
         
-            self.c_automata.decomposition = self.c_automata.dissolve
+            # self.c_automata.decomposition = self.c_automata.dissolve
 
     source_code = inspect.getsource(NewSystem)
     Config.INITIAL_SCRIPT += source_code

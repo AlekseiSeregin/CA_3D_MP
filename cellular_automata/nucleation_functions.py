@@ -24,6 +24,14 @@ from utils.numba_functions import (
     nucleation_subblock_kernel_stoich_owner_fold_blockmask,
     nucleation_subblock_kernel_owner_spec_fold_blockmask,
     nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask,
+    nucleation_subblock_kernel_owner_fold_same_plane,
+    nucleation_subblock_kernel_stoich_owner_fold_same_plane,
+    nucleation_subblock_kernel_owner_spec_fold_same_plane,
+    nucleation_subblock_kernel_stoich_owner_spec_fold_same_plane,
+    nucleation_subblock_kernel_owner_fold_blockmask_same_plane,
+    nucleation_subblock_kernel_stoich_owner_fold_blockmask_same_plane,
+    nucleation_subblock_kernel_owner_spec_fold_blockmask_same_plane,
+    nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask_same_plane,
 )
 from multiprocessing import shared_memory
 from .neigh_indexes import *
@@ -1231,6 +1239,431 @@ def _run_nucleation_stoich_prob_owner_spec_fold_blockmask(
     )
 
 
+# =============================================================================
+# Same-plane fold wrappers (NUCLEATION_FOLD_SAME_PLANE = True).
+# Identical to the regular fold wrappers but route to *_same_plane kernels that
+# constrain the fold target to the seed's x-plane (skip ±x neighbours).
+# =============================================================================
+
+
+def _run_nucleation_legacy_prob_owner_fold_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+):
+    nucleation_subblock_kernel_owner_fold_same_plane(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_legacy_prob_owner_fold_blockmask_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    nucleation_subblock_kernel_owner_fold_blockmask_same_plane(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
+    )
+
+
+def _run_nucleation_stoich_prob_owner_fold_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+):
+    nucleation_subblock_kernel_stoich_owner_fold_same_plane(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_stoich_prob_owner_fold_blockmask_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    nucleation_subblock_kernel_stoich_owner_fold_blockmask_same_plane(
+        oxidant,
+        oxidant_dirs,
+        active,
+        active_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        threshold_outward,
+        seed_slab_k,
+        plane_indexes,
+        active_check_offsets,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
+    )
+
+
+def _run_nucleation_legacy_prob_owner_spec_fold_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+):
+    nucleation_subblock_kernel_owner_spec_fold_same_plane(
+        oxidant,
+        oxidant_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_legacy_prob_owner_spec_fold_blockmask_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    nucleation_subblock_kernel_owner_spec_fold_blockmask_same_plane(
+        oxidant,
+        oxidant_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        seed_slab_k,
+        plane_indexes,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
+    )
+
+
+def _run_nucleation_stoich_prob_owner_spec_fold_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+):
+    nucleation_subblock_kernel_stoich_owner_spec_fold_same_plane(
+        oxidant,
+        oxidant_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        seed_slab_k,
+        plane_indexes,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+    )
+
+
+def _run_nucleation_stoich_prob_owner_spec_fold_blockmask_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product,
+    full_3d,
+    product_init,
+    product_x_nzs,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    product_state,
+    phase_id,
+    block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask_same_plane(
+        oxidant,
+        oxidant_dirs,
+        product_init,
+        product_state,
+        phase_id,
+        ox_num,
+        threshold_inward,
+        seed_slab_k,
+        plane_indexes,
+        flat_neigh_offsets,
+        values_pp,
+        const_a_pp,
+        const_b_pp,
+        const_c_pp,
+        const_d_pp,
+        n_cells,
+        seed,
+        block_mask_bits,
+        block_cells_x,
+        block_cells_y,
+        block_cells_z,
+    )
+
+
 _NUCLEATION_KERNEL_RUNNERS = {
     "legacy_simple_owner": _run_nucleation_legacy_simple_owner,
     "legacy_prob_owner": _run_nucleation_legacy_prob_owner,
@@ -1279,6 +1712,26 @@ _NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_BLOCKMASK = {
     "stoich_prob_owner": _run_nucleation_stoich_prob_owner_spec_fold_blockmask,
 }
 
+_NUCLEATION_KERNEL_RUNNERS_FOLD_SAME_PLANE = {
+    "legacy_prob_owner": _run_nucleation_legacy_prob_owner_fold_same_plane,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner_fold_same_plane,
+}
+
+_NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_SAME_PLANE = {
+    "legacy_prob_owner": _run_nucleation_legacy_prob_owner_spec_fold_same_plane,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner_spec_fold_same_plane,
+}
+
+_NUCLEATION_KERNEL_RUNNERS_FOLD_BLOCKMASK_SAME_PLANE = {
+    "legacy_prob_owner": _run_nucleation_legacy_prob_owner_fold_blockmask_same_plane,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner_fold_blockmask_same_plane,
+}
+
+_NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_BLOCKMASK_SAME_PLANE = {
+    "legacy_prob_owner": _run_nucleation_legacy_prob_owner_spec_fold_blockmask_same_plane,
+    "stoich_prob_owner": _run_nucleation_stoich_prob_owner_spec_fold_blockmask_same_plane,
+}
+
 
 def resolve_nucleation_mode(mode, use_simple_nucleation):
     if mode is None:
@@ -1298,6 +1751,13 @@ def get_nucleation_kernel_runner_fold(mode, no_outward=False):
     if no_outward:
         return _NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD[mode]
     return _NUCLEATION_KERNEL_RUNNERS_FOLD[mode]
+
+
+def get_nucleation_kernel_runner_fold_same_plane(mode, no_outward=False):
+    """Selector for the same-plane fold runners. Mirrors get_nucleation_kernel_runner_fold."""
+    if no_outward:
+        return _NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_SAME_PLANE[mode]
+    return _NUCLEATION_KERNEL_RUNNERS_FOLD_SAME_PLANE[mode]
 
 
 def precip_step_subblock_worker(task):
@@ -1461,14 +1921,39 @@ def precip_step_subblock_worker(task):
                 use_fold = bool(getattr(Config, "NUCLEATION_APPLY_FOLD", False))
             except Exception:
                 use_fold = False
+        # Same-plane fold sub-flag: only restricts the fold target to the seed plane
+        # (skips ±x neighbours). Only meaningful when use_fold is True.
+        use_fold_same_plane = bool(
+            getattr(getattr(cur_case_mp, "nucleation_fold_same_plane", None), "value", False)
+        )
+        if not use_fold_same_plane:
+            try:
+                from configuration import Config
+                use_fold_same_plane = bool(getattr(Config, "NUCLEATION_FOLD_SAME_PLANE", False))
+            except Exception:
+                use_fold_same_plane = False
         if block_mask_bits is not None:
             if use_fold:
-                kernel_runner = (_NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_BLOCKMASK if no_outward else _NUCLEATION_KERNEL_RUNNERS_FOLD_BLOCKMASK)[mode]
+                if use_fold_same_plane:
+                    kernel_runner = (
+                        _NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_BLOCKMASK_SAME_PLANE
+                        if no_outward
+                        else _NUCLEATION_KERNEL_RUNNERS_FOLD_BLOCKMASK_SAME_PLANE
+                    )[mode]
+                else:
+                    kernel_runner = (
+                        _NUCLEATION_KERNEL_RUNNERS_SPEC_FOLD_BLOCKMASK
+                        if no_outward
+                        else _NUCLEATION_KERNEL_RUNNERS_FOLD_BLOCKMASK
+                    )[mode]
             else:
                 kernel_runner = (_NUCLEATION_KERNEL_RUNNERS_SPEC_BLOCKMASK if no_outward else _NUCLEATION_KERNEL_RUNNERS_BLOCKMASK)[mode]
         else:
             if use_fold:
-                kernel_runner = get_nucleation_kernel_runner_fold(mode, no_outward=no_outward)
+                if use_fold_same_plane:
+                    kernel_runner = get_nucleation_kernel_runner_fold_same_plane(mode, no_outward=no_outward)
+                else:
+                    kernel_runner = get_nucleation_kernel_runner_fold(mode, no_outward=no_outward)
             else:
                 kernel_runner = get_nucleation_kernel_runner(mode, no_outward=no_outward)
 

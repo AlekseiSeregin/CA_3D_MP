@@ -1,12 +1,12 @@
 import pyvoro
 import matplotlib.pyplot as plt
-from .bresenham import *
+# from .bresenham import *
 # from bresenham import *
-import numpy as np
+# import numpy as np
 import time
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from .own_seeds import *
-from configuration import Config
+# from .own_seeds import *
+# from configuration import Config
 
 
 class VoronoiMicrostructure:
@@ -626,11 +626,12 @@ if __name__ == "__main__":
     size = 300
     cells_size = 1
     edge_size = 5
-    # import bresenham
+    from bresenham import *
+    # from configuration import Config
     # _______Plot 3D______
     begin = time.time()
     micro = VoronoiMicrostructure(size)
-    micro.generate_voronoi_3d_continious(50, seeds="own")
+    micro.generate_voronoi_3d_continious(500)
     # micro.show_microstructure(size)
     # micro.generate_voronoi_3d_continious(size, seeds="own")
     # cells_faces_3d = np.array(np.nonzero(cells_faces))

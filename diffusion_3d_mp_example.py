@@ -109,6 +109,12 @@ def _views_from_segment(shm, n, max_per_cell, count_bytes, dirs_bytes):
     return count, dirs
 
 
+def _view_product_owner_phase(shm, n):
+    """Return owner-phase view (shape (n,n,n), dtype uint16) from product_state shared memory."""
+    product_state = np.ndarray((2, n, n, n), dtype=np.uint16, buffer=shm.buf, offset=0)
+    return product_state[0]
+
+
 # ---------------------------------------------------------------------------
 # Numba-compiled kernels: three separate functions (x periodic / reflection / deletion)
 # ---------------------------------------------------------------------------
@@ -573,6 +579,78 @@ def _diffuse_subblock_kernel_x_dr(
                     write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
                     write_count[nidx] = slot + 1
 
+
+@numba.njit(fastmath=True, cache=True)
+def _diffuse_subblock_kernel_product_aware(
+    read_count, read_dirs, write_count, write_dirs, owner_phase,
+    k_lo, k_hi, x_max, n, max_per_cell,
+    p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase,
+    bc_left, bc_right, seed
+):
+    np.random.seed(seed)
+    n2 = n * n
+    for k in range(k_lo, k_hi + 1):
+        for j in range(n):
+            for i in range(0, x_max + 1):
+                idx = i + n * j + n2 * k
+                nc = read_count[idx]
+                if nc == 0:
+                    continue
+                nc = min(nc, max_per_cell)
+                pid = int(owner_phase[i, j, k])
+                p1 = p1_by_phase[pid]
+                p2 = p2_by_phase[pid]
+                p3 = p3_by_phase[pid]
+                p4 = p4_by_phase[pid]
+                p_r = p_r_by_phase[pid]
+                for c in range(nc):
+                    b = read_dirs[idx, c]
+                    d0 = int(b & 3) - 1
+                    d1 = int((b >> 2) & 3) - 1
+                    d2 = int((b >> 4) & 3) - 1
+                    r = np.random.random()
+                    if r <= p1:
+                        nd0, nd1, nd2 = d2, d0, d1
+                    elif r <= p2:
+                        nd0, nd1, nd2 = -d2, -d0, -d1
+                    elif r <= p3:
+                        nd0, nd1, nd2 = d1, d2, d0
+                    elif r <= p4:
+                        nd0, nd1, nd2 = -d1, -d2, -d0
+                    elif r <= p_r:
+                        nd0, nd1, nd2 = -d0, -d1, -d2
+                    else:
+                        nd0, nd1, nd2 = d0, d1, d2
+
+                    v_new = i + nd0
+                    if v_new < 0:
+                        if bc_left == BC_PERIODIC:
+                            nx, ndx = n - 1, nd0
+                        elif bc_left == BC_REFLECTION:
+                            nx, ndx = 0, -nd0
+                        else:
+                            continue
+                    elif v_new >= n:
+                        if bc_right == BC_PERIODIC:
+                            nx, ndx = 0, nd0
+                        elif bc_right == BC_REFLECTION:
+                            nx, ndx = n - 1, -nd0
+                        else:
+                            continue
+                    else:
+                        nx, ndx = v_new, nd0
+
+                    ny = ((j + nd1) % n + n) % n
+                    nz = ((k + nd2) % n + n) % n
+                    ndy, ndz = nd1, nd2
+                    nidx = nx + n * ny + n2 * nz
+                    slot = write_count[nidx]
+                    if slot >= max_per_cell:
+                        continue
+                    write_dirs[nidx, slot] = (ndx + 1) + (ndy + 1) * 4 + (ndz + 1) * 16
+                    write_count[nidx] = slot + 1
+
+
 # Lookup: _BC_X_KERNELS_2D[bc_left][bc_right], bc in {0=periodic, 1=reflection, 2=deletion}
 _BC_X_KERNELS_2D = (
     (_diffuse_subblock_kernel_x_periodic, _diffuse_subblock_kernel_x_pr, _diffuse_subblock_kernel_x_pd),
@@ -604,6 +682,34 @@ def _worker_subblock(args):
 
     shm_r.close()
     shm_w.close()
+
+
+def _worker_subblock_product_aware(args):
+    """
+    Product-aware worker: selects diffusion thresholds from phase-id specific lookup
+    using owner_phase from product_state[0].
+    """
+    (read_name, write_name, product_state_name, n, max_per_cell, count_bytes, dirs_bytes,
+     k_lo, k_hi, x_max, bc_left, bc_right,
+     p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase, seed) = args
+
+    shm_r = shared_memory.SharedMemory(name=read_name)
+    shm_w = shared_memory.SharedMemory(name=write_name)
+    shm_p = shared_memory.SharedMemory(name=product_state_name)
+    read_count, read_dirs = _views_from_segment(shm_r, n, max_per_cell, count_bytes, dirs_bytes)
+    write_count, write_dirs = _views_from_segment(shm_w, n, max_per_cell, count_bytes, dirs_bytes)
+    owner_phase = _view_product_owner_phase(shm_p, n)
+
+    _diffuse_subblock_kernel_product_aware(
+        read_count, read_dirs, write_count, write_dirs, owner_phase,
+        k_lo, k_hi, x_max, n, max_per_cell,
+        p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase,
+        bc_left, bc_right, seed
+    )
+
+    shm_r.close()
+    shm_w.close()
+    shm_p.close()
 
 
 def _partition_gap_z_parallel(gap_z_set, min_spacing=3, n_z=None):
@@ -670,6 +776,33 @@ def _worker_gap_z(args):
     shm_w.close()
 
 
+def _worker_gap_z_product_aware(args):
+    """
+    Product-aware worker for one gap z-cell.
+    """
+    (read_name, write_name, product_state_name, n, max_per_cell, count_bytes, dirs_bytes,
+     gap_k, x_max, bc_left, bc_right,
+     p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase, seed) = args
+
+    shm_r = shared_memory.SharedMemory(name=read_name)
+    shm_w = shared_memory.SharedMemory(name=write_name)
+    shm_p = shared_memory.SharedMemory(name=product_state_name)
+    read_count, read_dirs = _views_from_segment(shm_r, n, max_per_cell, count_bytes, dirs_bytes)
+    write_count, write_dirs = _views_from_segment(shm_w, n, max_per_cell, count_bytes, dirs_bytes)
+    owner_phase = _view_product_owner_phase(shm_p, n)
+
+    _diffuse_subblock_kernel_product_aware(
+        read_count, read_dirs, write_count, write_dirs, owner_phase,
+        gap_k, gap_k, x_max, n, max_per_cell,
+        p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase,
+        bc_left, bc_right, seed
+    )
+
+    shm_r.close()
+    shm_w.close()
+    shm_p.close()
+
+
 def _update_gap_z_parallel(read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
                            gap_z_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng, x_max=-1):
     """
@@ -687,9 +820,30 @@ def _update_gap_z_parallel(read_name, write_name, n, max_per_cell, count_bytes, 
         pool.map(_worker_gap_z, args_list)
 
 
+def _update_gap_z_parallel_product_aware(
+    read_name, write_name, product_state_name, n, max_per_cell, count_bytes, dirs_bytes,
+    gap_z_groups, bc_left, bc_right,
+    p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase,
+    pool, rng, x_max=-1
+):
+    if len(gap_z_groups) == 0:
+        return
+    base_seed = rng.integers(0, 2**31)
+    for group_idx, group in enumerate(gap_z_groups):
+        args_list = [
+            (read_name, write_name, product_state_name, n, max_per_cell, count_bytes, dirs_bytes,
+             gap_k, x_max, bc_left, bc_right,
+             p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase,
+             base_seed + group_idx * 1000 + ki)
+            for ki, gap_k in enumerate(group)
+        ]
+        pool.map(_worker_gap_z_product_aware, args_list)
+
+
 def diffuse_3d_one_step_shm(
     read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-    subblock_arg_templates, gap_z_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng
+    subblock_arg_templates, gap_z_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng,
+    product_state_name=None, p1_by_phase=None, p2_by_phase=None, p3_by_phase=None, p4_by_phase=None, p_r_by_phase=None
 ):
     """
     One step: zero write buffer, compute x_max, run interior workers (read → write), then gap-z phase.
@@ -713,13 +867,30 @@ def diffuse_3d_one_step_shm(
         (read_name, write_name, tpl[0], tpl[1], tpl[2], tpl[3], tpl[4], tpl[5], x_max, tpl[6], tpl[7], tpl[8], tpl[9], tpl[10], tpl[11], tpl[12], rng.integers(0, 2**31))
         for tpl in subblock_arg_templates
     ]
-    pool.map(_worker_subblock, args_list)
+    if product_state_name is None:
+        pool.map(_worker_subblock, args_list)
+    else:
+        args_list_product = [
+            (read_name, write_name, product_state_name, tpl[0], tpl[1], tpl[2], tpl[3],
+             tpl[4], tpl[5], x_max, tpl[6], tpl[7],
+             p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase, rng.integers(0, 2**31))
+            for tpl in subblock_arg_templates
+        ]
+        pool.map(_worker_subblock_product_aware, args_list_product)
 
     # Gap z cells (processed in groups so writable k-ranges don't overlap)
-    _update_gap_z_parallel(
-        read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
-        gap_z_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng, x_max
-    )
+    if product_state_name is None:
+        _update_gap_z_parallel(
+            read_name, write_name, n, max_per_cell, count_bytes, dirs_bytes,
+            gap_z_groups, bc_left, bc_right, p1, p2, p3, p4, p_r, pool, rng, x_max
+        )
+    else:
+        _update_gap_z_parallel_product_aware(
+            read_name, write_name, product_state_name, n, max_per_cell, count_bytes, dirs_bytes,
+            gap_z_groups, bc_left, bc_right,
+            p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase,
+            pool, rng, x_max
+        )
 
 
 def _parse_boundary(s):
@@ -841,7 +1012,7 @@ class DiffusionEngine:
         engine.close()                                    # When done (closes cached pools)
     """
     
-    def __init__(self, n_outward_workers, n_inward_workers, rng, worker_pools=None):
+    def __init__(self, n_outward_workers, n_inward_workers, rng, worker_pools=None, product_state_shm_mdata=None):
         """
         Initialize diffusion engine with worker counts per element and RNG.
         
@@ -862,6 +1033,7 @@ class DiffusionEngine:
         # Config (max_per_cell, element_type) is constant per element; boundaries come from Config in diffusion module.
         self._config_cache = {}  # id(element) -> config dict, filled once per element
         self._state_cache = {}   # id(element) -> state dict (read_name, write_name, p1..p_r); names updated after each swap
+        self.product_state_shm_mdata = product_state_shm_mdata
     
     def _get_cached_state(self, element):
         """Return diffusion state for element; filled once, then read/write names updated in cache after each swap."""
@@ -884,6 +1056,36 @@ class DiffusionEngine:
                 seed=(self._rng_base_seed + threading.get_ident()) % (2**32)
             )
         return self._thread_local.rng
+
+    @staticmethod
+    def _build_phase_probability_tables(state):
+        p1_by_phase = np.full(256, float(state['p1']), dtype=np.float64)
+        p2_by_phase = np.full(256, float(state['p2']), dtype=np.float64)
+        p3_by_phase = np.full(256, float(state['p3']), dtype=np.float64)
+        p4_by_phase = np.full(256, float(state['p4']), dtype=np.float64)
+        p_r_by_phase = np.full(256, float(state['p_r']), dtype=np.float64)
+        p1_by_phase[0] = float(state['p1'])
+        p2_by_phase[0] = float(state['p2'])
+        p3_by_phase[0] = float(state['p3'])
+        p4_by_phase[0] = float(state['p4'])
+        p_r_by_phase[0] = float(state['p_r'])
+
+        phase_map = state.get('product_phase_probabilities', {}) or {}
+        for raw_pid, vals in phase_map.items():
+            try:
+                pid = int(raw_pid)
+            except (TypeError, ValueError):
+                continue
+            if pid <= 0 or pid >= 256:
+                continue
+            if vals is None or len(vals) < 5:
+                continue
+            p1_by_phase[pid] = float(vals[0])
+            p2_by_phase[pid] = float(vals[1])
+            p3_by_phase[pid] = float(vals[2])
+            p4_by_phase[pid] = float(vals[3])
+            p_r_by_phase[pid] = float(vals[4])
+        return p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase
     
     def _diffuse_with_pool(self, element, pool):
         """Apply one diffusion step to an element using the given dedicated pool."""
@@ -902,13 +1104,20 @@ class DiffusionEngine:
             state['p1'], state['p2'], state['p3'], state['p4'], state['p_r']
         )
         rng = self._get_thread_rng()  # thread-local so multiple elements can run in parallel without lock
+        use_product_aware = bool(state.get('use_product_aware_diffusion', False))
+        product_state_name = None
+        p1_by_phase = p2_by_phase = p3_by_phase = p4_by_phase = p_r_by_phase = None
+        if use_product_aware and self.product_state_shm_mdata is not None:
+            product_state_name = self.product_state_shm_mdata.name
+            p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase = self._build_phase_probability_tables(state)
         diffuse_3d_one_step_shm(
             state['read_name'], state['write_name'],
             params.n, params.max_per_cell,
             params.count_bytes, params.dirs_bytes,
             subblock_templates, params.gap_z_groups, params.bc_left, params.bc_right,
             state['p1'], state['p2'], state['p3'], state['p4'], state['p_r'],
-            pool, rng
+            pool, rng,
+            product_state_name, p1_by_phase, p2_by_phase, p3_by_phase, p4_by_phase, p_r_by_phase
         )
         element.swap_diffusion_buffers()
         self._swap_cached_state_names(element)

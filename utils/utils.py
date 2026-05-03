@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import time
 import datetime
+import pprint
 from configuration import Config
 import math
 from types import SimpleNamespace
@@ -67,6 +68,10 @@ class Utils:
                                 (-1, 0, 0): [[0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0, 0, 0]]}
 
     def generate_param(self):
+        initial_input_snapshot = None
+        if Config.SAVE_POST_PROCESSED_INPUT:
+            initial_input_snapshot = self._snapshot_static_params(Config)
+
         Config.GENERATED_VALUES.TAU = Config.SIM_TIME / Config.N_ITERATIONS
         Config.GENERATED_VALUES.LAMBDA = Config.SIZE / Config.N_CELLS_PER_AXIS
 
@@ -76,6 +81,7 @@ class Utils:
         self._calc_active_data_dynamic()
         self._calc_oxidant_data_dynamic()
         self.calc_product_data()
+        self._calc_product_diffusion_probability_maps()
         self._build_runtime_element_settings()
         self._calc_initial_conc_and_moles_dynamic()
 
@@ -88,7 +94,11 @@ class Utils:
 
         if Config.SAVE_POST_PROCESSED_INPUT:
             path = Config.SAVE_PATH + str(int(time.time())) + '_config.txt'
-            with open(path, 'w') as file:
+            with open(path, 'w', encoding='utf-8') as file:
+                if initial_input_snapshot is not None:
+                    file.write("INITIAL_CONFIG:\n")
+                    file.write(self._format_pretty_snapshot(initial_input_snapshot))
+                    file.write("\n\nPOST_PROCESSED_INPUT:\n")
                 self.print_static_params_to_file(Config, file)
 
     @staticmethod
@@ -130,6 +140,14 @@ class Utils:
             active["MOLAR_MASS"] = MOLAR_MASS[elem]
             active["DIFFUSION_COEFFICIENT"] = get_diff_coeff(Config.TEMPERATURE, active["diffusion_condition"])
             active["PROBABILITIES"] = self.calc_prob(active["DIFFUSION_COEFFICIENT"], stridden=True)
+            active["DIFFUSION_COEFFICIENT_IN_PRODUCT"] = self._resolve_in_product_diff_coeff(
+                active,
+                active["DIFFUSION_COEFFICIENT"],
+            )
+            active["PROBABILITIES_IN_PRODUCT"] = self.calc_prob(
+                active["DIFFUSION_COEFFICIENT_IN_PRODUCT"],
+                stridden=True,
+            )
 
         mass_sum = sum(float(a["mass_concentration"]) for a in Config.ACTIVES)
         if mass_sum > 1.0:
@@ -203,12 +221,85 @@ class Utils:
                 Config.TEMPERATURE, oxidant.get("diffusion_condition_gb", oxidant["diffusion_condition"])
             )
             oxidant["PROBABILITIES"] = self.calc_prob(oxidant["DIFFUSION_COEFFICIENT"])
+            oxidant["DIFFUSION_COEFFICIENT_IN_PRODUCT"] = self._resolve_in_product_diff_coeff(
+                oxidant,
+                oxidant["DIFFUSION_COEFFICIENT"],
+            )
+            oxidant["PROBABILITIES_IN_PRODUCT"] = self.calc_prob(
+                oxidant["DIFFUSION_COEFFICIENT_IN_PRODUCT"]
+            )
             oxidant["PROBABILITIES_2D"] = self.calc_p0_2d(oxidant["DIFFUSION_COEFFICIENT_GB"])
             oxidant["PROBABILITIES_SCALE"] = self.calc_prob(oxidant["DIFFUSION_COEFFICIENT"] * 10 ** -2)
             oxidant["PROBABILITIES_INTERFACE"] = self.calc_prob(oxidant["DIFFUSION_COEFFICIENT"] * 10 ** 3)
             oxidant["N_PER_PAGE"] = round(float(oxidant["cells_concentration"]) * Config.N_CELLS_PER_AXIS ** 2)
             oxidant["MOLES_PER_CELL"] = ref_oxidant_moles
             oxidant["MASS_PER_CELL"] = ref_oxidant_moles * float(oxidant["MOLAR_MASS"])
+            oxidant["ATOMIC_FRACTION"] = float(oxidant["atomic_fraction"])
+            oxidant["K_CONST"] = oxidant["ATOMIC_FRACTION"] / (ref_oxidant_moles * (1 - oxidant["ATOMIC_FRACTION"]))
+
+    @staticmethod
+    def _resolve_in_product_diff_coeff(species_cfg, base_coeff):
+        coeff_override = species_cfg.get("diffusion_coefficient_in_product", None)
+        cond_override = species_cfg.get("diffusion_condition_in_product", None)
+        if coeff_override is not None and str(coeff_override).strip() != "":
+            return float(coeff_override)
+        cond_text = str(cond_override).strip() if cond_override is not None else ""
+        if cond_text not in ("", "None", "none"):
+            return float(get_diff_coeff(Config.TEMPERATURE, str(cond_override)))
+        return float(base_coeff)
+
+    @staticmethod
+    def _resolve_product_phase_override(raw_override):
+        if raw_override is None:
+            return None, None
+        if isinstance(raw_override, dict):
+            coeff_override = raw_override.get("coefficient", None)
+            cond_override = raw_override.get("condition", None)
+            return coeff_override, cond_override
+        if isinstance(raw_override, (int, float, np.floating)):
+            return float(raw_override), None
+        if isinstance(raw_override, str):
+            return None, raw_override
+        return None, None
+
+    def _calc_product_diffusion_probability_maps(self):
+        products = getattr(Config, "PRODUCTS", None)
+        product_defs = []
+        if isinstance(products, (list, tuple)):
+            for idx, prod in enumerate(products):
+                priority = int(prod.get("priority", 0))
+                product_defs.append((priority, idx, prod))
+            product_defs.sort(key=lambda item: (item[0], item[1]))
+
+        species_entries = [(cfg, True) for cfg in Config.ACTIVES] + [(cfg, False) for cfg in Config.OXIDANTS]
+        for species_cfg, use_stridden in species_entries:
+            elem = str(species_cfg.get("element", "")).strip()
+            coeff_by_phase = {}
+            probs_by_phase = {}
+            for phase_offset, (_, _, prod) in enumerate(product_defs, start=1):
+                raw_map = prod.get("diffusion_in_product", None)
+                raw_override = None
+                if isinstance(raw_map, dict):
+                    if elem in raw_map:
+                        raw_override = raw_map[elem]
+                    elif "*" in raw_map:
+                        raw_override = raw_map["*"]
+                elif raw_map is not None:
+                    raw_override = raw_map
+
+                coeff_override, cond_override = self._resolve_product_phase_override(raw_override)
+                if coeff_override is not None and str(coeff_override).strip() != "":
+                    coeff_val = float(coeff_override)
+                elif cond_override is not None and str(cond_override).strip() not in ("", "None", "none"):
+                    coeff_val = float(get_diff_coeff(Config.TEMPERATURE, str(cond_override)))
+                else:
+                    coeff_val = float(species_cfg["DIFFUSION_COEFFICIENT_IN_PRODUCT"])
+
+                coeff_by_phase[int(phase_offset)] = coeff_val
+                probs_by_phase[int(phase_offset)] = self.calc_prob(coeff_val, stridden=use_stridden)
+
+            species_cfg["PRODUCT_DIFFUSION_COEFFICIENT_BY_PHASE"] = coeff_by_phase
+            species_cfg["PRODUCT_PROBABILITIES_BY_PHASE"] = probs_by_phase
 
     @staticmethod
     def _build_runtime_element_settings():
@@ -450,19 +541,57 @@ class Utils:
         return np.array(coord, dtype=np.byte)
 
     def print_static_params_to_file(self, cls, file_obj, indent=0):
-        for attr_name, attr_value in cls.__dict__.items():
-            if not callable(attr_value) and not attr_name.startswith('__'):
-                if hasattr(attr_value, '__dict__'):
-                    file_obj.write(f"{' ' * indent}{attr_name}:\n")
-                    self.print_static_params_to_file(attr_value, file_obj, indent + 4)
-                else:
-                    file_obj.write(f"{' ' * indent}{attr_name}: {attr_value}\n")
+        snapshot = self._snapshot_static_params(cls)
+        file_obj.write(self._format_pretty_snapshot(snapshot))
 
     def print_static_params(self, cls, indent=0):
-        for attr_name, attr_value in cls.__dict__.items():
-            if not callable(attr_value) and not attr_name.startswith('__'):
-                if hasattr(attr_value, '__dict__'):
-                    print(f"{' ' * indent}{attr_name}:")
-                    self.print_static_params(attr_value, indent + 4)
-                else:
-                    print(f"{' ' * indent}{attr_name}: {attr_value}")
+        snapshot = self._snapshot_static_params(cls)
+        print(self._format_pretty_snapshot(snapshot))
+
+    def _snapshot_static_params(self, obj, _visited=None):
+        if _visited is None:
+            _visited = set()
+
+        if isinstance(obj, (str, int, float, bool)) or obj is None:
+            return obj
+        if isinstance(obj, np.generic):
+            return obj.item()
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, dict):
+            return {
+                str(key): self._snapshot_static_params(value, _visited)
+                for key, value in obj.items()
+            }
+        if isinstance(obj, (list, tuple, set)):
+            return [self._snapshot_static_params(item, _visited) for item in obj]
+
+        obj_id = id(obj)
+        if obj_id in _visited:
+            return "<recursion>"
+
+        if hasattr(obj, "__dict__"):
+            _visited.add(obj_id)
+            mapped = {}
+            for attr_name, attr_value in vars(obj).items():
+                if callable(attr_value) or attr_name.startswith('__'):
+                    continue
+                mapped[attr_name] = self._snapshot_static_params(attr_value, _visited)
+            _visited.remove(obj_id)
+            return mapped
+
+        if isinstance(obj, type):
+            _visited.add(obj_id)
+            mapped = {}
+            for attr_name, attr_value in obj.__dict__.items():
+                if callable(attr_value) or attr_name.startswith('__'):
+                    continue
+                mapped[attr_name] = self._snapshot_static_params(attr_value, _visited)
+            _visited.remove(obj_id)
+            return mapped
+
+        return repr(obj)
+
+    @staticmethod
+    def _format_pretty_snapshot(snapshot):
+        return pprint.pformat(snapshot, indent=2, width=120, sort_dicts=False)

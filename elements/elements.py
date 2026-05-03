@@ -49,6 +49,34 @@ def create_diffusion_buffers(n, max_per_cell):
     return shm_A, shm_B, A_count, A_dirs, B_count, B_dirs
 
 
+def _prob_triplet_to_thresholds(prob_triplet):
+    p1 = float(prob_triplet[0])
+    p2 = 2.0 * p1
+    p3 = 3.0 * p1
+    p4 = 4.0 * p1
+    p_r = p4 + float(prob_triplet[1])
+    return p1, p2, p3, p4, p_r
+
+
+def _build_product_phase_threshold_map(settings, fallback_thresholds):
+    raw_map = getattr(settings, "PRODUCT_PROBABILITIES_BY_PHASE", {}) or {}
+    out = {}
+    for raw_pid, raw_probs in raw_map.items():
+        try:
+            pid = int(raw_pid)
+        except (TypeError, ValueError):
+            continue
+        if pid <= 0:
+            continue
+        out[pid] = _prob_triplet_to_thresholds(raw_probs)
+    if len(out) == 0:
+        return {}
+    for pid in list(out.keys()):
+        if out[pid] is None:
+            out[pid] = fallback_thresholds
+    return out
+
+
 class ActiveElem:
     element_type = 'outward'
     def __init__(self, settings):
@@ -61,6 +89,18 @@ class ActiveElem:
         self.p3_range = 3 * self.p1_range
         self.p4_range = 4 * self.p1_range
         self.p_r_range = self.p4_range + settings.PROBABILITIES[1]
+        (self.p1_in_product, self.p2_in_product, self.p3_in_product,
+         self.p4_in_product, self.p_r_in_product) = _prob_triplet_to_thresholds(
+            getattr(settings, "PROBABILITIES_IN_PRODUCT", settings.PROBABILITIES)
+        )
+        self.product_phase_probabilities = _build_product_phase_threshold_map(
+            settings,
+            (self.p1_in_product, self.p2_in_product, self.p3_in_product, self.p4_in_product, self.p_r_in_product),
+        )
+        self.use_product_aware_diffusion = any(
+            abs(vals[0] - self.p1_range) > 0.0 or abs(vals[4] - self.p_r_range) > 0.0
+            for vals in self.product_phase_probabilities.values()
+        )
         self.n_per_page = settings.N_PER_PAGE
 
         self.p_ranges = PRanges(self.p1_range, self.p2_range, self.p3_range, self.p4_range, self.p_r_range)
@@ -173,6 +213,8 @@ class ActiveElem:
             'p3': self.p3_range,
             'p4': self.p4_range,
             'p_r': self.p_r_range,
+            'use_product_aware_diffusion': self.use_product_aware_diffusion,
+            'product_phase_probabilities': self.product_phase_probabilities,
         }
     
     def swap_diffusion_buffers(self):
@@ -242,6 +284,18 @@ class OxidantElem:
         self.p3_range = 3 * self.p1_range
         self.p4_range = 4 * self.p1_range
         self.p_r_range = self.p4_range + settings.PROBABILITIES[1]
+        (self.p1_in_product, self.p2_in_product, self.p3_in_product,
+         self.p4_in_product, self.p_r_in_product) = _prob_triplet_to_thresholds(
+            getattr(settings, "PROBABILITIES_IN_PRODUCT", settings.PROBABILITIES)
+        )
+        self.product_phase_probabilities = _build_product_phase_threshold_map(
+            settings,
+            (self.p1_in_product, self.p2_in_product, self.p3_in_product, self.p4_in_product, self.p_r_in_product),
+        )
+        self.use_product_aware_diffusion = any(
+            abs(vals[0] - self.p1_range) > 0.0 or abs(vals[4] - self.p_r_range) > 0.0
+            for vals in self.product_phase_probabilities.values()
+        )
         self.p0_2d = settings.PROBABILITIES_2D
         self.n_per_page = settings.N_PER_PAGE
         self.neigh_range = Config.NEIGH_RANGE
@@ -273,6 +327,8 @@ class OxidantElem:
         # Initialize with empty grid (fill_first_page will add particles)
         self.current_count = 0
         self.from_product_counts = 0
+        self.adjusted_cells = settings.N_PER_PAGE
+        self.k_const = settings.K_CONST
         self.numbs_to_add = []
         self.fill_first_page()
 
@@ -282,364 +338,6 @@ class OxidantElem:
         # self.cross_shifts = np.array([[1, 0, 0], [0, 1, 0],
         #                               [-1, 0, 0], [0, -1, 0],
         #                               [0, 0, -1]], dtype=np.byte)
-
-    def diffuse_bulk(self):
-        """
-        DEPRECATED: Legacy method using flat arrays.
-        Use DiffusionEngine.diffuse(element) instead - operates directly on grid.
-        """
-        raise NotImplementedError("diffuse_bulk() removed - use DiffusionEngine.diffuse(element) instead")
-        if cells_flat.shape[1] == 0:
-            return
-        
-        randomise = np.array(np.random.random_sample(cells_flat.shape[1]), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p1_range)[0], dtype=np.uint32)
-        dirs_flat[:, temp_ind] = np.roll(dirs_flat[:, temp_ind], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p1_range) & (randomise <= self.p2_range))[0], dtype=np.uint32)
-        dirs_flat[:, temp_ind] = np.roll(dirs_flat[:, temp_ind], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p2_range) & (randomise <= self.p3_range))[0], dtype=np.uint32)
-        dirs_flat[:, temp_ind] = np.roll(dirs_flat[:, temp_ind], 2, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p3_range) & (randomise <= self.p4_range))[0], dtype=np.uint32)
-        dirs_flat[:, temp_ind] = np.roll(dirs_flat[:, temp_ind], 2, axis=0)
-        dirs_flat[:, temp_ind] *= -1
-        temp_ind = np.array(np.where((randomise > self.p4_range) & (randomise <= self.p_r_range))[0], dtype=np.uint32)
-        dirs_flat[:, temp_ind] *= -1
-        cells_flat = np.add(cells_flat, dirs_flat, casting="unsafe")
-        
-        # Adjust coordinates for boundary conditions
-        ind = np.where(cells_flat[2] < 0)[0]
-        # open left bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-        
-        cells_flat[0, np.where(cells_flat[0] <= -1)] = self.cells_per_axis - 1
-        cells_flat[0, np.where(cells_flat[0] >= self.cells_per_axis)] = 0
-        cells_flat[1, np.where(cells_flat[1] <= -1)] = self.cells_per_axis - 1
-        cells_flat[1, np.where(cells_flat[1] >= self.cells_per_axis)] = 0
-        ind = np.where(cells_flat[2] >= self.cells_per_axis)[0]
-        # open right bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-        
-        self._set_flat_cells_dirs(cells_flat, dirs_flat)
-        self.current_count = len(np.where(cells_flat[2] == 0)[0]) if cells_flat.shape[1] > 0 else 0
-        self.fill_first_page()
-
-    def diffuse_gb(self):
-        """
-        DEPRECATED: Legacy method using flat arrays.
-        Use DiffusionEngine.diffuse(element) instead - operates directly on grid.
-        """
-        raise NotImplementedError("diffuse_gb() removed - use DiffusionEngine.diffuse(element) instead")
-        if cells_flat.shape[1] == 0:
-            return
-        
-        # Diffusion along grain boundaries
-        exists = self.microstructure.grain_boundaries[cells_flat[0], cells_flat[1], cells_flat[2]]
-        t_ind_in_gb, ind_out_gb = separate_in_gb(exists)
-
-        randomise = np.array(np.random.random_sample(len(t_ind_in_gb)), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p0_2d)[0], dtype=np.uint32)
-
-        ind_in_gb = t_ind_in_gb[temp_ind]
-        temp_ = np.delete(t_ind_in_gb, temp_ind)
-        ind_out_gb = np.concatenate((ind_out_gb, temp_))
-        in_gb = np.array(cells_flat[:, ind_in_gb], dtype=np.short)
-
-        boost_vector = np.array(self.microstructure.jump_directions[in_gb[0], in_gb[1], in_gb[2]],
-                                dtype=np.short).transpose()
-        cells_flat[:, ind_in_gb] += boost_vector
-
-        # Diffusion in bulk
-        randomise = np.array(np.random.random_sample(len(ind_out_gb)), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p1_range)[0], dtype=np.uint32)
-        dirs_flat[:, ind_out_gb[temp_ind]] = np.roll(dirs_flat[:, ind_out_gb[temp_ind]], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p1_range) & (randomise <= self.p2_range))[0], dtype=np.uint32)
-        dirs_flat[:, ind_out_gb[temp_ind]] = np.roll(dirs_flat[:, ind_out_gb[temp_ind]], 1, axis=0)
-        dirs_flat[:, ind_out_gb[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p2_range) & (randomise <= self.p3_range))[0], dtype=np.uint32)
-        dirs_flat[:, ind_out_gb[temp_ind]] = np.roll(dirs_flat[:, ind_out_gb[temp_ind]], 2, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p3_range) & (randomise <= self.p4_range))[0], dtype=np.uint32)
-        dirs_flat[:, ind_out_gb[temp_ind]] = np.roll(dirs_flat[:, ind_out_gb[temp_ind]], 2, axis=0)
-        dirs_flat[:, ind_out_gb[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p4_range) & (randomise <= self.p_r_range))[0], dtype=np.uint32)
-        dirs_flat[:, ind_out_gb[temp_ind]] *= -1
-
-        cells_flat = np.add(cells_flat, dirs_flat, casting="unsafe")
-        # Adjust coordinates for boundary conditions
-        ind = np.where(cells_flat[2] < 0)[0]
-        # open left bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-
-        cells_flat[0, np.where(cells_flat[0] <= -1)] = self.cells_per_axis - 1
-        cells_flat[0, np.where(cells_flat[0] >= self.cells_per_axis)] = 0
-        cells_flat[1, np.where(cells_flat[1] <= -1)] = self.cells_per_axis - 1
-        cells_flat[1, np.where(cells_flat[1] >= self.cells_per_axis)] = 0
-
-        ind = np.where(cells_flat[2] >= self.cells_per_axis)[0]
-        # open right bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-
-        self._set_flat_cells_dirs(cells_flat, dirs_flat)
-        self.current_count = len(np.where(cells_flat[2] == 0)[0]) if cells_flat.shape[1] > 0 else 0
-        self.fill_first_page()
-
-    def diffuse_with_scale(self):
-        """
-        DEPRECATED: Legacy method using flat arrays.
-        Use DiffusionEngine.diffuse(element) instead - operates directly on grid.
-        """
-        raise NotImplementedError("diffuse_with_scale() removed - use DiffusionEngine.diffuse(element) instead")
-        if cells_flat.shape[1] == 0:
-            return
-        
-        # Diffusion at the interface between matrix the scale
-        self.diffuse_interface()
-
-        # Diffusion through the scale. If the current particle is inside the product particle it will be reflected
-        out_scale = check_in_scale(self.scale, cells_flat, dirs_flat)
-
-        # Mixing particles according to Chopard and Droz
-        randomise = np.array(np.random.random_sample(out_scale.size), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p1_range)[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] = np.roll(dirs_flat[:, out_scale[temp_ind]], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p1_range) & (randomise <= self.p2_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] = np.roll(dirs_flat[:, out_scale[temp_ind]], 1, axis=0)
-        dirs_flat[:, out_scale[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p2_range) & (randomise <= self.p3_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] = np.roll(dirs_flat[:, out_scale[temp_ind]], 2, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p3_range) & (randomise <= self.p4_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] = np.roll(dirs_flat[:, out_scale[temp_ind]], 2, axis=0)
-        dirs_flat[:, out_scale[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p4_range) & (randomise <= self.p_r_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] *= -1
-
-        cells_flat = np.add(cells_flat, dirs_flat, casting="unsafe")
-        # Adjust coordinates for boundary conditions
-        ind = np.where(cells_flat[2] < 0)[0]
-        # open left bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-
-        cells_flat[0, np.where(cells_flat[0] <= -1)] = self.cells_per_axis - 1
-        cells_flat[0, np.where(cells_flat[0] >= self.cells_per_axis)] = 0
-        cells_flat[1, np.where(cells_flat[1] <= -1)] = self.cells_per_axis - 1
-        cells_flat[1, np.where(cells_flat[1] >= self.cells_per_axis)] = 0
-
-        ind = np.where(cells_flat[2] >= self.cells_per_axis)[0]
-        # open right bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-
-        self._set_flat_cells_dirs(cells_flat, dirs_flat)
-        self.current_count = len(np.where(cells_flat[2] == 0)[0]) if cells_flat.shape[1] > 0 else 0
-        self.fill_first_page()
-
-    def diffuse_with_scale_adj(self, time=0):
-        """
-        DEPRECATED: Legacy method using flat arrays.
-        Use DiffusionEngine.diffuse(element) instead - operates directly on grid.
-        """
-        raise NotImplementedError("diffuse_with_scale_adj() removed - use DiffusionEngine.diffuse(element) instead")
-        if cells_flat.shape[1] == 0:
-            return
-        
-        # Diffusion through the scale. If the current particle is inside the product particle it will be reflected
-        out_scale, in_scale = check_in_scale_adj(self.scale, cells_flat)
-
-        # Mixing particles according to Chopard and Droz (out of scale)
-        randomise = np.array(np.random.random_sample(out_scale.size), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p1_range)[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] = np.roll(dirs_flat[:, out_scale[temp_ind]], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p1_range) & (randomise <= self.p2_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] = np.roll(dirs_flat[:, out_scale[temp_ind]], 1, axis=0)
-        dirs_flat[:, out_scale[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p2_range) & (randomise <= self.p3_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] = np.roll(dirs_flat[:, out_scale[temp_ind]], 2, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p3_range) & (randomise <= self.p4_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] = np.roll(dirs_flat[:, out_scale[temp_ind]], 2, axis=0)
-        dirs_flat[:, out_scale[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p4_range) & (randomise <= self.p_r_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_scale[temp_ind]] *= -1
-
-        # IN Scale Diffusion
-        randomise = np.array(np.random.random_sample(in_scale.size), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p_ranges_scale.p1_range)[0], dtype=np.uint32)
-        dirs_flat[:, in_scale[temp_ind]] = np.roll(dirs_flat[:, in_scale[temp_ind]], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p1_range) &
-                                     (randomise <= self.p_ranges_scale.p2_range))[0], dtype=np.uint32)
-        dirs_flat[:, in_scale[temp_ind]] = np.roll(dirs_flat[:, in_scale[temp_ind]], 1, axis=0)
-        dirs_flat[:, in_scale[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p2_range) &
-                                     (randomise <= self.p_ranges_scale.p3_range))[0], dtype=np.uint32)
-        dirs_flat[:, in_scale[temp_ind]] = np.roll(dirs_flat[:, in_scale[temp_ind]], 2, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p3_range) &
-                                     (randomise <= self.p_ranges_scale.p4_range))[0], dtype=np.uint32)
-        dirs_flat[:, in_scale[temp_ind]] = np.roll(dirs_flat[:, in_scale[temp_ind]], 2, axis=0)
-        dirs_flat[:, in_scale[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p4_range) &
-                                     (randomise <= self.p_ranges_scale.p_r_range))[0], dtype=np.uint32)
-        dirs_flat[:, in_scale[temp_ind]] *= -1
-
-        cells_flat = np.add(cells_flat, dirs_flat, casting="unsafe")
-        # Adjust coordinates for boundary conditions
-        ind = np.where(cells_flat[2] < 0)[0]
-        # open left bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-
-        cells_flat[0, np.where(cells_flat[0] <= -1)] = self.cells_per_axis - 1
-        cells_flat[0, np.where(cells_flat[0] >= self.cells_per_axis)] = 0
-        cells_flat[1, np.where(cells_flat[1] <= -1)] = self.cells_per_axis - 1
-        cells_flat[1, np.where(cells_flat[1] >= self.cells_per_axis)] = 0
-
-        ind = np.where(cells_flat[2] >= self.cells_per_axis)[0]
-        # open right bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-
-        self._set_flat_cells_dirs(cells_flat, dirs_flat)
-        self.current_count = len(np.where(cells_flat[2] == 0)[0]) if cells_flat.shape[1] > 0 else 0
-        self.fill_first_page(time=time)
-
-    def diffuse_interface(self):
-        """
-        DEPRECATED: Legacy method using flat arrays.
-        Use DiffusionEngine.diffuse(element) instead - operates directly on grid.
-        """
-        raise NotImplementedError("diffuse_interface() removed - use DiffusionEngine.diffuse(element) instead")
-        if cells_flat.shape[1] == 0:
-            return
-        
-        all_arounds = self.utils.calc_sur_ind_interface(cells_flat, dirs_flat, self.extended_axis - 1)
-        neighbours = go_around_bool(self.scale, all_arounds)
-        to_boost = np.array([sum(n_arr[:-1]) * (not n_arr[-1]) for n_arr in neighbours])
-        to_boost = np.array(np.where(to_boost)[0])
-
-        if len(to_boost) > 0:
-            for _ in range(self.n_boost_steps):
-                cells_flat[:, to_boost] = np.add(cells_flat[:, to_boost], dirs_flat[:, to_boost], casting="unsafe")
-            # Adjust coordinates for boundary conditions
-            cells_flat[0, to_boost[np.where(cells_flat[0, to_boost] <= -1)]] = self.cells_per_axis - 1
-            cells_flat[0, to_boost[np.where(cells_flat[0, to_boost] >= self.cells_per_axis)]] = 0
-            cells_flat[1, to_boost[np.where(cells_flat[1, to_boost] <= -1)]] = self.cells_per_axis - 1
-            cells_flat[1, to_boost[np.where(cells_flat[1, to_boost] >= self.cells_per_axis)]] = 0
-
-            ind = np.where(cells_flat[2, to_boost] < 0)[0]
-            # open left bound
-            keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-            keep_mask[to_boost[ind]] = False
-            cells_flat = cells_flat[:, keep_mask]
-            dirs_flat = dirs_flat[:, keep_mask]
-
-            ind = np.where(cells_flat[2] >= self.cells_per_axis)[0]
-            # open right bound
-            keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-            keep_mask[ind] = False
-            cells_flat = cells_flat[:, keep_mask]
-            dirs_flat = dirs_flat[:, keep_mask]
-            
-            self._set_flat_cells_dirs(cells_flat, dirs_flat)
-
-    def diffuse_interface_adj(self):
-        """
-        DEPRECATED: Legacy method using flat arrays.
-        Use DiffusionEngine.diffuse(element) instead - operates directly on grid.
-        """
-        raise NotImplementedError("diffuse_interface_adj() removed - use DiffusionEngine.diffuse(element) instead")
-        if cells_flat.shape[1] == 0:
-            return
-        
-        all_arounds = self.utils.calc_sur_ind_interface_adj(cells_flat, dirs_flat, self.extended_axis - 1)
-        in_int, blocked, out_int = separate_in_interface(self.scale, all_arounds)
-
-        # Mixing particles according to Chopard and Droz (out of interface)
-        randomise = np.array(np.random.random_sample(out_int.size), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p1_range)[0], dtype=np.uint32)
-        dirs_flat[:, out_int[temp_ind]] = np.roll(dirs_flat[:, out_int[temp_ind]], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p1_range) & (randomise <= self.p2_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_int[temp_ind]] = np.roll(dirs_flat[:, out_int[temp_ind]], 1, axis=0)
-        dirs_flat[:, out_int[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p2_range) & (randomise <= self.p3_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_int[temp_ind]] = np.roll(dirs_flat[:, out_int[temp_ind]], 2, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p3_range) & (randomise <= self.p4_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_int[temp_ind]] = np.roll(dirs_flat[:, out_int[temp_ind]], 2, axis=0)
-        dirs_flat[:, out_int[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p4_range) & (randomise <= self.p_r_range))[0], dtype=np.uint32)
-        dirs_flat[:, out_int[temp_ind]] *= -1
-
-        # INTERFACE Diffusion
-        randomise = np.array(np.random.random_sample(in_int.size), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p_ranges_interface.p1_range)[0], dtype=np.uint32)
-        dirs_flat[:, in_int[temp_ind]] = np.roll(dirs_flat[:, in_int[temp_ind]], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p_ranges_interface.p1_range) & (randomise <= self.p_ranges_interface.p2_range))[0], dtype=np.uint32)
-        dirs_flat[:, in_int[temp_ind]] = np.roll(dirs_flat[:, in_int[temp_ind]], 1, axis=0)
-        dirs_flat[:, in_int[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p_ranges_interface.p2_range) & (randomise <= self.p_ranges_interface.p3_range))[0], dtype=np.uint32)
-        dirs_flat[:, in_int[temp_ind]] = np.roll(dirs_flat[:, in_int[temp_ind]], 2, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p_ranges_interface.p3_range) & (randomise <= self.p_ranges_interface.p4_range))[0], dtype=np.uint32)
-        dirs_flat[:, in_int[temp_ind]] = np.roll(dirs_flat[:, in_int[temp_ind]], 2, axis=0)
-        dirs_flat[:, in_int[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p_ranges_interface.p4_range) & (randomise <= self.p_ranges_interface.p_r_range))[0], dtype=np.uint32)
-        dirs_flat[:, in_int[temp_ind]] *= -1
-
-        # IN scale Diffusion
-        randomise = np.array(np.random.random_sample(blocked.size), dtype=np.single)
-        temp_ind = np.array(np.where(randomise <= self.p_ranges_scale.p1_range)[0], dtype=np.uint32)
-        dirs_flat[:, blocked[temp_ind]] = np.roll(dirs_flat[:, blocked[temp_ind]], 1, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p1_range) & (randomise <= self.p_ranges_scale.p2_range))[0], dtype=np.uint32)
-        dirs_flat[:, blocked[temp_ind]] = np.roll(dirs_flat[:, blocked[temp_ind]], 1, axis=0)
-        dirs_flat[:, blocked[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p2_range) & (randomise <= self.p_ranges_scale.p3_range))[0], dtype=np.uint32)
-        dirs_flat[:, blocked[temp_ind]] = np.roll(dirs_flat[:, blocked[temp_ind]], 2, axis=0)
-        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p3_range) & (randomise <= self.p_ranges_scale.p4_range))[0], dtype=np.uint32)
-        dirs_flat[:, blocked[temp_ind]] = np.roll(dirs_flat[:, blocked[temp_ind]], 2, axis=0)
-        dirs_flat[:, blocked[temp_ind]] *= -1
-        temp_ind = np.array(np.where((randomise > self.p_ranges_scale.p4_range) & (randomise <= self.p_ranges_scale.p_r_range))[0], dtype=np.uint32)
-        dirs_flat[:, blocked[temp_ind]] *= -1
-
-        cells_flat = np.add(cells_flat, dirs_flat, casting="unsafe")
-        # Adjust coordinates for boundary conditions
-        ind = np.where(cells_flat[2] < 0)[0]
-        # open left bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-
-        cells_flat[0, np.where(cells_flat[0] <= -1)] = self.cells_per_axis - 1
-        cells_flat[0, np.where(cells_flat[0] >= self.cells_per_axis)] = 0
-        cells_flat[1, np.where(cells_flat[1] <= -1)] = self.cells_per_axis - 1
-        cells_flat[1, np.where(cells_flat[1] >= self.cells_per_axis)] = 0
-
-        ind = np.where(cells_flat[2] >= self.cells_per_axis)[0]
-        # open right bound
-        keep_mask = np.ones(cells_flat.shape[1], dtype=bool)
-        keep_mask[ind] = False
-        cells_flat = cells_flat[:, keep_mask]
-        dirs_flat = dirs_flat[:, keep_mask]
-
-        self._set_flat_cells_dirs(cells_flat, dirs_flat)
-        self.current_count = len(np.where(cells_flat[2] == 0)[0]) if cells_flat.shape[1] > 0 else 0
-        self.fill_first_page()
 
     def fill_first_page(self, time=0):
         """
@@ -657,10 +355,10 @@ class OxidantElem:
         # Same layout as diffusion (i,j,k)=(x,y,z): x=0 plane is count_3d[0, :, :], linear index n*j + n2*k
         current_count = int(count_3d[0, :, :].sum())
 
-        if current_count + self.from_product_counts >= self.n_per_page:
+        if current_count >= self.adjusted_cells:
             return
 
-        num_to_add = self.n_per_page - (current_count + self.from_product_counts)
+        num_to_add = self.adjusted_cells - current_count
         self.numbs_to_add.append(num_to_add)
         rng = np.random.default_rng()
         j_coords = rng.integers(0, n, size=num_to_add, dtype=np.intp)
@@ -710,6 +408,8 @@ class OxidantElem:
             'p3': self.p3_range,
             'p4': self.p4_range,
             'p_r': self.p_r_range,
+            'use_product_aware_diffusion': self.use_product_aware_diffusion,
+            'product_phase_probabilities': self.product_phase_probabilities,
         }
     
     def swap_diffusion_buffers(self):

@@ -69,7 +69,11 @@ class SimulationConfigurator:
             self.c_automata.ensure_jmatpro_pool()
             self.c_automata._ensure_precip_z_states()
 
-            self._diffusion_engine = _DiffusionEngine(n_out, n_in, rng, worker_pools=self.worker_pools)
+            self._diffusion_engine = _DiffusionEngine(
+                n_out, n_in, rng,
+                worker_pools=self.worker_pools,
+                product_state_shm_mdata=getattr(self.cases, "product_state_shm_mdata", None),
+            )
             self.c_automata.diffusion_engine = self._diffusion_engine
 
         self.function_block = FunctionBlock()
@@ -124,7 +128,7 @@ class SimulationConfigurator:
                 self.worker_pools = None
             self.save_results()
             self.insert_last_it()
-            self.db.insert_product_plane0_tracking(self.c_automata.product_plane0_tracking)
+            self.db.insert_product_plane0_tracking(self.c_automata.product_plane_tracking)
             self.db.conn.commit()
             print()
             print("____________________________________________________________")
@@ -238,6 +242,10 @@ class SimulationConfigurator:
         product_cfg.OXIDATION_NUMBER = int(raw_def.get("OXIDATION_NUMBER", 1))
         product_cfg.LIND_FLAT_ARRAY = int(raw_def.get("LIND_FLAT_ARRAY", 6))
         product_cfg.PHASE_FRACTION_LIMIT = float(raw_def.get("PHASE_FRACTION_LIMIT", Config.PHASE_FRACTION_LIMIT))
+        dissolution_ratio = float(raw_def.get("dissolution_time_ratio", raw_def.get("DISSOLUTION_TIME_RATIO", 0.0)))
+        if dissolution_ratio < 0.0:
+            raise ValueError(f"PRODUCTS[{idx}] dissolution_time_ratio must be >= 0.")
+        product_cfg.DISSOLUTION_TIME_RATIO = dissolution_ratio
         probs_raw = raw_def.get("probabilities", None)
         if probs_raw is None:
             raise ValueError(f"PRODUCTS[{idx}] must define 'probabilities'.")
@@ -324,13 +332,19 @@ class SimulationConfigurator:
 
     def init_product(self):
         # c3d_init
-        tmp = np.zeros((Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), dtype=np.ubyte)
+        tmp = np.zeros(
+            (Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS),
+            dtype=np.uint16,
+        )
         self.cases.precip_3d_init_shm = shared_memory.SharedMemory(create=True, size=tmp.nbytes)
         self.cases.precip_3d_init = np.ndarray(tmp.shape, dtype=tmp.dtype, buffer=self.cases.precip_3d_init_shm.buf)
         np.copyto(self.cases.precip_3d_init, tmp)
         self.cases.precip_3d_init_shm_mdata = SharedMetaData(self.cases.precip_3d_init_shm.name, tmp.shape, tmp.dtype)
 
-        state_tmp = np.zeros((2, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS), dtype=np.uint8)
+        state_tmp = np.zeros(
+            (2, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS, Config.N_CELLS_PER_AXIS),
+            dtype=np.uint16,
+        )
         self.cases.product_state_shm = shared_memory.SharedMemory(create=True, size=state_tmp.nbytes)
         self.cases.product_state = np.ndarray(state_tmp.shape, dtype=state_tmp.dtype, buffer=self.cases.product_state_shm.buf)
         np.copyto(self.cases.product_state, state_tmp)
@@ -384,6 +398,15 @@ class SimulationConfigurator:
         case_mp.oxidation_number = case.product_oxidation_number
         case_mp.threshold_inward = product_config.THRESHOLD_INWARD
         case_mp.threshold_outward = product_config.THRESHOLD_OUTWARD
+        case_mp.dissolution_time_ratio = float(getattr(product_config, "DISSOLUTION_TIME_RATIO", 0.0))
+        case_mp.dissolution_n_iterations = int(round(float(Config.N_ITERATIONS) * case_mp.dissolution_time_ratio))
+        case_mp.dissolution_counter = np.zeros(Config.N_CELLS_PER_AXIS, dtype=np.int32)
+        case_mp.dissolution_count_activated = np.zeros(Config.N_CELLS_PER_AXIS, dtype=bool)
+        # Keep case-level mirrors for compatibility with code paths using case instead of case_mp.
+        case.dissolution_time_ratio = case_mp.dissolution_time_ratio
+        case.dissolution_n_iterations = case_mp.dissolution_n_iterations
+        case.dissolution_counter = case_mp.dissolution_counter
+        case.dissolution_count_activated = case_mp.dissolution_count_activated
         case_mp.product_phase_id = int(phase_id)
         case_mp.product_state_shm_mdata = self.cases.product_state_shm_mdata
         mode = resolve_nucleation_mode(

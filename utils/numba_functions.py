@@ -59,7 +59,7 @@ def product_counts_blocks_ignited_from_state(
     """
     Per-block product counts for *multiple* phase ids in one scan, limited to ignited x-range.
 
-    - owner_phase, state_count: unified product_state views (shape (n,n,n), dtype uint8)
+    - owner_phase, state_count: unified product_state views (shape (n,n,n), dtype uint16)
     - pid_to_row: int16 array of length 256 mapping phase_id -> row index in [0, n_products), else -1
     - n_products: number of tracked product phases (rows in output)
     - Bx,By,Bz: number of blocks along each axis
@@ -254,8 +254,8 @@ def severe_planes_clear_product_release(
                 if owner_phase[plane_i, j, k] != pid:
                     continue
                 c = int(state_count[plane_i, j, k])
-                owner_phase[plane_i, j, k] = np.uint8(0)
-                state_count[plane_i, j, k] = np.uint8(0)
+                owner_phase[plane_i, j, k] = np.uint16(0)
+                state_count[plane_i, j, k] = np.uint16(0)
                 if c <= 0:
                     continue
                 nidx = plane_i + n_i * j + n2 * k
@@ -331,8 +331,8 @@ def severe_blocks_clear_product_release(
                     if owner_phase[i, j, k] != pid8:
                         continue
                     c = int(state_count[i, j, k])
-                    owner_phase[i, j, k] = np.uint8(0)
-                    state_count[i, j, k] = np.uint8(0)
+                    owner_phase[i, j, k] = np.uint16(0)
+                    state_count[i, j, k] = np.uint16(0)
                     if c <= 0:
                         continue
                     nidx = i + n_i * j + n2 * k
@@ -453,7 +453,7 @@ def nucleation_subblock_kernel_owner(
 
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(int(state_count[i, j, k]) + 1)
+                    state_count[i, j, k] = np.uint16(int(state_count[i, j, k]) + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -552,7 +552,7 @@ def nucleation_subblock_kernel_owner_blockmask(
 
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(int(state_count[i, j, k]) + 1)
+                    state_count[i, j, k] = np.uint16(int(state_count[i, j, k]) + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -622,7 +622,7 @@ def nucleation_subblock_kernel_simple_owner(
 
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(int(state_count[i, j, k]) + 1)
+                    state_count[i, j, k] = np.uint16(int(state_count[i, j, k]) + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -702,7 +702,7 @@ def nucleation_subblock_kernel_simple_owner_blockmask(
 
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(int(state_count[i, j, k]) + 1)
+                    state_count[i, j, k] = np.uint16(int(state_count[i, j, k]) + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -813,7 +813,7 @@ def nucleation_subblock_kernel_stoich_owner(
                     oxidant[i, j, k] = new_o
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -930,7 +930,7 @@ def nucleation_subblock_kernel_stoich_owner_blockmask(
                     oxidant[i, j, k] = new_o
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1018,7 +1018,7 @@ def nucleation_subblock_kernel_simple_stoich_owner(
                     oxidant[i, j, k] = new_o
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1117,7 +1117,7 @@ def nucleation_subblock_kernel_simple_stoich_owner_blockmask(
                     oxidant[i, j, k] = new_o
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1179,7 +1179,7 @@ def nucleation_subblock_kernel_owner_spec(
                     oxidant[i, j, k] -= 1
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1253,7 +1253,7 @@ def nucleation_subblock_kernel_owner_spec_blockmask(
                     oxidant[i, j, k] -= 1
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1295,7 +1295,7 @@ def nucleation_subblock_kernel_simple_owner_spec(
                     oxidant[i, j, k] -= 1
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1349,7 +1349,7 @@ def nucleation_subblock_kernel_simple_owner_spec_blockmask(
                     oxidant[i, j, k] -= 1
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 
@@ -1415,7 +1415,7 @@ def nucleation_subblock_kernel_stoich_owner_spec(
                     oxidant[i, j, k] = new_o
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1492,7 +1492,7 @@ def nucleation_subblock_kernel_stoich_owner_spec_blockmask(
                     oxidant[i, j, k] = new_o
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 
@@ -1538,7 +1538,7 @@ def nucleation_subblock_kernel_simple_stoich_owner_spec(
                     oxidant[i, j, k] = new_o
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1595,7 +1595,7 @@ def nucleation_subblock_kernel_simple_stoich_owner_spec_blockmask(
                     oxidant[i, j, k] = new_o
                     if owner == 0:
                         owner_phase[i, j, k] = pid
-                    state_count[i, j, k] = np.uint8(cnt_here + 1)
+                    state_count[i, j, k] = np.uint16(cnt_here + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1747,7 +1747,7 @@ def nucleation_subblock_kernel_owner_fold(
 
                     if owner_phase[ti, tj, tk] == 0:
                         owner_phase[ti, tj, tk] = pid
-                    state_count[ti, tj, tk] = np.uint8(int(state_count[ti, tj, tk]) + 1)
+                    state_count[ti, tj, tk] = np.uint16(int(state_count[ti, tj, tk]) + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1858,7 +1858,7 @@ def nucleation_subblock_kernel_owner_fold_blockmask(
 
                     if owner_phase[ti, tj, tk] == 0:
                         owner_phase[ti, tj, tk] = pid
-                    state_count[ti, tj, tk] = np.uint8(int(state_count[ti, tj, tk]) + 1)
+                    state_count[ti, tj, tk] = np.uint16(int(state_count[ti, tj, tk]) + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -1983,7 +1983,7 @@ def nucleation_subblock_kernel_stoich_owner_fold(
                     cnt_t = int(state_count[ti, tj, tk])
                     if owner_phase[ti, tj, tk] == 0:
                         owner_phase[ti, tj, tk] = pid
-                    state_count[ti, tj, tk] = np.uint8(cnt_t + 1)
+                    state_count[ti, tj, tk] = np.uint16(cnt_t + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -2112,7 +2112,7 @@ def nucleation_subblock_kernel_stoich_owner_fold_blockmask(
                     cnt_t = int(state_count[ti, tj, tk])
                     if owner_phase[ti, tj, tk] == 0:
                         owner_phase[ti, tj, tk] = pid
-                    state_count[ti, tj, tk] = np.uint8(cnt_t + 1)
+                    state_count[ti, tj, tk] = np.uint16(cnt_t + 1)
 
 
 
@@ -2186,7 +2186,7 @@ def nucleation_subblock_kernel_owner_spec_fold(
                     oxidant[i, j, k] -= 1
                     if owner_phase[ti, tj, tk] == 0:
                         owner_phase[ti, tj, tk] = pid
-                    state_count[ti, tj, tk] = np.uint8(int(state_count[ti, tj, tk]) + 1)
+                    state_count[ti, tj, tk] = np.uint16(int(state_count[ti, tj, tk]) + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -2270,7 +2270,7 @@ def nucleation_subblock_kernel_owner_spec_fold_blockmask(
                     oxidant[i, j, k] -= 1
                     if owner_phase[ti, tj, tk] == 0:
                         owner_phase[ti, tj, tk] = pid
-                    state_count[ti, tj, tk] = np.uint8(int(state_count[ti, tj, tk]) + 1)
+                    state_count[ti, tj, tk] = np.uint16(int(state_count[ti, tj, tk]) + 1)
 
 
 
@@ -2348,7 +2348,7 @@ def nucleation_subblock_kernel_stoich_owner_spec_fold(
                     cnt_t = int(state_count[ti, tj, tk])
                     if owner_phase[ti, tj, tk] == 0:
                         owner_phase[ti, tj, tk] = pid
-                    state_count[ti, tj, tk] = np.uint8(cnt_t + 1)
+                    state_count[ti, tj, tk] = np.uint16(cnt_t + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -2436,7 +2436,7 @@ def nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask(
                     cnt_t = int(state_count[ti, tj, tk])
                     if owner_phase[ti, tj, tk] == 0:
                         owner_phase[ti, tj, tk] = pid
-                    state_count[ti, tj, tk] = np.uint8(cnt_t + 1)
+                    state_count[ti, tj, tk] = np.uint16(cnt_t + 1)
 
 
 @numba.njit(fastmath=True, cache=_CACHE)
@@ -2555,7 +2555,7 @@ def dissolution_subblock_kernel_snapshot_owner(
                         state_count[i, j, k] -= 1
                         coords_list.append((i, j, k))
                 if state_count[i, j, k] <= 0 and owner_phase[i, j, k] == pid:
-                    owner_phase[i, j, k] = np.uint8(0)
+                    owner_phase[i, j, k] = np.uint16(0)
 
     if len(coords_list) == 0:
         return
@@ -2643,7 +2643,7 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner(
                         state_count[i, j, k] -= 1
                         coords_list.append((i, j, k))
                 if state_count[i, j, k] <= 0 and owner_phase[i, j, k] == pid:
-                    owner_phase[i, j, k] = np.uint8(0)
+                    owner_phase[i, j, k] = np.uint16(0)
 
     if len(coords_list) == 0:
         return
@@ -2735,7 +2735,7 @@ def dissolution_subblock_kernel_snapshot_owner_blockmask(
                         state_count[i, j, k] -= 1
                         coords_list.append((i, j, k))
                 if state_count[i, j, k] <= 0 and owner_phase[i, j, k] == pid:
-                    owner_phase[i, j, k] = np.uint8(0)
+                    owner_phase[i, j, k] = np.uint16(0)
 
     if len(coords_list) == 0:
         return
@@ -2835,7 +2835,7 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner_blockmask(
                         state_count[i, j, k] -= 1
                         coords_list.append((i, j, k))
                 if state_count[i, j, k] <= 0 and owner_phase[i, j, k] == pid:
-                    owner_phase[i, j, k] = np.uint8(0)
+                    owner_phase[i, j, k] = np.uint16(0)
 
     if len(coords_list) == 0:
         return
@@ -2851,3 +2851,856 @@ def dissolution_subblock_kernel_snapshot_with_blocks_owner_blockmask(
         max_per_cell_active,
         packed_dirs,
     )
+
+
+# =============================================================================
+# Same-plane fold variants (NUCLEATION_FOLD_SAME_PLANE = True)
+# Identical to the regular fold kernels except the fold target is restricted to
+# the same x-plane as the seed cell (center + ±y + ±z; ±x neighbours skipped).
+# =============================================================================
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def _nucleation_fold_pick_target_same_plane(i, j, k, n_cells, ox_num, pid, owner_phase, state_count):
+    """
+    Same-plane fold: scan center (i,j,k) + 4 in-plane face neighbours (PBC in y,z).
+    Skip ±x to keep the placement on the seed plane. Returns (ti, tj, tk) or (-1, -1, -1).
+    Tie-break: first scanned wins (center, +y, -y, +z, -z).
+    """
+    best_i = -1
+    best_j = -1
+    best_k = -1
+    best_c = -1
+    for t in range(5):
+        if t == 0:
+            di, dj, dk = 0, 0, 0
+        elif t == 1:
+            di, dj, dk = 0, 1, 0
+        elif t == 2:
+            di, dj, dk = 0, -1, 0
+        elif t == 3:
+            di, dj, dk = 0, 0, 1
+        else:
+            di, dj, dk = 0, 0, -1
+        # i never changes: PBC check on i is unnecessary, but keep helper for jj/kk wrap.
+        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+        if not valid:
+            continue
+        ow = owner_phase[ii, jj, kk]
+        if ow != 0 and ow != pid:
+            continue
+        c = int(state_count[ii, jj, kk])
+        if c >= ox_num:
+            continue
+        if c > best_c:
+            best_c = c
+            best_i = ii
+            best_j = jj
+            best_k = kk
+    return best_i, best_j, best_k
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def nucleation_subblock_kernel_owner_fold_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product_init,
+    product_state,
+    phase_id,
+    ox_num,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+):
+    """Same-plane fold variant of nucleation_subblock_kernel_owner_fold."""
+    np.random.seed(seed)
+    n2 = n_cells * n_cells
+    n_active = active_check_offsets.shape[0]
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
+
+    for k in seed_slab_k:
+        for i in plane_indexes:
+            for j in range(n_cells):
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
+                    continue
+                c_max = int(oxidant[i, j, k])
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
+                for _ in range(c_max):
+                    if oxidant[i, j, k] <= 0:
+                        break
+                    valid_count = 0
+                    _ni = np.empty(n_active, dtype=np.intp)
+                    _nj = np.empty(n_active, dtype=np.intp)
+                    _nk = np.empty(n_active, dtype=np.intp)
+                    for row in active_check_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+                            i + di, j + dj, k + dk, n_cells
+                        )
+                        if valid and active[ii, jj, kk] > 0:
+                            _ni[valid_count] = ii
+                            _nj[valid_count] = jj
+                            _nk[valid_count] = kk
+                            valid_count += 1
+                    if valid_count == 0:
+                        continue
+
+                    flat_count = 0
+                    for row in flat_neigh_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+                            i + di, j + dj, k + dk, n_cells
+                        )
+                        if valid and product_init[ii, jj, kk] > 0:
+                            flat_count += 1
+                    if flat_count == 0:
+                        prob = values_pp[k]
+                    else:
+                        prob = (
+                            const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
+                            + const_d_pp[k]
+                        )
+                    if np.random.random() >= prob:
+                        continue
+
+                    if flat_count == 0:
+                        ti, tj, tk = i, j, k
+                    else:
+                        ti, tj, tk = _nucleation_fold_pick_target_same_plane(
+                            i, j, k, n_cells, ox_num, pid, owner_phase, state_count
+                        )
+                        if ti < 0:
+                            ti, tj, tk = i, j, k
+                    ow_t = owner_phase[ti, tj, tk]
+                    if ow_t != 0 and ow_t != pid:
+                        continue
+                    if int(state_count[ti, tj, tk]) >= ox_num:
+                        continue
+
+                    pick = np.random.randint(0, valid_count)
+                    ni, nj, nk = _ni[pick], _nj[pick], _nk[pick]
+                    idx_a = ni + n_cells * nj + n2 * nk
+                    slot_a = active[ni, nj, nk] - 1
+                    active_dirs[idx_a, slot_a] = 0
+                    active[ni, nj, nk] -= 1
+
+                    slot_o = oxidant[i, j, k] - 1
+                    oxidant_dirs[idx_o, slot_o] = 0
+                    oxidant[i, j, k] -= 1
+
+                    if owner_phase[ti, tj, tk] == 0:
+                        owner_phase[ti, tj, tk] = pid
+                    state_count[ti, tj, tk] = np.uint16(int(state_count[ti, tj, tk]) + 1)
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def nucleation_subblock_kernel_owner_fold_blockmask_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product_init,
+    product_state,
+    phase_id,
+    ox_num,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    """Same-plane fold variant of nucleation_subblock_kernel_owner_fold_blockmask."""
+    np.random.seed(seed)
+    n2 = n_cells * n_cells
+    n_active = active_check_offsets.shape[0]
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
+
+    for k in seed_slab_k:
+        bz = k // cz
+        for i in plane_indexes:
+            bx = i // cx
+            for j in range(n_cells):
+                by = j // cy
+                if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
+                    continue
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
+                    continue
+                c_max = int(oxidant[i, j, k])
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
+                for _ in range(c_max):
+                    if oxidant[i, j, k] <= 0:
+                        break
+                    valid_count = 0
+                    _ni = np.empty(n_active, dtype=np.intp)
+                    _nj = np.empty(n_active, dtype=np.intp)
+                    _nk = np.empty(n_active, dtype=np.intp)
+                    for row in active_check_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                        if valid and active[ii, jj, kk] > 0:
+                            _ni[valid_count] = ii
+                            _nj[valid_count] = jj
+                            _nk[valid_count] = kk
+                            valid_count += 1
+                    if valid_count == 0:
+                        continue
+
+                    flat_count = 0
+                    for row in flat_neigh_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                        if valid and product_init[ii, jj, kk] > 0:
+                            flat_count += 1
+                    if flat_count == 0:
+                        prob = values_pp[k]
+                    else:
+                        prob = const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k]) + const_d_pp[k]
+                    if np.random.random() >= prob:
+                        continue
+
+                    if flat_count == 0:
+                        ti, tj, tk = i, j, k
+                    else:
+                        ti, tj, tk = _nucleation_fold_pick_target_same_plane(
+                            i, j, k, n_cells, ox_num, pid, owner_phase, state_count
+                        )
+                        if ti < 0:
+                            ti, tj, tk = i, j, k
+                    ow_t = owner_phase[ti, tj, tk]
+                    if ow_t != 0 and ow_t != pid:
+                        continue
+                    if int(state_count[ti, tj, tk]) >= ox_num:
+                        continue
+
+                    pick = np.random.randint(0, valid_count)
+                    ni, nj, nk = _ni[pick], _nj[pick], _nk[pick]
+                    idx_a = ni + n_cells * nj + n2 * nk
+                    slot_a = active[ni, nj, nk] - 1
+                    active_dirs[idx_a, slot_a] = 0
+                    active[ni, nj, nk] -= 1
+
+                    slot_o = oxidant[i, j, k] - 1
+                    oxidant_dirs[idx_o, slot_o] = 0
+                    oxidant[i, j, k] -= 1
+
+                    if owner_phase[ti, tj, tk] == 0:
+                        owner_phase[ti, tj, tk] = pid
+                    state_count[ti, tj, tk] = np.uint16(int(state_count[ti, tj, tk]) + 1)
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def nucleation_subblock_kernel_stoich_owner_fold_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product_init,
+    product_state,
+    phase_id,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+):
+    """Same-plane fold variant of nucleation_subblock_kernel_stoich_owner_fold."""
+    np.random.seed(seed)
+    n2 = n_cells * n_cells
+    n_active = active_check_offsets.shape[0]
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    thr_in = int(threshold_inward)
+    thr_out = int(threshold_outward)
+    pid = np.uint8(phase_id)
+
+    for k in seed_slab_k:
+        for i in plane_indexes:
+            for j in range(n_cells):
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
+                    continue
+                c_max = int(oxidant[i, j, k] // thr_in)
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
+                for _ in range(c_max):
+                    if oxidant[i, j, k] < thr_in:
+                        break
+                    valid_count = 0
+                    total_active = 0
+                    _ni = np.empty(n_active, dtype=np.intp)
+                    _nj = np.empty(n_active, dtype=np.intp)
+                    _nk = np.empty(n_active, dtype=np.intp)
+                    _nidx = np.empty(n_active, dtype=np.intp)
+                    _ac = np.empty(n_active, dtype=np.int32)
+                    for row in active_check_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+                            i + di, j + dj, k + dk, n_cells
+                        )
+                        if valid and active[ii, jj, kk] > 0:
+                            cnt = int(active[ii, jj, kk])
+                            _ni[valid_count] = ii
+                            _nj[valid_count] = jj
+                            _nk[valid_count] = kk
+                            _nidx[valid_count] = ii + n_cells * jj + n2 * kk
+                            _ac[valid_count] = cnt
+                            total_active += cnt
+                            valid_count += 1
+                    if thr_out > 0 and total_active < thr_out:
+                        continue
+
+                    flat_count = 0
+                    for row in flat_neigh_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(
+                            i + di, j + dj, k + dk, n_cells
+                        )
+                        if valid and product_init[ii, jj, kk] > 0:
+                            flat_count += 1
+                    if flat_count == 0:
+                        prob = values_pp[k]
+                    else:
+                        prob = (
+                            const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k])
+                            + const_d_pp[k]
+                        )
+                    if np.random.random() >= prob:
+                        continue
+
+                    if flat_count == 0:
+                        ti, tj, tk = i, j, k
+                    else:
+                        ti, tj, tk = _nucleation_fold_pick_target_same_plane(
+                            i, j, k, n_cells, ox_num, pid, owner_phase, state_count
+                        )
+                        if ti < 0:
+                            ti, tj, tk = i, j, k
+                    ow_t = owner_phase[ti, tj, tk]
+                    if ow_t != 0 and ow_t != pid:
+                        continue
+                    if int(state_count[ti, tj, tk]) >= ox_num:
+                        continue
+
+                    for _ in range(thr_out):
+                        picked_idx = 0
+                        while _ac[picked_idx] <= 0:
+                            picked_idx += 1
+                        ni = _ni[picked_idx]
+                        nj = _nj[picked_idx]
+                        nk = _nk[picked_idx]
+                        nidx = _nidx[picked_idx]
+                        slot_a = active[ni, nj, nk] - 1
+                        active_dirs[nidx, slot_a] = 0
+                        active[ni, nj, nk] -= 1
+                        _ac[picked_idx] -= 1
+
+                    old_o = int(oxidant[i, j, k])
+                    new_o = old_o - thr_in
+                    oxidant_dirs[idx_o, new_o:old_o] = 0
+                    oxidant[i, j, k] = new_o
+                    cnt_t = int(state_count[ti, tj, tk])
+                    if owner_phase[ti, tj, tk] == 0:
+                        owner_phase[ti, tj, tk] = pid
+                    state_count[ti, tj, tk] = np.uint16(cnt_t + 1)
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def nucleation_subblock_kernel_stoich_owner_fold_blockmask_same_plane(
+    oxidant,
+    oxidant_dirs,
+    active,
+    active_dirs,
+    product_init,
+    product_state,
+    phase_id,
+    ox_num,
+    threshold_inward,
+    threshold_outward,
+    seed_slab_k,
+    plane_indexes,
+    active_check_offsets,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    """Same-plane fold variant of nucleation_subblock_kernel_stoich_owner_fold_blockmask."""
+    np.random.seed(seed)
+    n2 = n_cells * n_cells
+    n_active = active_check_offsets.shape[0]
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    thr_in = int(threshold_inward)
+    thr_out = int(threshold_outward)
+    pid = np.uint8(phase_id)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
+
+    for k in seed_slab_k:
+        bz = k // cz
+        for i in plane_indexes:
+            bx = i // cx
+            for j in range(n_cells):
+                by = j // cy
+                if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
+                    continue
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
+                    continue
+                c_max = int(oxidant[i, j, k] // thr_in)
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
+                for _ in range(c_max):
+                    if oxidant[i, j, k] < thr_in:
+                        break
+                    valid_count = 0
+                    total_active = 0
+                    _ni = np.empty(n_active, dtype=np.intp)
+                    _nj = np.empty(n_active, dtype=np.intp)
+                    _nk = np.empty(n_active, dtype=np.intp)
+                    _nidx = np.empty(n_active, dtype=np.intp)
+                    _ac = np.empty(n_active, dtype=np.int32)
+                    for row in active_check_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                        if valid and active[ii, jj, kk] > 0:
+                            cnt = int(active[ii, jj, kk])
+                            _ni[valid_count] = ii
+                            _nj[valid_count] = jj
+                            _nk[valid_count] = kk
+                            _nidx[valid_count] = ii + n_cells * jj + n2 * kk
+                            _ac[valid_count] = cnt
+                            total_active += cnt
+                            valid_count += 1
+                    if thr_out > 0 and total_active < thr_out:
+                        continue
+
+                    flat_count = 0
+                    for row in flat_neigh_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                        if valid and product_init[ii, jj, kk] > 0:
+                            flat_count += 1
+                    if flat_count == 0:
+                        prob = values_pp[k]
+                    else:
+                        prob = const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k]) + const_d_pp[k]
+                    if np.random.random() >= prob:
+                        continue
+
+                    if flat_count == 0:
+                        ti, tj, tk = i, j, k
+                    else:
+                        ti, tj, tk = _nucleation_fold_pick_target_same_plane(
+                            i, j, k, n_cells, ox_num, pid, owner_phase, state_count
+                        )
+                        if ti < 0:
+                            ti, tj, tk = i, j, k
+                    ow_t = owner_phase[ti, tj, tk]
+                    if ow_t != 0 and ow_t != pid:
+                        continue
+                    if int(state_count[ti, tj, tk]) >= ox_num:
+                        continue
+
+                    for _ in range(thr_out):
+                        picked_idx = 0
+                        while _ac[picked_idx] <= 0:
+                            picked_idx += 1
+                        ni = _ni[picked_idx]
+                        nj = _nj[picked_idx]
+                        nk = _nk[picked_idx]
+                        nidx = _nidx[picked_idx]
+                        slot_a = active[ni, nj, nk] - 1
+                        active_dirs[nidx, slot_a] = 0
+                        active[ni, nj, nk] -= 1
+                        _ac[picked_idx] -= 1
+
+                    old_o = int(oxidant[i, j, k])
+                    new_o = old_o - thr_in
+                    oxidant_dirs[idx_o, new_o:old_o] = 0
+                    oxidant[i, j, k] = new_o
+                    cnt_t = int(state_count[ti, tj, tk])
+                    if owner_phase[ti, tj, tk] == 0:
+                        owner_phase[ti, tj, tk] = pid
+                    state_count[ti, tj, tk] = np.uint16(cnt_t + 1)
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def nucleation_subblock_kernel_owner_spec_fold_same_plane(
+    oxidant,
+    oxidant_dirs,
+    product_init,
+    product_state,
+    phase_id,
+    ox_num,
+    seed_slab_k,
+    plane_indexes,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+):
+    """Same-plane fold variant of nucleation_subblock_kernel_owner_spec_fold (no outward)."""
+    np.random.seed(seed)
+    n2 = n_cells * n_cells
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
+
+    for k in seed_slab_k:
+        for i in plane_indexes:
+            for j in range(n_cells):
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
+                    continue
+                c_max = int(oxidant[i, j, k])
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
+                for _ in range(c_max):
+                    if oxidant[i, j, k] <= 0:
+                        break
+                    flat_count = 0
+                    for row in flat_neigh_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                        if valid and product_init[ii, jj, kk] > 0:
+                            flat_count += 1
+                    if flat_count == 0:
+                        prob = values_pp[k]
+                    else:
+                        prob = const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k]) + const_d_pp[k]
+                    if np.random.random() >= prob:
+                        continue
+
+                    if flat_count == 0:
+                        ti, tj, tk = i, j, k
+                    else:
+                        ti, tj, tk = _nucleation_fold_pick_target_same_plane(
+                            i, j, k, n_cells, ox_num, pid, owner_phase, state_count
+                        )
+                        if ti < 0:
+                            ti, tj, tk = i, j, k
+                    ow_t = owner_phase[ti, tj, tk]
+                    if ow_t != 0 and ow_t != pid:
+                        continue
+                    if int(state_count[ti, tj, tk]) >= ox_num:
+                        continue
+
+                    slot_o = oxidant[i, j, k] - 1
+                    oxidant_dirs[idx_o, slot_o] = 0
+                    oxidant[i, j, k] -= 1
+                    if owner_phase[ti, tj, tk] == 0:
+                        owner_phase[ti, tj, tk] = pid
+                    state_count[ti, tj, tk] = np.uint16(int(state_count[ti, tj, tk]) + 1)
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def nucleation_subblock_kernel_owner_spec_fold_blockmask_same_plane(
+    oxidant,
+    oxidant_dirs,
+    product_init,
+    product_state,
+    phase_id,
+    ox_num,
+    seed_slab_k,
+    plane_indexes,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    """Same-plane fold variant of nucleation_subblock_kernel_owner_spec_fold_blockmask."""
+    np.random.seed(seed)
+    n2 = n_cells * n_cells
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
+
+    for k in seed_slab_k:
+        bz = k // cz
+        for i in plane_indexes:
+            bx = i // cx
+            for j in range(n_cells):
+                by = j // cy
+                if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
+                    continue
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
+                    continue
+                c_max = int(oxidant[i, j, k])
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
+                for _ in range(c_max):
+                    if oxidant[i, j, k] <= 0:
+                        break
+                    flat_count = 0
+                    for row in flat_neigh_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                        if valid and product_init[ii, jj, kk] > 0:
+                            flat_count += 1
+                    if flat_count == 0:
+                        prob = values_pp[k]
+                    else:
+                        prob = const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k]) + const_d_pp[k]
+                    if np.random.random() >= prob:
+                        continue
+
+                    if flat_count == 0:
+                        ti, tj, tk = i, j, k
+                    else:
+                        ti, tj, tk = _nucleation_fold_pick_target_same_plane(
+                            i, j, k, n_cells, ox_num, pid, owner_phase, state_count
+                        )
+                        if ti < 0:
+                            ti, tj, tk = i, j, k
+                    ow_t = owner_phase[ti, tj, tk]
+                    if ow_t != 0 and ow_t != pid:
+                        continue
+                    if int(state_count[ti, tj, tk]) >= ox_num:
+                        continue
+
+                    slot_o = oxidant[i, j, k] - 1
+                    oxidant_dirs[idx_o, slot_o] = 0
+                    oxidant[i, j, k] -= 1
+                    if owner_phase[ti, tj, tk] == 0:
+                        owner_phase[ti, tj, tk] = pid
+                    state_count[ti, tj, tk] = np.uint16(int(state_count[ti, tj, tk]) + 1)
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def nucleation_subblock_kernel_stoich_owner_spec_fold_same_plane(
+    oxidant,
+    oxidant_dirs,
+    product_init,
+    product_state,
+    phase_id,
+    ox_num,
+    threshold_inward,
+    seed_slab_k,
+    plane_indexes,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+):
+    """Same-plane fold variant of nucleation_subblock_kernel_stoich_owner_spec_fold (no outward)."""
+    np.random.seed(seed)
+    n2 = n_cells * n_cells
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
+    thr_in = int(threshold_inward)
+
+    for k in seed_slab_k:
+        for i in plane_indexes:
+            for j in range(n_cells):
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
+                    continue
+                c_max = int(oxidant[i, j, k] // thr_in)
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
+                for _ in range(c_max):
+                    if oxidant[i, j, k] < thr_in:
+                        break
+                    flat_count = 0
+                    for row in flat_neigh_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                        if valid and product_init[ii, jj, kk] > 0:
+                            flat_count += 1
+                    if flat_count == 0:
+                        prob = values_pp[k]
+                    else:
+                        prob = const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k]) + const_d_pp[k]
+                    if np.random.random() >= prob:
+                        continue
+
+                    if flat_count == 0:
+                        ti, tj, tk = i, j, k
+                    else:
+                        ti, tj, tk = _nucleation_fold_pick_target_same_plane(
+                            i, j, k, n_cells, ox_num, pid, owner_phase, state_count
+                        )
+                        if ti < 0:
+                            ti, tj, tk = i, j, k
+                    ow_t = owner_phase[ti, tj, tk]
+                    if ow_t != 0 and ow_t != pid:
+                        continue
+                    if int(state_count[ti, tj, tk]) >= ox_num:
+                        continue
+
+                    old_o = int(oxidant[i, j, k])
+                    new_o = old_o - thr_in
+                    oxidant_dirs[idx_o, new_o:old_o] = 0
+                    oxidant[i, j, k] = new_o
+                    cnt_t = int(state_count[ti, tj, tk])
+                    if owner_phase[ti, tj, tk] == 0:
+                        owner_phase[ti, tj, tk] = pid
+                    state_count[ti, tj, tk] = np.uint16(cnt_t + 1)
+
+
+@numba.njit(fastmath=True, cache=_CACHE)
+def nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask_same_plane(
+    oxidant,
+    oxidant_dirs,
+    product_init,
+    product_state,
+    phase_id,
+    ox_num,
+    threshold_inward,
+    seed_slab_k,
+    plane_indexes,
+    flat_neigh_offsets,
+    values_pp,
+    const_a_pp,
+    const_b_pp,
+    const_c_pp,
+    const_d_pp,
+    n_cells,
+    seed,
+    block_mask_bits,
+    block_cells_x,
+    block_cells_y,
+    block_cells_z,
+):
+    """Same-plane fold variant of nucleation_subblock_kernel_stoich_owner_spec_fold_blockmask."""
+    np.random.seed(seed)
+    n2 = n_cells * n_cells
+    owner_phase = product_state[0]
+    state_count = product_state[1]
+    pid = np.uint8(phase_id)
+    thr_in = int(threshold_inward)
+    cx = int(block_cells_x)
+    cy = int(block_cells_y)
+    cz = int(block_cells_z)
+
+    for k in seed_slab_k:
+        bz = k // cz
+        for i in plane_indexes:
+            bx = i // cx
+            for j in range(n_cells):
+                by = j // cy
+                if (int(block_mask_bits[bx, by]) >> bz) & 1 == 0:
+                    continue
+                owner = owner_phase[i, j, k]
+                if owner != 0 and owner != pid:
+                    continue
+                c_max = int(oxidant[i, j, k] // thr_in)
+                if c_max <= 0:
+                    continue
+                idx_o = i + n_cells * j + n2 * k
+                for _ in range(c_max):
+                    if oxidant[i, j, k] < thr_in:
+                        break
+                    flat_count = 0
+                    for row in flat_neigh_offsets:
+                        di, dj, dk = int(row[0]), int(row[1]), int(row[2])
+                        ii, jj, kk, valid = _nucleation_subblock_apply_pbc(i + di, j + dj, k + dk, n_cells)
+                        if valid and product_init[ii, jj, kk] > 0:
+                            flat_count += 1
+                    if flat_count == 0:
+                        prob = values_pp[k]
+                    else:
+                        prob = const_a_pp[k] * np.exp(const_b_pp[k] * flat_count + const_c_pp[k]) + const_d_pp[k]
+                    if np.random.random() >= prob:
+                        continue
+
+                    if flat_count == 0:
+                        ti, tj, tk = i, j, k
+                    else:
+                        ti, tj, tk = _nucleation_fold_pick_target_same_plane(
+                            i, j, k, n_cells, ox_num, pid, owner_phase, state_count
+                        )
+                        if ti < 0:
+                            ti, tj, tk = i, j, k
+                    ow_t = owner_phase[ti, tj, tk]
+                    if ow_t != 0 and ow_t != pid:
+                        continue
+                    if int(state_count[ti, tj, tk]) >= ox_num:
+                        continue
+
+                    old_o = int(oxidant[i, j, k])
+                    new_o = old_o - thr_in
+                    oxidant_dirs[idx_o, new_o:old_o] = 0
+                    oxidant[i, j, k] = new_o
+                    cnt_t = int(state_count[ti, tj, tk])
+                    if owner_phase[ti, tj, tk] == 0:
+                        owner_phase[ti, tj, tk] = pid
+                    state_count[ti, tj, tk] = np.uint16(cnt_t + 1)

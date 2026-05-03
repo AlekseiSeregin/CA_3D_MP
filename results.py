@@ -215,11 +215,11 @@ class VisualisationApp:
         lf_h.pack(fill=tk.X, pady=4)
         ttk.Button(lf_h, text="Plot h", command=self._run_plot_h).pack(anchor=tk.W)
 
-        lf_plane0 = ttk.LabelFrame(g, text="Plane-0 product tracking", padding=6)
+        lf_plane0 = ttk.LabelFrame(g, text="Product tracking per plane/slab", padding=6)
         lf_plane0.pack(fill=tk.X, pady=4)
         ttk.Button(
             lf_plane0,
-            text="Plot jmatpro vs existing (plane 0)",
+            text="Plot jmatpro vs CA (all planes; toggle curves)",
             command=self._run_plot_plane0_product_tracking,
         ).pack(anchor=tk.W)
 

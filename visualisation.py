@@ -1,9 +1,11 @@
 import matplotlib.pyplot as plt
 import sqlite3 as sql
+from matplotlib.widgets import Button, CheckButtons
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D
 from scipy import special
 from math import sqrt
+import zlib
 import numpy as np
 import utils
 from scipy import ndimage
@@ -1605,45 +1607,178 @@ ELAPSED TIME: {message}
         plt.show()
 
     def plot_plane0_product_tracking(self):
+        """Alias for Tk UI; plots every stored slab/plane index with toggle controls."""
+        self.plot_product_plane_tracking()
+
+    def plot_product_plane_tracking(self):
+        try:
+            self.c.execute("PRAGMA table_info(product_plane0_tracking)")
+            existing_cols = {row[1] for row in self.c.fetchall()}
+        except sql.OperationalError:
+            return print("No product_plane0_tracking table in this database!")
+        if not existing_cols:
+            return print("No product_plane0_tracking table in this database!")
+        has_cells = "cells_conc" in existing_cols
+        has_plane = "plane" in existing_cols
+
+        select_cols = "iteration, product, jmatpro_conc, existing_conc, diff_conc"
+        if has_plane:
+            select_cols = "iteration, product, plane, jmatpro_conc, existing_conc, diff_conc"
+        if has_cells:
+            select_cols += ", cells_conc"
         try:
             self.c.execute(
-                """SELECT iteration, product, jmatpro_conc, existing_conc, diff_conc
+                f"""SELECT {select_cols}
+                   FROM product_plane0_tracking
+                   ORDER BY iteration, product, plane"""
+                if has_plane
+                else f"""SELECT {select_cols}
                    FROM product_plane0_tracking
                    ORDER BY iteration, product"""
             )
             rows = self.c.fetchall()
         except sql.OperationalError:
-            return print("No product_plane0_tracking table in this database!")
+            if has_plane:
+                select_cols_fallback = (
+                    "iteration, product, jmatpro_conc, existing_conc, diff_conc"
+                    + (", cells_conc" if has_cells else "")
+                )
+                try:
+                    self.c.execute(
+                        f"""SELECT {select_cols_fallback}
+                           FROM product_plane0_tracking
+                           ORDER BY iteration, product"""
+                    )
+                    rows = self.c.fetchall()
+                    has_plane = False
+                except sql.OperationalError:
+                    return print("No product_plane0_tracking table in this database!")
+            else:
+                return print("No product_plane0_tracking table in this database!")
 
         if not rows:
-            return print("No plane-0 product tracking data to plot!")
+            return print("No per-plane product tracking data to plot!")
 
-        data = pd.DataFrame(
-            rows,
-            columns=["iteration", "product", "jmatpro_conc", "existing_conc", "diff_conc"],
-        )
+        columns = ["iteration", "product", "jmatpro_conc", "existing_conc", "diff_conc"]
+        if has_plane:
+            columns.insert(2, "plane")
+        if has_cells:
+            columns.append("cells_conc")
+        data = pd.DataFrame(rows, columns=columns)
+        if not has_plane:
+            data.insert(2, "plane", 0)
 
-        fig, ax = plt.subplots()
+        planes_sorted = sorted(int(p) for p in data["plane"].unique())
+        lines_by_plane = {p: [] for p in planes_sorted}
+
+        fig = plt.figure(figsize=(10, 6.8))
+        fig.subplots_adjust(left=0.22, right=0.96, top=0.94, bottom=0.09, hspace=0.12)
+        ax_conc = fig.add_subplot(211)
+        ax_cells = fig.add_subplot(212, sharex=ax_conc)
+
+        cmap = plt.get_cmap("tab10")
+        n_colors = cmap.N
+
+        def _series_color(product: str, plane_idx: int):
+            key = f"{product}\x00{int(plane_idx)}".encode("utf-8", errors="surrogateescape")
+            return cmap(zlib.adler32(key) % n_colors)
+
         for product in sorted(data["product"].unique()):
-            prod_data = data[data["product"] == product].sort_values("iteration")
-            ax.plot(
-                prod_data["iteration"].to_numpy(),
-                prod_data["jmatpro_conc"].to_numpy(),
-                label=f"{product} jmatpro",
-            )
-            ax.plot(
-                prod_data["iteration"].to_numpy(),
-                prod_data["existing_conc"].to_numpy(),
-                linestyle="--",
-                label=f"{product} existing",
-            )
+            for plane_idx in planes_sorted:
+                c = _series_color(product, plane_idx)
+                sub = (
+                    data[(data["product"] == product) & (data["plane"] == plane_idx)].sort_values("iteration")
+                )
+                if sub.empty:
+                    continue
+                iters = sub["iteration"].to_numpy()
+                ln_j, = ax_conc.plot(
+                    iters,
+                    sub["jmatpro_conc"].to_numpy(),
+                    linestyle="-",
+                    color=c,
+                    alpha=0.9,
+                    label=f"p={plane_idx} {product} jmatpro",
+                )
+                ln_e, = ax_conc.plot(
+                    iters,
+                    sub["existing_conc"].to_numpy(),
+                    linestyle="--",
+                    color=c,
+                    alpha=0.65,
+                    label=f"p={plane_idx} {product} CA",
+                )
+                lines_by_plane[int(plane_idx)].extend([ln_j, ln_e])
+                if has_cells:
+                    ln_c, = ax_cells.plot(
+                        iters,
+                        sub["cells_conc"].to_numpy(),
+                        linestyle="-",
+                        color=c,
+                        alpha=0.85,
+                        label=f"p={plane_idx} {product} cells/N²",
+                    )
+                    lines_by_plane[int(plane_idx)].append(ln_c)
 
-        ax.set_xlabel("Iteration")
-        ax.set_ylabel("Concentration")
-        ax.set_title("Plane-0 concentration tracking")
-        ax.grid(True, alpha=0.25)
-        ax.legend()
-        plt.tight_layout()
+        ax_conc.set_ylabel("Mole fraction")
+        ax_conc.set_title("Product concentration tracking (toggle planes)")
+        ax_conc.grid(True, alpha=0.25)
+        leg_conc = ax_conc.legend(loc="upper left", bbox_to_anchor=(1.01, 1), borderaxespad=0, fontsize=7)
+
+        if has_cells:
+            ax_cells.set_ylabel("Cell concentration\n(state_count / plane)")
+            ax_cells.grid(True, alpha=0.25)
+            ax_cells.legend(loc="upper left", bbox_to_anchor=(1.02, 1), borderaxespad=0, fontsize=7)
+        else:
+            ax_cells.set_visible(False)
+
+        ax_cells.set_xlabel("Iteration")
+
+        labels = [f"Plane {p}" for p in planes_sorted]
+        n_lab = len(labels)
+        if n_lab > 1:
+            yh = max(0.22, min(0.038 * n_lab, 0.62))
+            y0 = 0.93 - yh
+            ax_cb = plt.axes([0.02, y0, 0.17, yh])
+            active = tuple(True for _ in planes_sorted)
+
+            check = CheckButtons(ax_cb, labels, active)
+
+            def _sync_lines_from_checks():
+                status = check.get_status()
+                for i, pkey in enumerate(planes_sorted):
+                    vis_i = status[i]
+                    for ln in lines_by_plane[pkey]:
+                        ln.set_visible(vis_i)
+                fig.canvas.draw_idle()
+
+            def _on_plane_checkbox(_label_clicked: str):
+                _sync_lines_from_checks()
+
+            check.on_clicked(_on_plane_checkbox)
+
+            bh = min(0.042, max(0.028, y0 - 0.07))
+            by_buttons = max(0.02, y0 - bh - 0.018)
+            ax_all = plt.axes([0.02, by_buttons, 0.086, bh])
+            ax_none = plt.axes([0.112, by_buttons, 0.086, bh])
+            btn_all_planes = Button(ax_all, "All planes")
+            btn_no_planes = Button(ax_none, "No planes")
+
+            def _planes_set_all(enabled: bool):
+                for i in range(len(planes_sorted)):
+                    if check.get_status()[i] != enabled:
+                        check.set_active(i)
+                _sync_lines_from_checks()
+
+            def _btn_all_planes(_evt):
+                _planes_set_all(True)
+
+            def _btn_no_planes(_evt):
+                _planes_set_all(False)
+
+            btn_all_planes.on_clicked(_btn_all_planes)
+            btn_no_planes.on_clicked(_btn_no_planes)
+
         plt.show()
 
 

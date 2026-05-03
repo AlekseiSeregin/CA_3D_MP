@@ -58,23 +58,52 @@ class Database:
             """CREATE TABLE IF NOT EXISTS product_plane0_tracking
                (iteration int,
                 product text,
+                plane int,
                 jmatpro_conc float,
                 existing_conc float,
-                diff_conc float)"""
+                diff_conc float,
+                cells_conc float)"""
         )
+        self.c.execute("PRAGMA table_info(product_plane0_tracking)")
+        existing_cols = {row[1] for row in self.c.fetchall()}
+        if "cells_conc" not in existing_cols:
+            self.c.execute(
+                "ALTER TABLE product_plane0_tracking ADD COLUMN cells_conc float"
+            )
+        if "plane" not in existing_cols:
+            self.c.execute(
+                "ALTER TABLE product_plane0_tracking ADD COLUMN plane integer NOT NULL DEFAULT 0"
+            )
 
     def insert_product_plane0_tracking(self, tracking_data):
         if not tracking_data:
             return
         rows = []
-        for (iteration, product), values in tracking_data.items():
-            jmatpro_conc, existing_conc, diff_conc = values
-            rows.append((int(iteration), str(product), float(jmatpro_conc), float(existing_conc), float(diff_conc)))
-        rows.sort(key=lambda x: (x[0], x[1]))
+        for key, values in tracking_data.items():
+            if len(key) == 2:
+                iteration, product = key
+                plane = 0
+            else:
+                iteration, product, plane = key[0], key[1], int(key[2])
+            if len(values) >= 4:
+                jmatpro_conc, existing_conc, diff_conc, cells_conc = values[:4]
+            else:
+                jmatpro_conc, existing_conc, diff_conc = values
+                cells_conc = 0.0
+            rows.append((
+                int(iteration),
+                str(product),
+                int(plane),
+                float(jmatpro_conc),
+                float(existing_conc),
+                float(diff_conc),
+                float(cells_conc),
+            ))
+        rows.sort(key=lambda x: (x[0], x[1], x[2]))
         self.c.executemany(
             """INSERT INTO product_plane0_tracking
-               (iteration, product, jmatpro_conc, existing_conc, diff_conc)
-               VALUES (?, ?, ?, ?, ?)""",
+               (iteration, product, plane, jmatpro_conc, existing_conc, diff_conc, cells_conc)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
 

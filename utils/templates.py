@@ -58,8 +58,11 @@ class CaseSetUpMP:
 
         self.threshold_inward = None
         self.threshold_outward = None
-
+        self.dissolution_time_ratio = 0.0
         self.cells_per_axis = Config.N_CELLS_PER_AXIS
+        self.dissolution_n_iterations = 0
+        self.dissolution_counter = np.zeros(self.cells_per_axis, dtype=np.int32)
+        self.dissolution_count_activated = np.zeros(self.cells_per_axis, dtype=bool)
 
         self.nucleation_mode = Config.NUCLEATION_MODE
         self.nucleation_kernel_runner = None
